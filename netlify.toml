@@ -1,0 +1,5 @@
+# Configuración de despliegue para Netlify
+# Sitio estático: un único index.html servido desde la raíz del repo.
+[build]
+  publish = "."
+  command = ""
