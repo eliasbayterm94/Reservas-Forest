@@ -430,86 +430,13 @@ function toggleFee(el){
   onFilter();
 }
 
-function aplicarFiltros(){
-  if(!DATA.length) return;
-
-  // Leer todos los valores de filtro una sola vez (evita re-leer DOM por fila)
-  const q  = DOM.fQ.value.toLowerCase().trim();
-  const fb = DOM.fBodega.value;
-  const fc = DOM.fContrato.value.toLowerCase();
-  const ff = DOM.fFactura.value.toLowerCase();
-  const fm = DOM.fComercial.value;
-  const fd = DOM.fDias.value;
-
-  // Tipos y estados activos como arrays (más rápido que Set.has en loops grandes)
-  const tipoSet   = af.tipo;
-  const estadoSet = af.estado;
-
-  filtered = DATA.filter(r=>{
-    if(!tipoSet.has(r.tipo) || !estadoSet.has(r.estado)) return false;
-    if(fb && r.bodega    !== fb) return false;
-    if(fm && r.comercial !== fm) return false;
-    if(fc && !(r.contrato||'').toLowerCase().includes(fc)) return false;
-    if(ff && !(r.factura||'').toLowerCase().includes(ff))  return false;
-    if(fd){
-      const d = r.dias_reserva;
-      if(d === null) return false;
-      if(fd==='0-30'   && !(d>=0 && d<=30))   return false;
-      if(fd==='31-90'  && !(d>=31 && d<=90))  return false;
-      if(fd==='91-180' && !(d>=91 && d<=180)) return false;
-      if(fd==='180+'   && !(d>180))            return false;
-    }
-    // Usa cadena pre-computada en lugar de concatenar en cada keypress
-    if(q && !r._search.includes(q)) return false;
-    if(soloConFee){
-      const feeAplica = r.fee_en === null || r.fee_en <= 0;
-      if(!feeAplica || !(r.warehouse_fee>0 || r.finance_fee>0)) return false;
-    }
-    return true;
-  });
-
-  // Ordenar
-  const numericKeys = new Set(['cantidad','dias','dias_reserva','warehouse_fee','finance_fee','pallet_price']);
-  if(numericKeys.has(sc)){
-    filtered.sort((a,b)=> sd*((a[sc]??-99999)-(b[sc]??-99999)));
-  }else{
-    filtered.sort((a,b)=> sd*String(a[sc]||'').localeCompare(String(b[sc]||''),'es',{sensitivity:'base'}));
-  }
-
-  // Totales — un solo recorrido
-  let totalBags=0;
-  const clienteSet = new Set();
-  const feesPorMoneda = {};
-
-  for(let i=0;i<filtered.length;i++){
-    const r = filtered[i];
-    totalBags += r.cantidad;
-    clienteSet.add(r.cliente);
-    if(r.warehouse_fee>0 && (r.fee_en===null || r.fee_en<=0)){
-      const b=(r.bodega||'').toUpperCase().trim();
-      const sym = b==='EU'?'€':b==='UK'?'£':b==='AU'?'A$':b==='MENA'?'AED ':'$';
-      feesPorMoneda[sym]=(feesPorMoneda[sym]||0)+Math.round(r.warehouse_fee);
-    }
-  }
-  const uniqC = clienteSet.size;
-  const totalWHStr = Object.entries(feesPorMoneda).map(([s,v])=>`${s}${v.toLocaleString('en-US')}`).join(' + ')||'—';
-
-  // Actualizar stats de una vez (batch DOM writes)
-  DOM.sRows.textContent     = filtered.length;
-  DOM.sBags.textContent     = totalBags;
-  DOM.sClientes.textContent = uniqC;
-  DOM.resCount.textContent  = `${filtered.length} resultado${filtered.length!==1?'s':''}`;
-  DOM.fBags.textContent     = `${totalBags} bags`;
-  DOM.fClientes.textContent = uniqC;
-  DOM.fWH.textContent       = totalWHStr;
-
-  renderPagina();
-}
+// NOTA: aplicarFiltros() (filtrado + orden + totales + alternancia de filas)
+// se define más abajo, en la sección "FILTROS / ORDEN / TOTALES".
 
 // ═══════════════════════════════════════════════════
 // PAGINACIÓN
 // ═══════════════════════════════════════════════════
-function cambiarTamano(){ pageSize=Number(DOM.pgSize?.$?.value||$('pgSize').value); paginaActual=1; renderPagina(); }
+function cambiarTamano(){ pageSize=Number($('pgSize').value); paginaActual=1; renderPagina(); }
 function irPagina(p){ if(p<1||p>totalPaginas)return; paginaActual=p; renderPagina(); DOM.tw.scrollTop=0; }
 
 function renderPagina(){
@@ -671,42 +598,10 @@ function renderFilas(rows, fromIdx){
 }
 
 // ═══════════════════════════════════════════════════
-// PRE-COMPUTE ROW ALTERNANCE — se recalcula al filtrar
+// ROW ALTERNANCE — alternancia de fondo por bloque (bodega+cliente)
+// Se recalcula dentro de aplicarFiltros() tras filtrar/ordenar.
 // ═══════════════════════════════════════════════════
 let rowAlt = [];
-
-// Recalcular alternancia cuando filtered cambia
-// Lo llamamos dentro de aplicarFiltros después del sort
-const _origAplicarFiltros = aplicarFiltros;
-// Override para añadir el paso extra
-function aplicarFiltrosConAlt(){
-  aplicarFiltros();
-}
-
-// Patch: recalcular rowAlt después de filtrar/ordenar
-// (se ejecuta justo antes de renderPagina dentro de aplicarFiltros ya que
-//  filtered ya está actualizado en ese punto)
-function computeRowAlt(){
-  rowAlt = new Array(filtered.length);
-  let tog=false, lastKey=null;
-  for(let i=0;i<filtered.length;i++){
-    const r=filtered[i];
-    const k=r.bodega+'|'+r.cliente;
-    if(k!==lastKey){ tog=!tog; lastKey=k; }
-    rowAlt[i]=tog;
-  }
-}
-
-// ═══════════════════════════════════════════════════
-// Patch aplicarFiltros para incluir computeRowAlt
-// ═══════════════════════════════════════════════════
-// Redefino directamente con el paso incluido:
-(function patchAplicar(){
-  const orig = aplicarFiltros;
-  // No podemos patchear la referencia fácilmente, así que reimplementamos
-  // directamente en el body de aplicarFiltros — ya está hecho arriba.
-  // En cambio, lo más limpio: llamamos computeRowAlt antes de renderPagina.
-})();
 
 // ═══════════════════════════════════════════════════
 // THEAD + RESIZE + COLGROUP
@@ -826,10 +721,10 @@ function hideOverlays(){
 }
 
 // ═══════════════════════════════════════════════════
-// PATCH: computeRowAlt integrado en aplicarFiltros
-// (redefinición limpia con todo junto)
+// FILTROS / ORDEN / TOTALES
+// Filtra DATA según los controles activos, ordena, recalcula la
+// alternancia de filas y los totales, y dispara el render.
 // ═══════════════════════════════════════════════════
-// Sobrescribimos aplicarFiltros con la versión final que incluye rowAlt
 function aplicarFiltros(){
   if(!DATA.length) return;
 
