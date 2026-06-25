@@ -241,7 +241,9 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 
 <!-- FILTER BAR -->
 <div class="filterbar">
-  <div class="fi"><span class="fi-icon">🔍</span><input id="fQ" type="text" placeholder="Cliente, café, ICO…" oninput="onFilterDebounced()"></div>
+  <div class="fi"><span class="fi-icon">🔍</span><input id="fQ" type="text" placeholder="Cliente…" oninput="onFilterDebounced()"></div>
+  <div class="fi"><span class="fi-icon">☕</span><input id="fCafe" type="text" placeholder="Café / Referencia…" oninput="onFilterDebounced()"></div>
+  <div class="fi"><span class="fi-icon">🔖</span><input id="fIco" type="text" placeholder="ICO…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon">🏭</span>
     <select id="fBodega" onchange="onFilter()"><option value="">Bodega</option></select>
   </div>
@@ -362,7 +364,7 @@ const DOM = {};
 ['sRows','sBags','sClientes','resCount','fBags','fClientes','fWH','footerTs','brandSub',
  'statusPill','statusText','btnRefresh','refreshIcon',
  'pgCurrent','pgTotal','pgFrom','pgTo','pgAll','pgFirst','pgPrev','pgNext','pgLast','pgNums',
- 'fQ','fBodega','fContrato','fFactura','fComercial','fSerie','fDias',
+ 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias',
  'thead','tbody','tfoot','colgroup',
  'ovLoading','ovError','ovEmpty','ovErrorMsg','tw'
 ].forEach(id=>DOM[id]=$( id));
@@ -396,10 +398,6 @@ async function cargarDatos(forzar=false){
       r.finance_fee  = Number(r.finance_fee)||0;
       r.pallet_price = Number(r.pallet_price)||0;
       r.fee_en       = r.fee_en!=null ? Number(r.fee_en) : null;
-      // Cadena de búsqueda pre-computada (evita concatenar en cada keypress)
-      r._search = (
-        (r.cliente||'')+(r.cafe||'')+(r.ico||'')+(r.contrato||'')+(r.factura||'')+(r.comercial||'')+(r.serie||'')
-      ).toLowerCase();
     });
 
     localStorage.setItem(LAST_LOAD_KEY, new Date().toISOString());
@@ -751,7 +749,9 @@ function hideOverlays(){
 function aplicarFiltros(){
   if(!DATA.length) return;
 
-  const q  = DOM.fQ.value.toLowerCase().trim();
+  const q    = DOM.fQ.value.toLowerCase().trim();
+  const fcaf = DOM.fCafe.value.toLowerCase().trim();
+  const fico = DOM.fIco.value.toLowerCase().trim();
   const fb = DOM.fBodega.value;
   const fc = DOM.fContrato.value.toLowerCase();
   const ff = DOM.fFactura.value.toLowerCase();
@@ -776,7 +776,9 @@ function aplicarFiltros(){
       if(fd==='91-180' && !(d>=91&&d<=180)) return false;
       if(fd==='180+'   && !(d>180))          return false;
     }
-    if(q && !r._search.includes(q)) return false;
+    if(q    && !(r.cliente||'').toLowerCase().includes(q))    return false;
+    if(fcaf && !(r.cafe||'').toLowerCase().includes(fcaf))    return false;
+    if(fico && !(r.ico||'').toLowerCase().includes(fico))     return false;
     if(soloConFee){
       const feeAplica = r.fee_en===null||r.fee_en<=0;
       if(!feeAplica||!(r.warehouse_fee>0||r.finance_fee>0)) return false;
