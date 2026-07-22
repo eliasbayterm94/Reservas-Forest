@@ -229,6 +229,22 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .age.b90{background:var(--warn-bg);color:var(--warn)}
 .age.b90p{background:#fbe0e0;color:#a01414}
 .c-saldo{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;text-align:right}
+
+/* ══ RESUMEN POR BRACKETS (cartera) ══ */
+.resumen{display:flex;gap:8px;padding:10px 20px;background:var(--surface);border-bottom:2px solid var(--border);flex-wrap:wrap;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.resumen.hidden{display:none}
+.rcard{flex:1 1 0;min-width:112px;background:var(--surface2);border:1.5px solid var(--border);border-left-width:3px;border-radius:9px;padding:7px 12px}
+.rcard .rc-l{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:700;white-space:nowrap}
+.rcard .rc-n{font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--text);margin-top:3px}
+.rcard .rc-s{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:1px}
+.rcard.fut{border-left-color:var(--text3)}
+.rcard.b0 {border-left-color:var(--green3)}
+.rcard.b10{border-left-color:var(--gold)}
+.rcard.b30{border-left-color:#b86000}
+.rcard.b60{border-left-color:var(--warn)}
+.rcard.b90{border-left-color:#a01414}
+.rcard.tot{background:var(--green-xl);border-color:var(--res-bd);border-left-color:var(--green2)}
+.rcard.tot .rc-n{color:var(--green)}
 </style>
 </head>
 <body>
@@ -375,6 +391,9 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     <span class="res-count" id="cResCount">—</span>
     <button class="btn-excel" onclick="exportCartera()">⬇ Excel</button>
   </div>
+
+  <!-- RESUMEN POR BRACKETS (aparece al filtrar por comercial o región) -->
+  <div id="cartResumen" class="resumen hidden"></div>
 
   <!-- TABLE CARTERA -->
   <div class="table-wrap" id="twCart">
@@ -1035,6 +1054,32 @@ function agingOf(d){
   return          { k:'b90p', label:'+90'   };
 }
 
+// Parser CSV propio (quotes-aware) — evita que XLSX convierta fechas en números
+function parseCSV(t){
+  const rows=[]; let f='', row=[], q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else { if(c==='"')q=true; else if(c===','){row.push(f);f='';} else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';} else if(c!=='\r')f+=c; }
+  }
+  if(f.length||row.length){row.push(f);rows.push(row);}
+  return rows;
+}
+const cleanNum = v => Number(String(v==null?'':v).replace(/[^0-9.\-]/g,'')) || 0;
+function normalizeDate(v){
+  if(v==null||v==='') return '';
+  const s=String(v).trim();
+  let m;
+  if(m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))        return `${m[1]}-${m[2]}-${m[3]}`;        // ISO
+  if(m=s.match(/Date\((\d+),(\d+),(\d+)/))          return `${m[1]}-${String(+m[2]+1).padStart(2,'0')}-${m[3].padStart(2,'0')}`; // gviz Date(y,m,d)
+  if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))   return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`; // M/D/YYYY
+  if(/^\d+(\.\d+)?$/.test(s)){                       // serial de Excel
+    const n=Number(s);
+    if(n>20000&&n<80000) return new Date(Math.round((n-25569)*86400000)).toISOString().slice(0,10);
+  }
+  return s.slice(0,10);
+}
+
 async function cargarCartera(forzar=false){
   showCartOverlay('loading');
   if(activeTab==='cartera') setLoading(true);
@@ -1043,9 +1088,7 @@ async function cargarCartera(forzar=false){
     const resp = await fetch(url);
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
-    const wb   = XLSX.read(text, {type:'string'});
-    const ws   = wb.Sheets[wb.SheetNames[0]];
-    const aoa  = XLSX.utils.sheet_to_json(ws, {header:1, blankrows:false});
+    const aoa  = parseCSV(text);
     if(!aoa.length) throw new Error('Sheet vacío');
 
     // Localizar columnas por encabezado (robusto ante reordenamientos)
@@ -1058,18 +1101,18 @@ async function cargarCartera(forzar=false){
     const rows=[];
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
-      const saldo=Number(row[iBalL])||0;
+      const saldo=cleanNum(row[iBalL]);
       if(saldo<=0) continue;                       // solo facturas con saldo pendiente
       rows.push({
         region:    String(row[iReg]||'').trim(),
         factura:   String(row[iDoc]||'').trim(),
         cliente:   String(row[iCus]||'').trim(),
-        comercial: row[iRep] ? titleCase(row[iRep]) : 'Sin asignar',
-        due:       String(row[iDue]||'').trim().slice(0,10),
+        comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Sin asignar',
+        due:       normalizeDate(row[iDue]),
         currency:  String(row[iCur]||'').trim().toUpperCase(),
         saldo:     saldo,
-        saldoUsd:  Number(row[iBalU])||0,
-        days:      Number(row[iDays])||0,
+        saldoUsd:  cleanNum(row[iBalU]),
+        days:      Math.round(cleanNum(row[iDays])),
       });
     }
     cartData=rows; cartLoaded=true;
@@ -1148,8 +1191,34 @@ function aplicarCartera(){
   $('cFClientes').textContent= cli.size;
   $('cFVencido').textContent = money(vencUsd);
   renderCartTotales(saldoPorMon, totUsd, cartFiltered.length);
+  renderResumen(cartFiltered, !!(fc||fr));   // resumen por brackets al filtrar comercial/región
 
   cartFiltered.length===0 ? showCartOverlay('empty') : hideCartOverlays();
+}
+
+// Cuadro resumen por brackets de días vencidos (montos en USD para poder sumar monedas)
+function renderResumen(rows, show){
+  const box=$('cartResumen');
+  if(!show){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  box.classList.remove('hidden');
+  const B=[
+    {cls:'fut', label:'Por vencer', test:d=>d<0},
+    {cls:'b0',  label:'0–10 días',  test:d=>d>=0 && d<=10},
+    {cls:'b10', label:'11–30 días', test:d=>d>=11 && d<=30},
+    {cls:'b30', label:'31–60 días', test:d=>d>=31 && d<=60},
+    {cls:'b60', label:'61–90 días', test:d=>d>=61 && d<=90},
+    {cls:'b90', label:'90+ días',   test:d=>d>90},
+  ].map(b=>({...b, usd:0, n:0}));
+  const cli=new Set();
+  for(const r of rows){
+    cli.add(r.cliente);
+    const b=B.find(x=>x.test(r.days));
+    if(b){ b.usd+=r.saldoUsd; b.n++; }
+  }
+  let html = B.map(b=>`<div class="rcard ${b.cls}"><div class="rc-l">${b.label}</div><div class="rc-n">${money(b.usd)}</div><div class="rc-s">${b.n} fact.</div></div>`).join('');
+  html += `<div class="rcard tot"><div class="rc-l">Clientes</div><div class="rc-n">${cli.size}</div><div class="rc-s">en cartera</div></div>`;
+  html += `<div class="rcard tot"><div class="rc-l">Facturas</div><div class="rc-n">${rows.length}</div><div class="rc-s">total</div></div>`;
+  box.innerHTML = html;
 }
 
 function buildTheadCart(){
@@ -1206,7 +1275,11 @@ function renderCartTotales(saldoPorMon, totUsd, n){
     let v='', cls='', title='';
     if(ci===0){ v='TOTALES'; cls=' class="tot-label"'; }
     else if(col.key==='cliente'){ v=`${n} factura${n!==1?'s':''}`; cls=' class="tot-label"'; }
-    else if(col.key==='saldo'){ v=join(saldoPorMon); cls=' class="tot-fee"'; title=` title="${join(saldoPorMon)}"`; }
+    else if(col.key==='saldo'){
+      const mons=Object.keys(saldoPorMon);
+      v = mons.length===1 ? fmtCur(saldoPorMon[mons[0]], mons[0]) : '—';   // evita sumatoria multi-moneda
+      cls=' class="tot-fee"'; title=` title="Saldo por moneda: ${join(saldoPorMon)}"`;
+    }
     else if(col.key==='saldoUsd'){ v=money(totUsd); cls=' class="tot-fee"'; }
     const align = col.align ? ` style="text-align:${col.align}"` : '';
     cells+=`<td${cls}${align}${title}>${v}</td>`;
