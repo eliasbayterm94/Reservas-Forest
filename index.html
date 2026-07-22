@@ -46,13 +46,17 @@
   --radius:10px;
 }
 
+html{height:100%}
 body{
   background:var(--bg);
   color:var(--text);
   font-family:'Montserrat',sans-serif;
   font-size:13px;
+  /* Fijar el body a la ventana evita que iOS desplace la página y esconda el topbar */
+  position:fixed;
+  top:0; left:0; right:0;
   height:100vh;          /* fallback */
-  height:100dvh;         /* respeta la barra del navegador en móvil */
+  height:100dvh;         /* área visible real en móvil */
   display:flex;
   flex-direction:column;
   overflow:hidden;
