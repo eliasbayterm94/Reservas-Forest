@@ -6,6 +6,8 @@
 <title>Forest — Reservas Activas</title>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -394,7 +396,8 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     <div class="fsep"></div>
     <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)">⚠ Solo vencidos</span>
     <span class="res-count" id="cResCount">—</span>
-    <button class="btn-excel" onclick="exportCartera()">⬇ Excel</button>
+    <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a4262c;box-shadow:0 2px 6px rgba(164,38,44,.3)">⬇ PDF</button>
+    <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px">⬇ Excel</button>
   </div>
 
   <!-- RESUMEN POR BRACKETS (aparece al filtrar por comercial o región) -->
@@ -1348,6 +1351,75 @@ function exportCartera(){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Cartera');
   XLSX.writeFile(wb,`Forest_Cartera_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+const AG_LABELS = {fut:'Por vencer', b0:'0–10 días', b10:'11–30 días', b30:'31–60 días', b60:'61–90 días', b90:'90+ días'};
+
+// Descarga PDF del detalle filtrado (para que el comercial baje lo vencido)
+function exportCarteraPDF(){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartFiltered.length){ alert('No hay facturas para exportar con los filtros actuales.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const GREEN=[30,77,24];
+
+  // Encabezado
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...GREEN);
+  doc.text('Forest — Cartera / Cuentas por Cobrar', 40, 42);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('Generado: '+new Date().toLocaleString('es'), W-40, 42, {align:'right'});
+
+  // Filtros activos
+  const F=[];
+  if($('cComercial').value) F.push('Comercial: '+$('cComercial').value);
+  if($('cRegion').value)    F.push('Región: '+$('cRegion').value);
+  if($('cMoneda').value)    F.push('Moneda: '+$('cMoneda').value);
+  if($('cAging').value)     F.push('Antigüedad: '+(AG_LABELS[$('cAging').value]||''));
+  if($('cVencidos')._on)    F.push('Solo vencidos');
+  if($('cQ').value.trim())  F.push('Cliente: "'+$('cQ').value.trim()+'"');
+  doc.setFontSize(9); doc.setTextColor(70);
+  doc.text('Filtros: '+(F.length?F.join('   ·   '):'ninguno (toda la cartera)'), 40, 60);
+
+  // Totales de cabecera
+  let totUsd=0, vencUsd=0; const cli=new Set(); const porMon={};
+  cartFiltered.forEach(r=>{ totUsd+=r.saldoUsd; if(r.days>0) vencUsd+=r.saldoUsd; cli.add(r.cliente); porMon[r.currency]=(porMon[r.currency]||0)+r.saldo; });
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...GREEN);
+  doc.text(`Total: ${money(totUsd)} USD    ·    Vencido: ${money(vencUsd)} USD    ·    ${cartFiltered.length} facturas    ·    ${cli.size} clientes`, 40, 78);
+
+  // Tabla de detalle
+  const body = cartFiltered.map(r=>[
+    r.region, r.cliente, r.comercial, r.factura, r.due, r.currency,
+    fmtCur(r.saldo, r.currency), money(r.saldoUsd),
+    r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label
+  ]);
+  doc.autoTable({
+    startY: 92,
+    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Saldo','Saldo USD','Días Venc.','Antigüedad']],
+    body,
+    foot: [['','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.']],
+    styles:{fontSize:7.5, cellPadding:3, overflow:'linebreak', lineColor:[221,217,207], lineWidth:.5},
+    headStyles:{fillColor:GREEN, textColor:255, fontSize:8, halign:'left'},
+    footStyles:{fillColor:[232,242,230], textColor:GREEN, fontStyle:'bold', fontSize:8},
+    alternateRowStyles:{fillColor:[248,246,240]},
+    columnStyles:{1:{cellWidth:150},6:{halign:'right'},7:{halign:'right'},8:{halign:'center'},9:{halign:'center'}},
+    margin:{left:40, right:40},
+    didParseCell:(data)=>{
+      if(data.section==='body' && data.column.index===8){
+        const r=cartFiltered[data.row.index];
+        if(r && r.days>0){ data.cell.styles.textColor = r.days>90?[160,20,20]:r.days>60?[192,56,0]:[138,108,0]; data.cell.styles.fontStyle='bold'; }
+      }
+    },
+    didDrawPage:(data)=>{
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+      doc.text('Forest Reservas — Cartera', 40, H-18);
+      doc.text('Página '+data.pageNumber, W-40, H-18, {align:'right'});
+    }
+  });
+
+  const tag = ($('cComercial').value ? $('cComercial').value.replace(/\s+/g,'_')+'_' : '');
+  doc.save(`Forest_Cartera_${tag}${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 // ═══════════════════════════════════════════════════
