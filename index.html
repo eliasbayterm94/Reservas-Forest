@@ -110,6 +110,8 @@ body{
 .btn-excel{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 15px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:6px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;flex-shrink:0;margin-left:auto}
 .btn-excel:hover{background:var(--fc-navy-dark);transform:translateY(-1px)}
 .btn-excel svg{width:15px;height:15px;stroke-width:2}
+.filter-toggle{display:none;align-items:center;gap:6px;height:34px;padding:0 14px;background:var(--fc-navy);color:#fff;border:none;border-radius:6px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.filter-toggle svg{width:15px;height:15px;stroke-width:2}
 
 /* ══ TABLE ══ */
 .table-wrap{flex:1;overflow:auto;position:relative;contain:strict}
@@ -291,6 +293,12 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
   .fi select{max-width:none;width:100%}
   .btn-excel{height:32px;padding:0 12px}
 
+  /* Filtros de Reservas colapsables (cerrados por defecto en móvil) */
+  .filter-toggle{display:inline-flex}
+  #fbReservas .fi,#fbReservas .pill,#fbReservas .fsep{display:none}
+  #fbReservas.filters-open .fi{display:flex}
+  #fbReservas.filters-open .pill{display:inline-flex}
+
   /* Resumen como carril horizontal deslizable (1 fila) en vez de apilarse */
   .resumen{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:8px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .resumen::-webkit-scrollbar{display:none}
@@ -344,7 +352,8 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 <div id="viewReservas" class="view">
 
 <!-- FILTER BAR -->
-<div class="filterbar">
+<div class="filterbar" id="fbReservas">
+  <button class="filter-toggle" onclick="toggleFilters()"><i data-lucide="sliders-horizontal"></i> Filtros</button>
   <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="fQ" type="text" placeholder="Cliente…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="coffee"></i></span><input id="fCafe" type="text" placeholder="Café / Referencia…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="bookmark"></i></span><input id="fIco" type="text" placeholder="ICO…" oninput="onFilterDebounced()"></div>
@@ -604,8 +613,13 @@ function togglePill(el,key,val){
 function toggleFee(el){
   soloConFee=!soloConFee;
   el.classList.toggle('off',!soloConFee);
-  el.textContent = soloConFee ? '✓ Con Fees' : '💰 Con Fees';
+  el.textContent = soloConFee ? '✓ Con Fees' : 'Con Fees';
   onFilter();
+}
+
+// Muestra/oculta el bloque de filtros de Reservas (útil en móvil)
+function toggleFilters(){
+  document.getElementById('fbReservas').classList.toggle('filters-open');
 }
 
 // NOTA: aplicarFiltros() (filtrado + orden + totales + alternancia de filas)
