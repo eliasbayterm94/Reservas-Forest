@@ -1037,7 +1037,7 @@ const CART_COLS = [
   { key:'days',     label:'Días Vencido', w:110 },
   { key:'aging',    label:'Antigüedad',   w:100 },
 ];
-let cartData=[], cartFiltered=[], cartLoaded=false, cartSc='days', cartSd=-1;
+let cartData=[], cartFiltered=[], cartBase=[], cartLoaded=false, cartSc='days', cartSd=-1;
 let activeTab='reservas', cartDebounce=null;
 
 const titleCase = s => String(s||'').trim().toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
@@ -1177,6 +1177,7 @@ function aplicarCartera(){
     if(q && !r.cliente.toLowerCase().includes(q)) return false;
     return true;
   });
+  cartBase = base;
   // Drill (bracket de antigüedad + solo vencidos) → tabla de detalle
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
@@ -1388,14 +1389,40 @@ function exportCarteraPDF(){
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...GREEN);
   doc.text(`Total: ${money(totUsd)} USD    ·    Vencido: ${money(vencUsd)} USD    ·    ${cartFiltered.length} facturas    ·    ${cli.size} clientes`, 40, 78);
 
+  // Resumen por brackets (sobre el contexto comercial/región = mismo que en pantalla)
+  const ctx = cartBase.length ? cartBase : cartFiltered;
+  const brk=[
+    {label:'Por vencer', test:d=>d<0},
+    {label:'0–10',       test:d=>d>=0 && d<=10},
+    {label:'11–30',      test:d=>d>=11 && d<=30},
+    {label:'31–60',      test:d=>d>=31 && d<=60},
+    {label:'61–90',      test:d=>d>=61 && d<=90},
+    {label:'90+',        test:d=>d>90},
+  ].map(b=>({...b, usd:0, n:0}));
+  const cliB=new Set();
+  ctx.forEach(r=>{ cliB.add(r.cliente); const b=brk.find(x=>x.test(r.days)); if(b){ b.usd+=r.saldoUsd; b.n++; } });
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
+  doc.text('RESUMEN POR ANTIGÜEDAD (USD)', 40, 98);
+  doc.autoTable({
+    startY: 104,
+    head: [[...brk.map(b=>b.label), 'Clientes', 'Facturas']],
+    body: [[...brk.map(b=>`${money(b.usd)}\n${b.n} fact.`), String(cliB.size), String(ctx.length)]],
+    styles:{fontSize:8, cellPadding:5, halign:'center', valign:'middle', lineColor:[221,217,207], lineWidth:.5},
+    headStyles:{fillColor:[27,32,61], textColor:[231,226,68], fontSize:7.5, fontStyle:'bold'},
+    bodyStyles:{fontStyle:'bold', textColor:[27,32,61], fontSize:9},
+    margin:{left:40, right:40},
+  });
+
   // Tabla de detalle
   const body = cartFiltered.map(r=>[
     r.region, r.cliente, r.comercial, r.factura, r.due, r.currency,
     fmtCur(r.saldo, r.currency), money(r.saldoUsd),
     r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label
   ]);
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
+  doc.text('DETALLE DE FACTURAS', 40, doc.lastAutoTable.finalY + 18);
   doc.autoTable({
-    startY: 92,
+    startY: doc.lastAutoTable.finalY + 24,
     head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Saldo','Saldo USD','Días Venc.','Antigüedad']],
     body,
     foot: [['','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.']],
