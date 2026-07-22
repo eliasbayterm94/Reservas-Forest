@@ -249,6 +249,7 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .age.b60{background:#fbe0dc;color:#a8351c}
 .age.b90{background:#f4c6bd;color:#8a2414}
 .c-saldo{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;text-align:right}
+.c-total{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;text-align:right;color:var(--text2)}
 
 /* ══ RESUMEN POR BRACKETS (cartera) ══ */
 .resumen{display:flex;gap:8px;padding:10px 20px;background:var(--surface);border-bottom:2px solid var(--border);flex-wrap:wrap;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.04)}
@@ -1103,6 +1104,7 @@ const CART_COLS = [
   { key:'factura',  label:'Factura',      w:75  },
   { key:'due',      label:'Vencimiento',  w:105 },
   { key:'currency', label:'Moneda',       w:70  },
+  { key:'total',    label:'Total',        w:115, align:'right' },
   { key:'saldo',    label:'Saldo',        w:115, align:'right' },
   { key:'saldoUsd', label:'Saldo USD',    w:115, align:'right' },
   { key:'days',     label:'Días Vencido', w:110 },
@@ -1175,8 +1177,8 @@ async function cargarCartera(forzar=false){
     const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
     const col  = name => head.indexOf(name);
     const iReg=col('region'), iDoc=col('doc number'), iCus=col('customer'), iRep=col('sales rep'),
-          iDue=col('due date'), iCur=col('currency'), iBalL=col('balance (local)'),
-          iBalU=col('usd balance'), iDays=col('days');
+          iDue=col('due date'), iCur=col('currency'), iTotL=col('total (local)'), iBalL=col('balance (local)'),
+          iTotU=col('usd amount'), iBalU=col('usd balance'), iDays=col('days');
 
     const rows=[];
     for(let r=1;r<aoa.length;r++){
@@ -1190,6 +1192,8 @@ async function cargarCartera(forzar=false){
         comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Sin asignar',
         due:       normalizeDate(row[iDue]),
         currency:  String(row[iCur]||'').trim().toUpperCase(),
+        total:     cleanNum(row[iTotL]),
+        totalUsd:  cleanNum(row[iTotU]),
         saldo:     saldo,
         saldoUsd:  cleanNum(row[iBalU]),
         days:      Math.round(cleanNum(row[iDays])),
@@ -1256,18 +1260,19 @@ function aplicarCartera(){
     return true;
   });
 
-  const numeric = new Set(['saldo','saldoUsd','days']);
+  const numeric = new Set(['total','totalUsd','saldo','saldoUsd','days']);
   if(numeric.has(cartSc)) cartFiltered.sort((a,b)=>cartSd*((a[cartSc]||0)-(b[cartSc]||0)));
   else cartFiltered.sort((a,b)=>cartSd*String(a[cartSc]||'').localeCompare(String(b[cartSc]||''),'es',{sensitivity:'base'}));
 
   renderCartera();
 
   // KPIs + totales (un solo recorrido)
-  let totUsd=0, vencUsd=0; const cli=new Set(); const saldoPorMon={};
+  let totUsd=0, vencUsd=0; const cli=new Set(); const saldoPorMon={}, totalPorMon={};
   for(const r of cartFiltered){
     totUsd+=r.saldoUsd; cli.add(r.cliente);
     if(r.days>0) vencUsd+=r.saldoUsd;
     saldoPorMon[r.currency]=(saldoPorMon[r.currency]||0)+r.saldo;
+    totalPorMon[r.currency]=(totalPorMon[r.currency]||0)+r.total;
   }
   $('cUsd').textContent      = money(totUsd);
   $('cVenc').textContent     = money(vencUsd);
@@ -1276,7 +1281,7 @@ function aplicarCartera(){
   $('cFacturas').textContent = `${cartFiltered.length} facturas`;
   $('cFClientes').textContent= cli.size;
   $('cFVencido').textContent = money(vencUsd);
-  renderCartTotales(saldoPorMon, totUsd, cartFiltered.length);
+  renderCartTotales(saldoPorMon, totalPorMon, totUsd, cartFiltered.length);
   renderResumen(base, !!(fc||fr), fa);   // resumen sobre el contexto; resalta el bracket activo
 
   cartFiltered.length===0 ? showCartOverlay('empty') : hideCartOverlays();
@@ -1343,6 +1348,7 @@ function renderCartera(){
       switch(col.key){
         case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age fut">al día</span>'; break;
         case 'aging':    inner = `<span class="age ${ag.k}">${ag.label}</span>`; break;
+        case 'total':    inner = fmtCur(r.total, r.currency);  cls=' class="c-total"'; break;
         case 'saldo':    inner = fmtCur(r.saldo, r.currency); cls=' class="c-saldo"'; break;
         case 'saldoUsd': inner = money(r.saldoUsd);           cls=' class="c-saldo"'; break;
         case 'cliente':  inner = esc(r.cliente); cls=' class="c-cliente"'; break;
@@ -1361,16 +1367,20 @@ function renderCartera(){
   $('tbodyCart').innerHTML = parts.join('');
 }
 
-function renderCartTotales(saldoPorMon, totUsd, n){
+function renderCartTotales(saldoPorMon, totalPorMon, totUsd, n){
   const join = o => Object.entries(o).map(([c,v])=>fmtCur(v,c)).join('  ·  ') || '—';
+  const oneOr = o => { const m=Object.keys(o); return m.length===1 ? fmtCur(o[m[0]], m[0]) : '—'; };
   let cells='';
   CART_COLS.forEach((col,ci)=>{
     let v='', cls='', title='';
     if(ci===0){ v='TOTALES'; cls=' class="tot-label"'; }
     else if(col.key==='cliente'){ v=`${n} factura${n!==1?'s':''}`; cls=' class="tot-label"'; }
+    else if(col.key==='total'){
+      v = oneOr(totalPorMon);
+      cls=' class="tot-fee"'; title=` title="Total por moneda: ${join(totalPorMon)}"`;
+    }
     else if(col.key==='saldo'){
-      const mons=Object.keys(saldoPorMon);
-      v = mons.length===1 ? fmtCur(saldoPorMon[mons[0]], mons[0]) : '—';   // evita sumatoria multi-moneda
+      v = oneOr(saldoPorMon);   // evita sumatoria multi-moneda
       cls=' class="tot-fee"'; title=` title="Saldo por moneda: ${join(saldoPorMon)}"`;
     }
     else if(col.key==='saldoUsd'){ v=money(totUsd); cls=' class="tot-fee"'; }
@@ -1398,7 +1408,7 @@ function exportCartera(){
   const st=(ev,al,bold,fg)=>({fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{sz:10,name:'Calibri',bold:!!bold,color:{rgb:fg||'1A1710'}},alignment:{horizontal:al||'left',vertical:'center'},border:allB(BORDER_C)});
   const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:GREEN}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB(GREEN)}});
   const ws={};
-  const headers=['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Saldo Local','Saldo USD','Días Vencido','Antigüedad'];
+  const headers=['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total Local','Saldo Local','Saldo USD','Días Vencido','Antigüedad'];
   headers.forEach((h,c)=>ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
   let tog=false,lastRep=null;
   cartFiltered.forEach((r,i)=>{
@@ -1411,10 +1421,11 @@ function exportCartera(){
     set(3,r.factura,st(ev,'center'));
     set(4,r.due,st(ev,'center'));
     set(5,r.currency,st(ev,'center'));
-    set(6,r.saldo,st(ev,'right',true));
-    set(7,r.saldoUsd,st(ev,'right'));
-    set(8,r.days,st(ev,'center',true,r.days>0?'C03800':'155A30'));
-    set(9,ag.label,st(ev,'center'));
+    set(6,r.total,st(ev,'right'));
+    set(7,r.saldo,st(ev,'right',true));
+    set(8,r.saldoUsd,st(ev,'right'));
+    set(9,r.days,st(ev,'center',true,r.days>0?'C03800':'155A30'));
+    set(10,ag.label,st(ev,'center'));
   });
   ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:cartFiltered.length,c:headers.length-1}});
   ws['!cols']=CART_COLS.map(c=>({wch:Math.round(c.w/7)}));
@@ -1487,24 +1498,24 @@ function exportCarteraPDF(){
   // Tabla de detalle
   const body = cartFiltered.map(r=>[
     r.region, r.cliente, r.comercial, r.factura, r.due, r.currency,
-    fmtCur(r.saldo, r.currency), money(r.saldoUsd),
+    fmtCur(r.total, r.currency), fmtCur(r.saldo, r.currency), money(r.saldoUsd),
     r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label
   ]);
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
   doc.text('DETALLE DE FACTURAS', 40, doc.lastAutoTable.finalY + 18);
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 24,
-    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Saldo','Saldo USD','Días Venc.','Antigüedad']],
+    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total','Saldo','Saldo USD','Días Venc.','Antigüedad']],
     body,
-    foot: [['','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.']],
+    foot: [['','','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.']],
     styles:{fontSize:7.5, cellPadding:3, overflow:'linebreak', lineColor:[221,217,207], lineWidth:.5},
     headStyles:{fillColor:GREEN, textColor:255, fontSize:8, halign:'left'},
     footStyles:{fillColor:[232,242,230], textColor:GREEN, fontStyle:'bold', fontSize:8},
     alternateRowStyles:{fillColor:[248,246,240]},
-    columnStyles:{1:{cellWidth:150},6:{halign:'right'},7:{halign:'right'},8:{halign:'center'},9:{halign:'center'}},
+    columnStyles:{1:{cellWidth:140},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'center'},10:{halign:'center'}},
     margin:{left:40, right:40},
     didParseCell:(data)=>{
-      if(data.section==='body' && data.column.index===8){
+      if(data.section==='body' && data.column.index===9){
         const r=cartFiltered[data.row.index];
         if(r && r.days>0){ data.cell.styles.textColor = r.days>90?[160,20,20]:r.days>60?[192,56,0]:[138,108,0]; data.cell.styles.fontStyle='bold'; }
       }
