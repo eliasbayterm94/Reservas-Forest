@@ -211,6 +211,24 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .footer{background:var(--surface2);border-top:1px solid var(--border);height:32px;display:flex;align-items:center;padding:0 20px;gap:28px;flex-shrink:0}
 .footer span{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace}
 .footer strong{color:var(--green2)}
+
+/* ══ TABS ══ */
+.tabs{background:var(--surface2);border-bottom:2px solid var(--border);display:flex;gap:4px;padding:6px 16px 0;flex-shrink:0}
+.tab{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 18px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;border-radius:8px 8px 0 0;border-bottom:2.5px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text2);background:var(--surface)}
+.tab.active{color:var(--green2);background:var(--surface);border-bottom-color:var(--green2)}
+.view{flex:1;display:flex;flex-direction:column;min-height:0}
+.view.hidden{display:none}
+.tst.hidden{display:none}
+
+/* ══ AGING BADGES (cartera) ══ */
+.age{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;white-space:nowrap}
+.age.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.age.b30{background:#fff8e8;color:#8a6c00}
+.age.b60{background:#fff4e0;color:#b86000}
+.age.b90{background:var(--warn-bg);color:var(--warn)}
+.age.b90p{background:#fbe0e0;color:#a01414}
+.c-saldo{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;text-align:right}
 </style>
 </head>
 <body>
@@ -225,7 +243,7 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     </div>
   </div>
   <div class="tb-sep"></div>
-  <button class="btn-top btn-refresh" id="btnRefresh" onclick="cargarDatos(true)">
+  <button class="btn-top btn-refresh" id="btnRefresh" onclick="refrescar()">
     <span id="refreshIcon">↻</span> Actualizar
   </button>
   <div id="statusPill" class="status-pill loading">
@@ -233,11 +251,23 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     <span id="statusText">—</span>
   </div>
   <div class="topstats">
-    <div class="tst"><div class="tst-n" id="sRows">—</div><div class="tst-l">Registros</div></div>
-    <div class="tst"><div class="tst-n" id="sBags">—</div><div class="tst-l">Bags</div></div>
-    <div class="tst"><div class="tst-n" id="sClientes">—</div><div class="tst-l">Clientes</div></div>
+    <div class="tst rv"><div class="tst-n" id="sRows">—</div><div class="tst-l">Registros</div></div>
+    <div class="tst rv"><div class="tst-n" id="sBags">—</div><div class="tst-l">Bags</div></div>
+    <div class="tst rv"><div class="tst-n" id="sClientes">—</div><div class="tst-l">Clientes</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cUsd">—</div><div class="tst-l">Cartera USD</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cVenc">—</div><div class="tst-l">Vencido USD</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cClientes">—</div><div class="tst-l">Clientes</div></div>
   </div>
 </div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" id="tabReservas" onclick="switchTab('reservas')">📦 Reservas Activas</button>
+  <button class="tab" id="tabCartera" onclick="switchTab('cartera')">💳 Cartera</button>
+</div>
+
+<!-- ══════════ VISTA: RESERVAS ══════════ -->
+<div id="viewReservas" class="view">
 
 <!-- FILTER BAR -->
 <div class="filterbar">
@@ -313,6 +343,60 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
   <span><strong id="fWH">—</strong> en storage fees</span>
   <span style="margin-left:auto;color:var(--text3)" id="footerTs">—</span>
 </div>
+</div><!-- /viewReservas -->
+
+<!-- ══════════ VISTA: CARTERA ══════════ -->
+<div id="viewCartera" class="view hidden">
+
+  <!-- FILTER BAR CARTERA -->
+  <div class="filterbar">
+    <div class="fi"><span class="fi-icon">🔍</span><input id="cQ" type="text" placeholder="Cliente…" oninput="onCartFilterDebounced()"></div>
+    <div class="fi"><span class="fi-icon">👤</span>
+      <select id="cComercial" onchange="aplicarCartera()"><option value="">Comercial</option></select>
+    </div>
+    <div class="fi"><span class="fi-icon">🌎</span>
+      <select id="cRegion" onchange="aplicarCartera()"><option value="">Región</option></select>
+    </div>
+    <div class="fi"><span class="fi-icon">💱</span>
+      <select id="cMoneda" onchange="aplicarCartera()"><option value="">Moneda</option></select>
+    </div>
+    <div class="fi"><span class="fi-icon">⏱</span>
+      <select id="cAging" onchange="aplicarCartera()">
+        <option value="">Antigüedad</option>
+        <option value="ok">Al día</option>
+        <option value="b30">1–30 días</option>
+        <option value="b60">31–60 días</option>
+        <option value="b90">61–90 días</option>
+        <option value="b90p">+90 días</option>
+      </select>
+    </div>
+    <div class="fsep"></div>
+    <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)">⚠ Solo vencidos</span>
+    <span class="res-count" id="cResCount">—</span>
+    <button class="btn-excel" onclick="exportCartera()">⬇ Excel</button>
+  </div>
+
+  <!-- TABLE CARTERA -->
+  <div class="table-wrap" id="twCart">
+    <table id="cartTable">
+      <colgroup id="colgroupCart"></colgroup>
+      <thead id="theadCart"></thead>
+      <tbody id="tbodyCart"></tbody>
+      <tfoot id="tfootCart"></tfoot>
+    </table>
+    <div class="overlay" id="ovCartLoading"><div class="spinner"></div><div class="overlay-title">Cargando cartera…</div><div class="overlay-sub">Conectando con Google Sheets</div></div>
+    <div class="overlay hidden" id="ovCartError"><div class="overlay-icon">⚠️</div><div class="overlay-title">Error de conexión</div><div class="overlay-sub" id="ovCartErrorMsg">Verifica el acceso al Sheet.</div></div>
+    <div class="overlay hidden" id="ovCartEmpty"><div class="overlay-icon">🔍</div><div class="overlay-title">Sin resultados</div><div class="overlay-sub">Ajusta los filtros para ver cartera.</div></div>
+  </div>
+
+  <!-- FOOTER CARTERA -->
+  <div class="footer">
+    <span><strong id="cFacturas">—</strong> facturas</span>
+    <span><strong id="cFClientes">—</strong> clientes</span>
+    <span><strong id="cFVencido">—</strong> vencido (USD)</span>
+    <span style="margin-left:auto;color:var(--text3)" id="cFooterTs">—</span>
+  </div>
+</div><!-- /viewCartera -->
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -911,9 +995,292 @@ function exportExcel(){
 }
 
 // ═══════════════════════════════════════════════════
+// CARTERA — cuentas por cobrar (fuente: Google Sheet AR, vía CSV)
+// ═══════════════════════════════════════════════════
+const CART_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&gid=0';
+const CART_COLS = [
+  { key:'region',   label:'Región',       w:70  },
+  { key:'cliente',  label:'Cliente',      w:210 },
+  { key:'comercial',label:'Comercial',    w:105 },
+  { key:'factura',  label:'Factura',      w:75  },
+  { key:'due',      label:'Vencimiento',  w:105 },
+  { key:'currency', label:'Moneda',       w:70  },
+  { key:'saldo',    label:'Saldo',        w:115, align:'right' },
+  { key:'saldoUsd', label:'Saldo USD',    w:115, align:'right' },
+  { key:'days',     label:'Días Vencido', w:110 },
+  { key:'aging',    label:'Antigüedad',   w:100 },
+];
+let cartData=[], cartFiltered=[], cartLoaded=false, cartSc='days', cartSd=-1;
+let activeTab='reservas', cartDebounce=null;
+
+const titleCase = s => String(s||'').trim().toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+
+function fmtCur(val, cur){
+  const n = Math.round(Number(val)||0).toLocaleString('en-US');
+  switch((cur||'').toUpperCase()){
+    case 'EUR': return '€'+n;
+    case 'GBP': return '£'+n;
+    case 'AUD': return 'A$'+n;
+    case 'AED': return 'AED '+n;
+    default:    return '$'+n;   // USD
+  }
+}
+const money = n => '$'+Math.round(Number(n)||0).toLocaleString('en-US');
+
+function agingOf(d){
+  if(d<=0)  return { k:'ok',   label:'Al día' };
+  if(d<=30) return { k:'b30',  label:'1–30'  };
+  if(d<=60) return { k:'b60',  label:'31–60' };
+  if(d<=90) return { k:'b90',  label:'61–90' };
+  return          { k:'b90p', label:'+90'   };
+}
+
+async function cargarCartera(forzar=false){
+  showCartOverlay('loading');
+  if(activeTab==='cartera') setLoading(true);
+  try{
+    const url = CART_CSV_URL + (forzar ? '&_='+Date.now() : '');
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    const wb   = XLSX.read(text, {type:'string'});
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const aoa  = XLSX.utils.sheet_to_json(ws, {header:1, blankrows:false});
+    if(!aoa.length) throw new Error('Sheet vacío');
+
+    // Localizar columnas por encabezado (robusto ante reordenamientos)
+    const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
+    const col  = name => head.indexOf(name);
+    const iReg=col('region'), iDoc=col('doc number'), iCus=col('customer'), iRep=col('sales rep'),
+          iDue=col('due date'), iCur=col('currency'), iBalL=col('balance (local)'),
+          iBalU=col('usd balance'), iDays=col('days');
+
+    const rows=[];
+    for(let r=1;r<aoa.length;r++){
+      const row=aoa[r]; if(!row||!row.length) continue;
+      const saldo=Number(row[iBalL])||0;
+      if(saldo<=0) continue;                       // solo facturas con saldo pendiente
+      rows.push({
+        region:    String(row[iReg]||'').trim(),
+        factura:   String(row[iDoc]||'').trim(),
+        cliente:   String(row[iCus]||'').trim(),
+        comercial: row[iRep] ? titleCase(row[iRep]) : 'Sin asignar',
+        due:       String(row[iDue]||'').trim().slice(0,10),
+        currency:  String(row[iCur]||'').trim().toUpperCase(),
+        saldo:     saldo,
+        saldoUsd:  Number(row[iBalU])||0,
+        days:      Number(row[iDays])||0,
+      });
+    }
+    cartData=rows; cartLoaded=true;
+    llenarFiltrosCartera();
+    aplicarCartera();
+    const ts=new Date().toLocaleString('es');
+    $('cFooterTs').textContent=`Actualizado: ${ts}`;
+    if(activeTab==='cartera') setStatus('ok', ts);
+  }catch(err){
+    console.error(err);
+    showCartOverlay('error');
+    $('ovCartErrorMsg').textContent = `${err.message} — revisa que el Sheet esté compartido como “cualquiera con el link puede ver”.`;
+    if(activeTab==='cartera') setStatus('err','Error de conexión');
+  }finally{
+    if(activeTab==='cartera') setLoading(false);
+  }
+}
+
+function llenarFiltrosCartera(){
+  const uniq = arr => [...new Set(arr.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'));
+  const fill = (sel,vals,label)=>{
+    const pv=sel.value;
+    sel.innerHTML=`<option value="">${label}</option>`;
+    vals.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);});
+    sel.value=pv;
+  };
+  fill($('cComercial'), uniq(cartData.map(r=>r.comercial)), 'Comercial');
+  fill($('cRegion'),    uniq(cartData.map(r=>r.region)),    'Región');
+  fill($('cMoneda'),    uniq(cartData.map(r=>r.currency)),  'Moneda');
+}
+
+function onCartFilterDebounced(){ clearTimeout(cartDebounce); cartDebounce=setTimeout(aplicarCartera,120); }
+function toggleVencidos(el){ el._on=!el._on; el.classList.toggle('off',!el._on); aplicarCartera(); }
+
+function cartSortBy(key,th){
+  cartSc===key ? cartSd*=-1 : (cartSc=key, cartSd=1);
+  document.querySelectorAll('#theadCart th').forEach(t=>t.classList.remove('asc','desc'));
+  th.classList.add(cartSd===1?'asc':'desc');
+  aplicarCartera();
+}
+
+function aplicarCartera(){
+  if(!cartLoaded) return;
+  const q  = $('cQ').value.toLowerCase().trim();
+  const fc = $('cComercial').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
+  const soloVenc = !!$('cVencidos')._on;
+
+  cartFiltered = cartData.filter(r=>{
+    if(fc && r.comercial!==fc) return false;
+    if(fr && r.region   !==fr) return false;
+    if(fm && r.currency !==fm) return false;
+    if(fa && agingOf(r.days).k!==fa) return false;
+    if(soloVenc && !(r.days>0)) return false;
+    if(q && !r.cliente.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const numeric = new Set(['saldo','saldoUsd','days']);
+  if(numeric.has(cartSc)) cartFiltered.sort((a,b)=>cartSd*((a[cartSc]||0)-(b[cartSc]||0)));
+  else cartFiltered.sort((a,b)=>cartSd*String(a[cartSc]||'').localeCompare(String(b[cartSc]||''),'es',{sensitivity:'base'}));
+
+  renderCartera();
+
+  // KPIs + totales (un solo recorrido)
+  let totUsd=0, vencUsd=0; const cli=new Set(); const saldoPorMon={};
+  for(const r of cartFiltered){
+    totUsd+=r.saldoUsd; cli.add(r.cliente);
+    if(r.days>0) vencUsd+=r.saldoUsd;
+    saldoPorMon[r.currency]=(saldoPorMon[r.currency]||0)+r.saldo;
+  }
+  $('cUsd').textContent      = money(totUsd);
+  $('cVenc').textContent     = money(vencUsd);
+  $('cClientes').textContent = cli.size;
+  $('cResCount').textContent = `${cartFiltered.length} factura${cartFiltered.length!==1?'s':''}`;
+  $('cFacturas').textContent = `${cartFiltered.length} facturas`;
+  $('cFClientes').textContent= cli.size;
+  $('cFVencido').textContent = money(vencUsd);
+  renderCartTotales(saldoPorMon, totUsd, cartFiltered.length);
+
+  cartFiltered.length===0 ? showCartOverlay('empty') : hideCartOverlays();
+}
+
+function buildTheadCart(){
+  $('colgroupCart').innerHTML = CART_COLS.map(c=>`<col style="width:${c.w}px">`).join('');
+  const tr=document.createElement('tr');
+  CART_COLS.forEach(col=>{
+    const th=document.createElement('th');
+    if(cartSc===col.key) th.classList.add(cartSd===1?'asc':'desc');
+    const inner=document.createElement('div');
+    inner.className='th-inner';
+    inner.innerHTML=`${col.label}<span class="th-sort"></span>`;
+    inner.onclick=()=>cartSortBy(col.key,th);
+    th.appendChild(inner);
+    tr.appendChild(th);
+  });
+  const thead=$('theadCart'); thead.innerHTML=''; thead.appendChild(tr);
+}
+
+function renderCartera(){
+  const parts=[];
+  let tog=false,lastRep=null;
+  for(let i=0;i<cartFiltered.length;i++){
+    const r=cartFiltered[i];
+    if(r.comercial!==lastRep){tog=!tog;lastRep=r.comercial;}   // alterna por comercial
+    const ag=agingOf(r.days);
+    let tds='';
+    for(const col of CART_COLS){
+      let inner='', cls='';
+      switch(col.key){
+        case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age ok">al día</span>'; break;
+        case 'aging':    inner = `<span class="age ${ag.k}">${ag.label}</span>`; break;
+        case 'saldo':    inner = fmtCur(r.saldo, r.currency); cls=' class="c-saldo"'; break;
+        case 'saldoUsd': inner = money(r.saldoUsd);           cls=' class="c-saldo"'; break;
+        case 'cliente':  inner = esc(r.cliente); cls=' class="c-cliente"'; break;
+        case 'region':   inner = esc(r.region);  cls=' class="c-bodega"';  break;
+        case 'factura':  inner = esc(r.factura); cls=' class="c-mono"';    break;
+        case 'currency': inner = esc(r.currency);cls=' class="c-mono"';    break;
+        case 'due':      inner = esc(r.due);     cls=' class="c-mono"';    break;
+        case 'comercial':inner = esc(r.comercial);cls=' class="c-muted"'; break;
+        default:         inner = esc(r[col.key]||'—');
+      }
+      const align = col.align ? ` style="text-align:${col.align}"` : '';
+      tds += `<td${cls}${align}>${inner}</td>`;
+    }
+    parts.push(`<tr${tog?' class="alt"':''}>${tds}</tr>`);
+  }
+  $('tbodyCart').innerHTML = parts.join('');
+}
+
+function renderCartTotales(saldoPorMon, totUsd, n){
+  const join = o => Object.entries(o).map(([c,v])=>fmtCur(v,c)).join('  ·  ') || '—';
+  let cells='';
+  CART_COLS.forEach((col,ci)=>{
+    let v='', cls='', title='';
+    if(ci===0){ v='TOTALES'; cls=' class="tot-label"'; }
+    else if(col.key==='cliente'){ v=`${n} factura${n!==1?'s':''}`; cls=' class="tot-label"'; }
+    else if(col.key==='saldo'){ v=join(saldoPorMon); cls=' class="tot-fee"'; title=` title="${join(saldoPorMon)}"`; }
+    else if(col.key==='saldoUsd'){ v=money(totUsd); cls=' class="tot-fee"'; }
+    const align = col.align ? ` style="text-align:${col.align}"` : '';
+    cells+=`<td${cls}${align}${title}>${v}</td>`;
+  });
+  $('tfootCart').innerHTML=`<tr>${cells}</tr>`;
+}
+
+function showCartOverlay(state){
+  $('ovCartLoading').classList.toggle('hidden',state!=='loading');
+  $('ovCartError').classList.toggle('hidden',state!=='error');
+  $('ovCartEmpty').classList.toggle('hidden',state!=='empty');
+}
+function hideCartOverlays(){
+  $('ovCartLoading').classList.add('hidden');
+  $('ovCartError').classList.add('hidden');
+  $('ovCartEmpty').classList.add('hidden');
+}
+
+function exportCartera(){
+  const GREEN='1E4D18',WHITE='FFFFFF',BORDER_C='DDD9CF',ROW_ALT='F8F6F0';
+  const thin=c=>({style:'thin',color:{rgb:c||BORDER_C}});
+  const allB=c=>({top:thin(c),bottom:thin(c),left:thin(c),right:thin(c)});
+  const st=(ev,al,bold,fg)=>({fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{sz:10,name:'Calibri',bold:!!bold,color:{rgb:fg||'1A1710'}},alignment:{horizontal:al||'left',vertical:'center'},border:allB(BORDER_C)});
+  const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:GREEN}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB(GREEN)}});
+  const ws={};
+  const headers=['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Saldo Local','Saldo USD','Días Vencido','Antigüedad'];
+  headers.forEach((h,c)=>ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
+  let tog=false,lastRep=null;
+  cartFiltered.forEach((r,i)=>{
+    if(r.comercial!==lastRep){tog=!tog;lastRep=r.comercial;}
+    const ev=tog,row=i+1,ag=agingOf(r.days);
+    const set=(c,v,s)=>ws[XLSX.utils.encode_cell({r:row,c})]={v,t:typeof v==='number'?'n':'s',s};
+    set(0,r.region,st(ev,'center'));
+    set(1,r.cliente,st(ev,'left',true));
+    set(2,r.comercial,st(ev));
+    set(3,r.factura,st(ev,'center'));
+    set(4,r.due,st(ev,'center'));
+    set(5,r.currency,st(ev,'center'));
+    set(6,r.saldo,st(ev,'right',true));
+    set(7,r.saldoUsd,st(ev,'right'));
+    set(8,r.days,st(ev,'center',true,r.days>0?'C03800':'155A30'));
+    set(9,ag.label,st(ev,'center'));
+  });
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:cartFiltered.length,c:headers.length-1}});
+  ws['!cols']=CART_COLS.map(c=>({wch:Math.round(c.w/7)}));
+  ws['!rows']=[{hpt:22}];for(let i=1;i<=cartFiltered.length;i++)ws['!rows'].push({hpt:20});
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2'};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Cartera');
+  XLSX.writeFile(wb,`Forest_Cartera_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════
+function switchTab(tab){
+  activeTab = tab;
+  const isC = tab==='cartera';
+  $('viewReservas').classList.toggle('hidden', isC);
+  $('viewCartera').classList.toggle('hidden', !isC);
+  $('tabReservas').classList.toggle('active', !isC);
+  $('tabCartera').classList.toggle('active', isC);
+  document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', isC));
+  document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
+  DOM.brandSub.textContent = isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
+  if(isC && !cartLoaded) cargarCartera(false);
+}
+function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : cargarDatos(true); }
+
+// ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
 buildThead();
+buildTheadCart();
 cargarDatos(false);
 </script>
 </body>
