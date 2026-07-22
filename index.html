@@ -276,6 +276,61 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .pill svg{width:12px;height:12px;stroke-width:2.2}
 .pill{display:inline-flex;align-items:center;gap:5px}
 
+/* ══ SEGUIMIENTO: checkbox, estados, panel, barra de lote ══ */
+#viewCartera{position:relative}
+.c-sel{text-align:center;cursor:default}
+tbody tr{cursor:pointer}
+.cb{display:inline-block;width:16px;height:16px;border:1.8px solid var(--border2);border-radius:4px;vertical-align:middle;cursor:pointer;position:relative;background:#fff;transition:all .1s}
+.cb:hover{border-color:var(--fc-navy)}
+.cb.on{background:var(--fc-navy);border-color:var(--fc-navy)}
+.cb.on::after{content:'✓';color:var(--fc-yellow);font-size:11px;font-weight:800;position:absolute;top:-2px;left:2px}
+tbody tr.rowsel{background:#fdfce0 !important}
+tbody tr.fl-inc  td:nth-child(2){box-shadow:inset 3px 0 0 var(--warn)}
+tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
+.est{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
+.est.e-sin {background:#ececec;color:#777}
+.est.e-cont{background:var(--yel-bg,#fbf9d3);background:#fbf9d3;color:#7a6a00}
+.est.e-comp{background:#e6eef5;color:#2e4a63}
+.est.e-parc{background:#dcf2dc;color:#3d6224}
+.est.e-inc {background:#fbe9e5;color:#a8351c}
+.est.e-disp{background:#f6ead6;color:#9c5e15}
+.est.e-esc {background:#efe0f0;color:#7a3d84}
+.mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
+.comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
+.comp2.venc{color:var(--warn)}
+.comp2 small{display:block;font-size:9px;color:var(--text3);font-weight:400}
+.accion{color:var(--text2);font-size:11.5px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Barra de gestión en lote */
+.bulkbar{display:flex;align-items:center;gap:13px;background:var(--fc-navy);color:#fff;padding:9px 18px;flex-shrink:0}
+.bulkbar.hidden{display:none}
+.bulk-cnt{background:var(--fc-yellow);color:var(--fc-navy);font-family:'Archivo',sans-serif;font-weight:800;border-radius:6px;padding:3px 10px;font-size:13px}
+.bulk-txt{font-size:12.5px}.bulk-txt b{font-weight:700}
+.bulk-act{margin-left:auto;display:flex;gap:8px}
+.bbtn{height:31px;border-radius:6px;padding:0 14px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer}
+.bbtn.y{background:var(--fc-yellow);color:var(--fc-navy)}
+.bbtn.g{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3)}
+/* Panel slide-over */
+.pn-backdrop{position:absolute;inset:0;background:rgba(12,12,11,.28);z-index:30}
+.pn-backdrop.hidden{display:none}
+.pn{position:absolute;top:0;right:0;bottom:0;width:390px;max-width:92vw;background:#fff;box-shadow:-8px 0 28px rgba(12,12,11,.18);z-index:31;display:flex;flex-direction:column}
+.pn.hidden{display:none}
+.pn-head{background:var(--fc-navy);color:#fff;padding:15px 18px}
+.pn-ey{font-family:'Archivo',sans-serif;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+.pn-t{font-family:'Archivo',sans-serif;font-size:17px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;margin-top:5px}
+.pn-sub{font-size:11.5px;color:rgba(255,255,255,.82);margin-top:6px;font-family:'DM Mono',monospace}
+.pn-body{padding:15px 18px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.pn-applies{background:#fbf9d3;border:1px solid #eadf7a;border-radius:8px;padding:8px 11px;font-size:11px;color:#7a6a00;font-weight:600}
+.pn-fld label{font-family:'Archivo',sans-serif;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);font-weight:700;display:block;margin-bottom:6px}
+.pn-inp{width:100%;height:38px;border:1.5px solid var(--border2);border-radius:8px;padding:0 12px;font-family:'Montserrat',sans-serif;font-size:13px;color:var(--text);background:#fff;outline:none}
+.pn-inp:focus{border-color:var(--fc-navy)}
+textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
+.pn-row{display:flex;gap:10px}.pn-row .pn-fld{flex:1;min-width:0}
+.pn-foot{border-top:1px solid var(--border);padding:12px 18px;display:flex;gap:10px}
+.pn-save{flex:1;height:40px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:8px;font-family:'Archivo',sans-serif;font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:12px;cursor:pointer}
+.pn-save:disabled{opacity:.6}
+.pn-cancel{height:40px;background:#fff;border:1.5px solid var(--border2);border-radius:8px;padding:0 16px;font-family:'Archivo',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:var(--text2);cursor:pointer}
+@media(max-width:767px){ .pn{width:100%;max-width:100%} }
+
 /* ══════════ RESPONSIVE (al final para ganar en cascada) ══════════ */
 @media (max-width:1023px){
   .topbar{padding:0 14px;gap:10px}
@@ -470,6 +525,16 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
   <!-- RESUMEN POR BRACKETS (aparece al filtrar por comercial o región) -->
   <div id="cartResumen" class="resumen hidden"></div>
 
+  <!-- BARRA DE GESTIÓN EN LOTE (aparece al seleccionar facturas) -->
+  <div id="bulkBar" class="bulkbar hidden">
+    <span class="bulk-cnt" id="bulkCnt">0</span>
+    <span class="bulk-txt" id="bulkTxt"></span>
+    <div class="bulk-act">
+      <button class="bbtn y" onclick="gestionSel()">Aplicar gestión</button>
+      <button class="bbtn g" onclick="limpiarSel()">Limpiar</button>
+    </div>
+  </div>
+
   <!-- TABLE CARTERA -->
   <div class="table-wrap" id="twCart">
     <table id="cartTable">
@@ -489,6 +554,32 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     <span><strong id="cFClientes">—</strong> clientes</span>
     <span><strong id="cFVencido">—</strong> vencido (USD)</span>
     <span style="margin-left:auto;color:var(--text3)" id="cFooterTs">—</span>
+  </div>
+
+  <!-- PANEL DE GESTIÓN (slide-over) -->
+  <div id="cartBackdrop" class="pn-backdrop hidden" onclick="cerrarPanel()"></div>
+  <div id="cartPanel" class="pn hidden">
+    <div class="pn-head">
+      <div class="pn-ey">Gestión de cobro</div>
+      <div class="pn-t" id="pnTitle">—</div>
+      <div class="pn-sub" id="pnSub">—</div>
+    </div>
+    <div class="pn-body">
+      <div class="pn-applies" id="pnApplies">—</div>
+      <div class="pn-fld"><label>Estado / clasificación</label>
+        <select class="pn-inp" id="pEstado"></select></div>
+      <div class="pn-row">
+        <div class="pn-fld"><label>Fecha de contacto</label><input type="date" class="pn-inp" id="pContacto"></div>
+        <div class="pn-fld"><label>Fecha de pago esperada</label><input type="date" class="pn-inp" id="pCompromiso"></div>
+      </div>
+      <div class="pn-fld"><label>Monto comprometido (opcional)</label><input type="text" class="pn-inp" id="pMonto" placeholder="ej. $5,000"></div>
+      <div class="pn-fld"><label>Próxima acción / compromiso</label>
+        <textarea class="pn-inp" id="pNota" placeholder="ej. Paga por transferencia el viernes; confirmar recibo."></textarea></div>
+    </div>
+    <div class="pn-foot">
+      <button class="pn-save" id="pSave" onclick="guardarGestion()">Guardar</button>
+      <button class="pn-cancel" onclick="cerrarPanel()">Cancelar</button>
+    </div>
   </div>
 </div><!-- /viewCartera -->
 
@@ -1097,19 +1188,30 @@ function exportExcel(){
 // CARTERA — cuentas por cobrar (fuente: Google Sheet AR, vía CSV)
 // ═══════════════════════════════════════════════════
 const CART_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&gid=0';
+// URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
+let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 const CART_COLS = [
-  { key:'region',   label:'Región',       w:70  },
-  { key:'cliente',  label:'Cliente',      w:210 },
-  { key:'comercial',label:'Comercial',    w:105 },
-  { key:'factura',  label:'Factura',      w:75  },
-  { key:'due',      label:'Vencimiento',  w:105 },
-  { key:'currency', label:'Moneda',       w:70  },
-  { key:'total',    label:'Total',        w:115, align:'right' },
-  { key:'saldo',    label:'Saldo',        w:115, align:'right' },
-  { key:'saldoUsd', label:'Saldo USD',    w:115, align:'right' },
-  { key:'days',     label:'Días Vencido', w:110 },
-  { key:'aging',    label:'Antigüedad',   w:100 },
+  { key:'_sel',     label:'',             w:36,  nosort:true },
+  { key:'region',   label:'Región',       w:64  },
+  { key:'cliente',  label:'Cliente',      w:200 },
+  { key:'comercial',label:'Comercial',    w:100 },
+  { key:'factura',  label:'Factura',      w:72  },
+  { key:'due',      label:'Vencimiento',  w:100 },
+  { key:'currency', label:'Moneda',       w:66  },
+  { key:'total',    label:'Total',        w:110, align:'right' },
+  { key:'saldo',    label:'Saldo',        w:110, align:'right' },
+  { key:'saldoUsd', label:'Saldo USD',    w:110, align:'right' },
+  { key:'days',     label:'Días Venc.',   w:96  },
+  { key:'aging',    label:'Antigüedad',   w:92  },
+  { key:'estado',   label:'Estado',       w:135 },
+  { key:'contacto', label:'Últ. contacto',w:100 },
+  { key:'compromiso',label:'Compromiso',  w:118 },
+  { key:'accion',   label:'Próxima acción',w:230 },
 ];
+// Estado de seguimiento (merge por Región|Factura) y selección múltiple
+let segData = {}, selKeys = new Set(), selClient = null, panelTargets = [];
+const EST_LIST = ['Sin gestión','Contactado','Compromiso de pago','Pago parcial','Promesa incumplida','En disputa','Escalado'];
+const EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Compromiso de pago':'e-comp','Pago parcial':'e-parc','Promesa incumplida':'e-inc','En disputa':'e-disp','Escalado':'e-esc'};
 let cartData=[], cartFiltered=[], cartBase=[], cartLoaded=false, cartSc='days', cartSd=-1;
 let activeTab='reservas', cartDebounce=null;
 
@@ -1200,8 +1302,10 @@ async function cargarCartera(forzar=false){
       });
     }
     cartData=rows; cartLoaded=true;
+    mergeSeg();
     llenarFiltrosCartera();
     aplicarCartera();
+    cargarSeguimiento();   // trae los compromisos guardados y re-mergea
     const ts=new Date().toLocaleString('es');
     $('cFooterTs').textContent=`Actualizado: ${ts}`;
     if(activeTab==='cartera') setStatus('ok', ts);
@@ -1319,6 +1423,115 @@ function filtrarBracket(k){
   aplicarCartera();
 }
 
+// ═══════════════ SEGUIMIENTO DE CARTERA ═══════════════
+const escAttr = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,"\\'").replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// Adjunta a cada factura su gestión (segData) y calcula la bandera semanal
+function mergeSeg(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(const r of cartData){
+    const s = segData[r.region+'|'+r.factura];
+    r.estado    = s ? (s.estado||'') : '';
+    r.contacto  = s ? (s.fechaContacto||'') : '';
+    r.compromiso= s ? (s.fechaCompromiso||'') : '';
+    r.montoComp = s ? (s.monto||'') : '';
+    r.accion    = s ? (s.nota||'') : '';
+    let flag='';
+    if(r.compromiso){
+      const diff=Math.round((new Date(r.compromiso)-today)/86400000);
+      if(diff<0) flag='inc'; else if(diff<=7) flag='week';
+    }
+    if(!r.estado || r.estado==='Sin gestión') flag = flag || 'sin';
+    r.flag=flag;
+  }
+}
+
+async function cargarSeguimiento(){
+  if(!SEG_API_URL){ return; }
+  try{
+    const resp = await fetch(SEG_API_URL);
+    const j = await resp.json();
+    if(j && j.ok){
+      segData={}; (j.rows||[]).forEach(row=>{ segData[row.key]=row; });
+      if(cartLoaded){ mergeSeg(); aplicarCartera(); }
+    }
+  }catch(err){ console.warn('Seguimiento no disponible:', err); }
+}
+
+// ── Selección múltiple (un solo cliente a la vez) ──
+function toggleSel(region, factura, cliente){
+  const k=region+'|'+factura;
+  if(selKeys.has(k)){ selKeys.delete(k); if(!selKeys.size) selClient=null; }
+  else{
+    if(selClient && selClient!==cliente) selKeys.clear();   // otro cliente → reinicia
+    selClient=cliente; selKeys.add(k);
+  }
+  renderCartera(); renderBulk();
+}
+function limpiarSel(){ selKeys.clear(); selClient=null; renderCartera(); renderBulk(); }
+function renderBulk(){
+  const bar=$('bulkBar');
+  if(!selKeys.size){ bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  let tot=0; for(const r of cartFiltered){ if(selKeys.has(r.region+'|'+r.factura)) tot+=r.saldoUsd; }
+  $('bulkCnt').textContent=selKeys.size;
+  $('bulkTxt').innerHTML=`factura${selKeys.size!==1?'s':''} seleccionada${selKeys.size!==1?'s':''} · <b>${esc(selClient)}</b> · Saldo <span class="mono" style="color:var(--fc-yellow)">${money(tot)}</span>`;
+}
+
+// ── Abrir panel: en lote (selección) o una sola factura ──
+function gestionSel(){
+  if(!selKeys.size) return;
+  panelTargets = cartFiltered.filter(r=>selKeys.has(r.region+'|'+r.factura));
+  abrirPanel();
+}
+function gestionUno(region, factura){
+  panelTargets = cartFiltered.filter(r=>r.region===region && r.factura===factura);
+  abrirPanel();
+}
+function abrirPanel(){
+  if(!panelTargets.length) return;
+  const base=panelTargets[0];
+  const cli=panelTargets[0].cliente;
+  const tot=panelTargets.reduce((a,r)=>a+r.saldoUsd,0);
+  $('pnTitle').textContent = panelTargets.length>1 ? `${panelTargets.length} facturas` : `Factura ${base.factura}`;
+  $('pnSub').textContent = `${cli} · ${base.comercial} · Saldo ${money(tot)}`;
+  const facts = panelTargets.map(r=>r.factura).join(', ');
+  $('pnApplies').textContent = panelTargets.length>1
+    ? `Se aplicará a las ${panelTargets.length} facturas seleccionadas (${facts})`
+    : `Factura ${facts} · ${cli}`;
+  // Prefill (si es una sola factura y ya tiene gestión)
+  const pre = panelTargets.length===1 ? (segData[base.region+'|'+base.factura]||{}) : {};
+  fillSelect($('pEstado'), EST_LIST, pre.estado||'Sin gestión');
+  $('pContacto').value  = pre.fechaContacto  || new Date().toISOString().slice(0,10);
+  $('pCompromiso').value= pre.fechaCompromiso|| '';
+  $('pMonto').value     = pre.monto || '';
+  $('pNota').value      = pre.nota  || '';
+  $('cartPanel').classList.remove('hidden');
+  $('cartBackdrop').classList.remove('hidden');
+}
+function cerrarPanel(){ $('cartPanel').classList.add('hidden'); $('cartBackdrop').classList.add('hidden'); }
+function fillSelect(sel, arr, val){ sel.innerHTML=arr.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join(''); }
+
+async function guardarGestion(){
+  if(!panelTargets.length) return;
+  if(!SEG_API_URL){ alert('Falta configurar la URL del backend de seguimiento (SEG_API_URL).'); return; }
+  const payload = {
+    keys: panelTargets.map(r=>({ key:r.region+'|'+r.factura, region:r.region, factura:r.factura, cliente:r.cliente, comercial:r.comercial })),
+    estado:$('pEstado').value, fechaContacto:$('pContacto').value, fechaCompromiso:$('pCompromiso').value,
+    monto:$('pMonto').value, nota:$('pNota').value, usuario:($('cComercial')&&$('cComercial').value)||''
+  };
+  const btn=$('pSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    const resp = await fetch(SEG_API_URL, { method:'POST', body: JSON.stringify(payload) });
+    const j = await resp.json();
+    if(!j || !j.ok) throw new Error((j&&j.error)||'Error');
+    const now=new Date().toISOString();
+    payload.keys.forEach(k=>{ segData[k.key]={ key:k.key, estado:payload.estado, fechaContacto:payload.fechaContacto, fechaCompromiso:payload.fechaCompromiso, monto:payload.monto, nota:payload.nota, actualizado:now }; });
+    mergeSeg(); cerrarPanel(); limpiarSel(); aplicarCartera();
+  }catch(err){ alert('No se pudo guardar: '+err.message); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+
 function buildTheadCart(){
   $('colgroupCart').innerHTML = CART_COLS.map(c=>`<col style="width:${c.w}px">`).join('');
   const tr=document.createElement('tr');
@@ -1328,7 +1541,7 @@ function buildTheadCart(){
     const inner=document.createElement('div');
     inner.className='th-inner';
     inner.innerHTML=`${col.label}<span class="th-sort"></span>`;
-    inner.onclick=()=>cartSortBy(col.key,th);
+    if(!col.nosort) inner.onclick=()=>cartSortBy(col.key,th);
     th.appendChild(inner);
     tr.appendChild(th);
   });
@@ -1342,10 +1555,12 @@ function renderCartera(){
     const r=cartFiltered[i];
     if(r.comercial!==lastRep){tog=!tog;lastRep=r.comercial;}   // alterna por comercial
     const ag=agingOf(r.days);
+    const k = r.region+'|'+r.factura;
     let tds='';
     for(const col of CART_COLS){
       let inner='', cls='';
       switch(col.key){
+        case '_sel':     inner = `<span class="cb${selKeys.has(k)?' on':''}" onclick="event.stopPropagation();toggleSel('${escAttr(r.region)}','${escAttr(r.factura)}','${escAttr(r.cliente)}')"></span>`; cls=' class="c-sel"'; break;
         case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age fut">al día</span>'; break;
         case 'aging':    inner = `<span class="age ${ag.k}">${ag.label}</span>`; break;
         case 'total':    inner = fmtCur(r.total, r.currency);  cls=' class="c-total"'; break;
@@ -1357,12 +1572,20 @@ function renderCartera(){
         case 'currency': inner = esc(r.currency);cls=' class="c-mono"';    break;
         case 'due':      inner = esc(r.due);     cls=' class="c-mono"';    break;
         case 'comercial':inner = esc(r.comercial);cls=' class="c-muted"'; break;
+        case 'estado':   inner = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : `<span class="est e-sin">Sin gestión</span>`; break;
+        case 'contacto': inner = r.contacto ? `<span class="mut2">${esc(r.contacto)}</span>` : '<span class="mut2">—</span>'; break;
+        case 'compromiso':
+          if(r.compromiso){ const venc=r.flag==='inc'; inner=`<span class="comp2${venc?' venc':''}">${esc(r.compromiso)}${r.montoComp?`<small>${esc(String(r.montoComp))}</small>`:''}</span>`; }
+          else inner='<span class="mut2">—</span>'; break;
+        case 'accion':   inner = r.accion ? `<span class="accion" title="${escAttr(r.accion)}">${esc(r.accion)}</span>` : '<span class="mut2">—</span>'; break;
         default:         inner = esc(r[col.key]||'—');
       }
       const align = col.align ? ` style="text-align:${col.align}"` : '';
       tds += `<td${cls}${align}>${inner}</td>`;
     }
-    parts.push(`<tr${tog?' class="alt"':''}>${tds}</tr>`);
+    const flagCls = r.flag ? ' fl-'+r.flag : '';
+    const selCls = selKeys.has(k) ? ' rowsel' : '';
+    parts.push(`<tr class="${(tog?'alt':'')}${flagCls}${selCls}" onclick="gestionUno('${escAttr(r.region)}','${escAttr(r.factura)}')">${tds}</tr>`);
   }
   $('tbodyCart').innerHTML = parts.join('');
 }
@@ -1373,7 +1596,7 @@ function renderCartTotales(saldoPorMon, totalPorMon, totUsd, n){
   let cells='';
   CART_COLS.forEach((col,ci)=>{
     let v='', cls='', title='';
-    if(ci===0){ v='TOTALES'; cls=' class="tot-label"'; }
+    if(col.key==='region'){ v='TOTALES'; cls=' class="tot-label"'; }
     else if(col.key==='cliente'){ v=`${n} factura${n!==1?'s':''}`; cls=' class="tot-label"'; }
     else if(col.key==='total'){
       v = oneOr(totalPorMon);
