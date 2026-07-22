@@ -267,6 +267,42 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .fi-icon svg{width:14px;height:14px;stroke-width:2}
 .pill svg{width:12px;height:12px;stroke-width:2.2}
 .pill{display:inline-flex;align-items:center;gap:5px}
+
+/* ══════════ RESPONSIVE (al final para ganar en cascada) ══════════ */
+@media (max-width:1023px){
+  .topbar{padding:0 14px;gap:10px}
+  .tst{min-width:58px;padding:5px 9px}
+  .filterbar{padding:8px 12px}
+}
+@media (max-width:767px){
+  .topbar{padding:0 12px;gap:8px}
+  .topstats{display:none}                 /* KPIs viven en los cards del resumen + footer */
+  .brand-text p{display:none}
+  .btn-top.btn-refresh{padding:0 11px;font-size:0}     /* solo ícono */
+  .btn-top.btn-refresh #refreshIcon{font-size:15px}
+  .status-pill{font-size:9px;padding:0 8px}
+
+  .tabs{padding:0 6px;gap:0}
+  .tab{padding:0 12px;font-size:10px;height:42px;gap:6px}
+
+  .filterbar{padding:8px 10px;gap:6px}
+  .fi{flex:1 1 calc(50% - 6px);min-width:0}
+  .fi input{width:100%}
+  .fi select{max-width:none;width:100%}
+  .btn-excel{height:32px;padding:0 12px}
+
+  /* Resumen como carril horizontal deslizable (1 fila) en vez de apilarse */
+  .resumen{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:8px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .resumen::-webkit-scrollbar{display:none}
+  .rcard{flex:0 0 138px;min-width:138px}
+
+  .footer{height:auto;min-height:34px;flex-wrap:wrap;align-content:center;padding:6px 10px;gap:8px 14px}
+  .footer span{font-size:10px}
+  .pagination{padding:0 8px;gap:6px}
+  .pagination>span{display:none}          /* deja los botones de página */
+  .pg-size{margin-left:auto}
+  td{font-size:12px}
+}
 </style>
 </head>
 <body>
