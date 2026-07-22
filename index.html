@@ -223,11 +223,12 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 
 /* ══ AGING BADGES (cartera) ══ */
 .age{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;white-space:nowrap}
-.age.ok{background:var(--ok-bg);color:var(--ok-fg)}
-.age.b30{background:#fff8e8;color:#8a6c00}
-.age.b60{background:#fff4e0;color:#b86000}
-.age.b90{background:var(--warn-bg);color:var(--warn)}
-.age.b90p{background:#fbe0e0;color:#a01414}
+.age.fut{background:var(--ok-bg);color:var(--ok-fg)}
+.age.b0 {background:#fdf6e3;color:#8a6c00}
+.age.b10{background:#fff8e8;color:#8a6c00}
+.age.b30{background:#fff4e0;color:#b86000}
+.age.b60{background:var(--warn-bg);color:var(--warn)}
+.age.b90{background:#fbe0e0;color:#a01414}
 .c-saldo{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;text-align:right}
 
 /* ══ RESUMEN POR BRACKETS (cartera) ══ */
@@ -245,6 +246,9 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .rcard.b90{border-left-color:#a01414}
 .rcard.tot{background:var(--green-xl);border-color:var(--res-bd);border-left-color:var(--green2)}
 .rcard.tot .rc-n{color:var(--green)}
+.rcard.clickable{cursor:pointer;transition:transform .1s,background .1s}
+.rcard.clickable:hover{background:var(--surface3);transform:translateY(-1px)}
+.rcard.clickable.active{background:var(--green-l);outline:2px solid var(--green2);outline-offset:-1px}
 </style>
 </head>
 <body>
@@ -379,11 +383,12 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
     <div class="fi"><span class="fi-icon">⏱</span>
       <select id="cAging" onchange="aplicarCartera()">
         <option value="">Antigüedad</option>
-        <option value="ok">Al día</option>
-        <option value="b30">1–30 días</option>
-        <option value="b60">31–60 días</option>
-        <option value="b90">61–90 días</option>
-        <option value="b90p">+90 días</option>
+        <option value="fut">Por vencer</option>
+        <option value="b0">0–10 días</option>
+        <option value="b10">11–30 días</option>
+        <option value="b30">31–60 días</option>
+        <option value="b60">61–90 días</option>
+        <option value="b90">90+ días</option>
       </select>
     </div>
     <div class="fsep"></div>
@@ -1047,11 +1052,12 @@ function fmtCur(val, cur){
 const money = n => '$'+Math.round(Number(n)||0).toLocaleString('en-US');
 
 function agingOf(d){
-  if(d<=0)  return { k:'ok',   label:'Al día' };
-  if(d<=30) return { k:'b30',  label:'1–30'  };
-  if(d<=60) return { k:'b60',  label:'31–60' };
-  if(d<=90) return { k:'b90',  label:'61–90' };
-  return          { k:'b90p', label:'+90'   };
+  if(d<0)   return { k:'fut', label:'Por vencer' };
+  if(d<=10) return { k:'b0',  label:'0–10'  };
+  if(d<=30) return { k:'b10', label:'11–30' };
+  if(d<=60) return { k:'b30', label:'31–60' };
+  if(d<=90) return { k:'b60', label:'61–90' };
+  return          { k:'b90', label:'90+'   };
 }
 
 // Parser CSV propio (quotes-aware) — evita que XLSX convierta fechas en números
@@ -1160,13 +1166,18 @@ function aplicarCartera(){
   const fc = $('cComercial').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
   const soloVenc = !!$('cVencidos')._on;
 
-  cartFiltered = cartData.filter(r=>{
+  // Contexto (comercial + región + cliente + moneda) → base del resumen por brackets
+  const base = cartData.filter(r=>{
     if(fc && r.comercial!==fc) return false;
     if(fr && r.region   !==fr) return false;
     if(fm && r.currency !==fm) return false;
+    if(q && !r.cliente.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  // Drill (bracket de antigüedad + solo vencidos) → tabla de detalle
+  cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
     if(soloVenc && !(r.days>0)) return false;
-    if(q && !r.cliente.toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -1191,23 +1202,23 @@ function aplicarCartera(){
   $('cFClientes').textContent= cli.size;
   $('cFVencido').textContent = money(vencUsd);
   renderCartTotales(saldoPorMon, totUsd, cartFiltered.length);
-  renderResumen(cartFiltered, !!(fc||fr));   // resumen por brackets al filtrar comercial/región
+  renderResumen(base, !!(fc||fr), fa);   // resumen sobre el contexto; resalta el bracket activo
 
   cartFiltered.length===0 ? showCartOverlay('empty') : hideCartOverlays();
 }
 
-// Cuadro resumen por brackets de días vencidos (montos en USD para poder sumar monedas)
-function renderResumen(rows, show){
+// Cuadro resumen por brackets — cada card es un filtro (montos en USD para sumar monedas)
+function renderResumen(rows, show, activeK){
   const box=$('cartResumen');
   if(!show){ box.classList.add('hidden'); box.innerHTML=''; return; }
   box.classList.remove('hidden');
   const B=[
-    {cls:'fut', label:'Por vencer', test:d=>d<0},
-    {cls:'b0',  label:'0–10 días',  test:d=>d>=0 && d<=10},
-    {cls:'b10', label:'11–30 días', test:d=>d>=11 && d<=30},
-    {cls:'b30', label:'31–60 días', test:d=>d>=31 && d<=60},
-    {cls:'b60', label:'61–90 días', test:d=>d>=61 && d<=90},
-    {cls:'b90', label:'90+ días',   test:d=>d>90},
+    {k:'fut', label:'Por vencer', test:d=>d<0},
+    {k:'b0',  label:'0–10 días',  test:d=>d>=0 && d<=10},
+    {k:'b10', label:'11–30 días', test:d=>d>=11 && d<=30},
+    {k:'b30', label:'31–60 días', test:d=>d>=31 && d<=60},
+    {k:'b60', label:'61–90 días', test:d=>d>=61 && d<=90},
+    {k:'b90', label:'90+ días',   test:d=>d>90},
   ].map(b=>({...b, usd:0, n:0}));
   const cli=new Set();
   for(const r of rows){
@@ -1215,10 +1226,17 @@ function renderResumen(rows, show){
     const b=B.find(x=>x.test(r.days));
     if(b){ b.usd+=r.saldoUsd; b.n++; }
   }
-  let html = B.map(b=>`<div class="rcard ${b.cls}"><div class="rc-l">${b.label}</div><div class="rc-n">${money(b.usd)}</div><div class="rc-s">${b.n} fact.</div></div>`).join('');
+  let html = B.map(b=>`<div class="rcard ${b.k} clickable${activeK===b.k?' active':''}" onclick="filtrarBracket('${b.k}')" title="${b.n} facturas · clic para filtrar"><div class="rc-l">${b.label}</div><div class="rc-n">${money(b.usd)}</div><div class="rc-s">${b.n} fact.</div></div>`).join('');
   html += `<div class="rcard tot"><div class="rc-l">Clientes</div><div class="rc-n">${cli.size}</div><div class="rc-s">en cartera</div></div>`;
   html += `<div class="rcard tot"><div class="rc-l">Facturas</div><div class="rc-n">${rows.length}</div><div class="rc-s">total</div></div>`;
   box.innerHTML = html;
+}
+
+// Clic en un card del resumen → filtra la tabla por ese bracket (toggle) y sincroniza el dropdown
+function filtrarBracket(k){
+  const sel=$('cAging');
+  sel.value = (sel.value===k) ? '' : k;
+  aplicarCartera();
 }
 
 function buildTheadCart(){
@@ -1248,7 +1266,7 @@ function renderCartera(){
     for(const col of CART_COLS){
       let inner='', cls='';
       switch(col.key){
-        case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age ok">al día</span>'; break;
+        case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age fut">al día</span>'; break;
         case 'aging':    inner = `<span class="age ${ag.k}">${ag.label}</span>`; break;
         case 'saldo':    inner = fmtCur(r.saldo, r.currency); cls=' class="c-saldo"'; break;
         case 'saldoUsd': inner = money(r.saldoUsd);           cls=' class="c-saldo"'; break;
