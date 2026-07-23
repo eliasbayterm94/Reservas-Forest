@@ -301,6 +301,8 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .pill.flag-week{background:#fbf3d8;color:#8a6c00;border-color:#e6d488}
 .pill.flag-sin{background:#ececec;color:#666;border-color:#d5d5d5}
 .pill b{font-family:'DM Mono',monospace;margin-left:3px;font-weight:600}
+#histTable{table-layout:auto}
+#histTable th{padding:0 12px;height:38px}
 .mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
 .comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
 .comp2.venc{color:var(--warn)}
@@ -416,6 +418,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <div class="tabs">
   <button class="tab active" id="tabReservas" onclick="switchTab('reservas')"><i data-lucide="package"></i> Reservas Activas</button>
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Cartera</button>
+  <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> Historial</button>
 </div>
 
 <!-- ══════════ VISTA: RESERVAS ══════════ -->
@@ -527,11 +530,28 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <option value="b90">90+ días</option>
       </select>
     </div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="list-checks"></i></span>
+      <select id="cEstadoCobro" onchange="aplicarCartera()">
+        <option value="">Estado de cobro</option>
+        <optgroup label="Revisión semanal">
+          <option value="flag:inc">Incumplidos</option>
+          <option value="flag:week">Vencen esta semana</option>
+          <option value="flag:sin">Sin gestión</option>
+        </optgroup>
+        <optgroup label="Clasificación">
+          <option value="est:Contactado">Contactado</option>
+          <option value="est:Compromiso de pago">Compromiso de pago</option>
+          <option value="est:Plan de pago">Plan de pago</option>
+          <option value="est:Pago parcial">Pago parcial</option>
+          <option value="est:Promesa incumplida">Promesa incumplida</option>
+          <option value="est:En disputa">En disputa</option>
+          <option value="est:Escalado">Escalado</option>
+          <option value="est:Cobro Jurídico">Cobro Jurídico</option>
+        </optgroup>
+      </select>
+    </div>
     <div class="fsep"></div>
     <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Solo vencidos</span>
-    <span class="pill flag-inc off"  id="fInc"  onclick="toggleFlag('inc',this)">Incumplidos <b id="nInc">0</b></span>
-    <span class="pill flag-week off" id="fWeek" onclick="toggleFlag('week',this)">Vencen semana <b id="nWeek">0</b></span>
-    <span class="pill flag-sin off"  id="fSin"  onclick="toggleFlag('sin',this)">Sin gestión <b id="nSin">0</b></span>
     <span class="res-count" id="cResCount">—</span>
     <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
@@ -600,6 +620,40 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </div>
   </div>
 </div><!-- /viewCartera -->
+
+<!-- ══════════ VISTA: HISTORIAL (cerradas) ══════════ -->
+<div id="viewHistorial" class="view hidden">
+  <div class="filterbar">
+    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="hQ" type="text" placeholder="Buscar cliente…" oninput="renderHistorial()"></div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="user"></i></span>
+      <select id="hComercial" onchange="renderHistorial()"><option value="">Comercial</option></select>
+    </div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="check-check"></i></span>
+      <select id="hCumplio" onchange="renderHistorial()">
+        <option value="">Cumplimiento</option>
+        <option value="SI">Cumplió compromiso</option>
+        <option value="NO">No cumplió</option>
+      </select>
+    </div>
+    <span class="res-count" id="hResCount">—</span>
+    <button class="btn-excel" onclick="exportHistorial()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+  </div>
+  <div class="table-wrap" id="twHist">
+    <table id="histTable">
+      <thead><tr>
+        <th>Fecha cierre</th><th>Cliente</th><th>Comercial</th><th>Factura</th><th>Región</th>
+        <th>Monto comp.</th><th>Último estado</th><th>Compromiso</th><th>¿Cumplió?</th>
+      </tr></thead>
+      <tbody id="tbodyHist"></tbody>
+    </table>
+    <div class="overlay hidden" id="ovHist"><div class="overlay-icon">🗂️</div><div class="overlay-title">Sin historial aún</div><div class="overlay-sub">Aquí aparecerán las facturas pagadas/cerradas con su último compromiso.</div></div>
+  </div>
+  <div class="footer">
+    <span><strong id="hCount">—</strong> cerradas</span>
+    <span><strong id="hCumpl">—</strong> cumplieron compromiso</span>
+    <span style="margin-left:auto;color:var(--text3)" id="hTs">—</span>
+  </div>
+</div><!-- /viewHistorial -->
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -1364,12 +1418,6 @@ function onComercialChange(){ llenarClientes(); aplicarCartera(); }
 
 function onCartFilterDebounced(){ clearTimeout(cartDebounce); cartDebounce=setTimeout(aplicarCartera,120); }
 function toggleVencidos(el){ el._on=!el._on; el.classList.toggle('off',!el._on); aplicarCartera(); }
-let flagFilters = new Set();
-function toggleFlag(f, el){
-  if(flagFilters.has(f)){ flagFilters.delete(f); el.classList.add('off'); }
-  else { flagFilters.add(f); el.classList.remove('off'); }
-  aplicarCartera();
-}
 
 function cartSortBy(key,th){
   cartSc===key ? cartSd*=-1 : (cartSc=key, cartSd=1);
@@ -1382,6 +1430,7 @@ function aplicarCartera(){
   if(!cartLoaded) return;
   const q  = $('cQ').value.toLowerCase().trim();
   const fc = $('cComercial').value, fcli = $('cCliente').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
+  const ec = $('cEstadoCobro').value;   // '' | flag:inc | est:Contactado …
   const soloVenc = !!$('cVencidos')._on;
 
   // Contexto (comercial + cliente + región + moneda) → base del resumen por brackets
@@ -1394,15 +1443,17 @@ function aplicarCartera(){
     return true;
   });
   cartBase = base;
-  // Contadores de banderas (sobre el contexto) para los chips semanales
+  // Contadores por bandera (sobre el contexto) → van en las opciones del dropdown
   let nInc=0,nWeek=0,nSin=0;
   for(const r of base){ if(r.flag==='inc')nInc++; else if(r.flag==='week')nWeek++; else if(r.flag==='sin')nSin++; }
-  $('nInc').textContent=nInc; $('nWeek').textContent=nWeek; $('nSin').textContent=nSin;
-  // Drill (bracket + solo vencidos + banderas semanales) → tabla de detalle
+  const setC=(v,l,n)=>{const o=document.querySelector('#cEstadoCobro option[value="'+v+'"]'); if(o) o.textContent=`${l} (${n})`;};
+  setC('flag:inc','Incumplidos',nInc); setC('flag:week','Vencen esta semana',nWeek); setC('flag:sin','Sin gestión',nSin);
+  // Drill (bracket + solo vencidos + estado de cobro) → tabla de detalle
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
     if(soloVenc && !(r.days>0)) return false;
-    if(flagFilters.size && !flagFilters.has(r.flag)) return false;
+    if(ec.startsWith('flag:')){ if(r.flag !== ec.slice(5)) return false; }
+    else if(ec.startsWith('est:')){ if((r.estado||'') !== ec.slice(4)) return false; }
     return true;
   });
 
@@ -1495,7 +1546,9 @@ async function cargarSeguimiento(){
     const j = await resp.json();
     if(j && j.ok){
       segData={}; (j.rows||[]).forEach(row=>{ segData[row.key]=row; });
+      cerradasData = j.cerradas || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
+      if(activeTab==='historial') renderHistorial();
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -1817,17 +1870,54 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isC = tab==='cartera';
-  $('viewReservas').classList.toggle('hidden', isC);
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial';
+  $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
-  $('tabReservas').classList.toggle('active', !isC);
+  $('viewHistorial').classList.toggle('hidden', !isH);
+  $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
-  document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', isC));
+  $('tabHistorial').classList.toggle('active', isH);
+  document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isH ? 'Cartera · historial de cerradas' : isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
   if(isC && !cartLoaded) cargarCartera(false);
+  if(isH){ if(!cartLoaded) cargarCartera(false); cargarSeguimiento(); renderHistorial(); }
 }
-function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : cargarDatos(true); }
+function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
+
+// ── Historial (facturas cerradas / pagadas) ──
+let cerradasData = [];
+function renderHistorial(){
+  const q=($('hQ').value||'').toLowerCase().trim(), fc=$('hComercial').value, fcu=$('hCumplio').value;
+  const coms=[...new Set(cerradasData.map(r=>r.comercial).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const sel=$('hComercial'), pv=sel.value;
+  sel.innerHTML='<option value="">Comercial</option>'+coms.map(c=>`<option${c===pv?' selected':''}>${esc(c)}</option>`).join('');
+  const rows=cerradasData.filter(r=>{
+    if(fc && r.comercial!==fc) return false;
+    if(fcu && (r.cumplio||'')!==fcu) return false;
+    if(q && !(r.cliente||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>String(b.fechaCierre).localeCompare(String(a.fechaCierre)));
+  $('tbodyHist').innerHTML = rows.map(r=>{
+    const cum = r.cumplio==='SI' ? '<span class="est e-parc">Cumplió</span>'
+             : r.cumplio==='NO' ? '<span class="est e-inc">No cumplió</span>'
+             : '<span class="mut2">—</span>';
+    const est = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : '<span class="mut2">—</span>';
+    return `<tr><td class="c-mono">${esc(r.fechaCierre||'—')}</td><td class="c-cliente">${esc(r.cliente||'')}</td><td class="c-muted">${esc(r.comercial||'')}</td><td class="c-mono">${esc(r.factura||'')}</td><td class="c-bodega">${esc(r.region||'')}</td><td class="c-total">${esc(String(r.monto||'—'))}</td><td>${est}</td><td class="mut2">${esc(r.compromiso||'—')}</td><td>${cum}</td></tr>`;
+  }).join('');
+  $('hResCount').textContent=`${rows.length} cerrada${rows.length!==1?'s':''}`;
+  $('hCount').textContent=`${rows.length} cerradas`;
+  $('hCumpl').textContent=`${rows.filter(r=>r.cumplio==='SI').length} cumplieron compromiso`;
+  $('ovHist').classList.toggle('hidden', rows.length>0);
+}
+function exportHistorial(){
+  const wb=XLSX.utils.book_new();
+  const data=[['Fecha cierre','Cliente','Comercial','Factura','Región','Monto comprometido','Último estado','Compromiso','Cumplió']]
+    .concat(cerradasData.map(r=>[r.fechaCierre,r.cliente,r.comercial,r.factura,r.region,r.monto,r.estado,r.compromiso,r.cumplio]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb,ws,'Historial');
+  XLSX.writeFile(wb,`Forest_Cartera_Historial_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 
 // ═══════════════════════════════════════════════════
 // INIT
