@@ -1855,29 +1855,33 @@ function exportCarteraPDF(){
     margin:{left:40, right:40},
   });
 
-  // Tabla de detalle
-  const body = cartFiltered.map(r=>[
+  // Tabla de detalle — ordenada por días de vencido (más vencidas primero)
+  const pdfRows = cartFiltered.slice().sort((a,b)=>(b.days||0)-(a.days||0));
+  const body = pdfRows.map(r=>[
     r.region, r.cliente, r.comercial, r.factura, r.due, r.currency,
     fmtCur(r.total, r.currency), fmtCur(r.saldo, r.currency), money(r.saldoUsd),
-    r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label
+    r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label, (r.prio?r.prio.l:'')
   ]);
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
-  doc.text('DETALLE DE FACTURAS', 40, doc.lastAutoTable.finalY + 18);
+  doc.text('DETALLE DE FACTURAS (por días de vencido)', 40, doc.lastAutoTable.finalY + 18);
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 24,
-    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total','Saldo','Saldo USD','Días Venc.','Antigüedad']],
+    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total','Saldo','Saldo USD','Días Venc.','Antigüedad','Acción']],
     body,
-    foot: [['','','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.']],
-    styles:{fontSize:7.5, cellPadding:3, overflow:'linebreak', lineColor:[221,217,207], lineWidth:.5},
-    headStyles:{fillColor:GREEN, textColor:255, fontSize:8, halign:'left'},
-    footStyles:{fillColor:[232,242,230], textColor:GREEN, fontStyle:'bold', fontSize:8},
+    foot: [['','','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.', '']],
+    styles:{fontSize:7, cellPadding:3, overflow:'linebreak', lineColor:[221,217,207], lineWidth:.5},
+    headStyles:{fillColor:GREEN, textColor:255, fontSize:7.5, halign:'left'},
+    footStyles:{fillColor:[232,242,230], textColor:GREEN, fontStyle:'bold', fontSize:7.5},
     alternateRowStyles:{fillColor:[248,246,240]},
-    columnStyles:{1:{cellWidth:140},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'center'},10:{halign:'center'}},
+    columnStyles:{1:{cellWidth:118},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'center'},10:{halign:'center'},11:{halign:'center'}},
     margin:{left:40, right:40},
     didParseCell:(data)=>{
-      if(data.section==='body' && data.column.index===9){
-        const r=cartFiltered[data.row.index];
-        if(r && r.days>0){ data.cell.styles.textColor = r.days>90?[160,20,20]:r.days>60?[192,56,0]:[138,108,0]; data.cell.styles.fontStyle='bold'; }
+      if(data.section!=='body') return;
+      const r=pdfRows[data.row.index]; if(!r) return;
+      if(data.column.index===9 && r.days>0){ data.cell.styles.textColor = r.days>90?[160,20,20]:r.days>60?[192,56,0]:[138,108,0]; data.cell.styles.fontStyle='bold'; }
+      if(data.column.index===11 && r.prio){
+        const cmap={'a-urg':[168,53,28],'a-pron':[156,94,21],'a-cont':[138,108,0],'a-esp':[107,58,120],'a-esp2':[46,74,99],'a-ok':[61,98,36]};
+        data.cell.styles.textColor = cmap[r.prio.c]||[90,90,90]; data.cell.styles.fontStyle='bold';
       }
     },
     didDrawPage:(data)=>{
