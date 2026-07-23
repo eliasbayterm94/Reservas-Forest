@@ -1552,16 +1552,15 @@ function mergeSeg(){
     const especial = (r.estado==='Escalado' || r.estado==='Cobro Jurídico' || r.estado==='En disputa');
     const compFut  = r.compromiso && new Date(r.compromiso) >= today;
     let ac;
-    if(especial)                 ac={l:'Gestión especial',  c:'a-esp',  s:20};
-    else if(compFut)             ac={l:'En espera de pago', c:'a-esp2', s:15};
-    else if(r.compromiso)        ac={l:'Promesa vencida',   c:'a-urg',  s:100}; // tenía promesa y venció
-    else if(r.days>60)           ac={l:'Contacto urgente',  c:'a-urg',  s:90};
-    else if(r.days>30)           ac={l:'Contactar pronto',  c:'a-pron', s:70};
-    else if(r.days>10)           ac={l:'Contactar',         c:'a-cont', s:50};
-    else                         ac={l:'Al día',            c:'a-ok',   s:5};
+    if(especial)          ac={l:'Gestión especial',  c:'a-esp',  s:20};
+    else if(compFut)      ac={l:'En espera de pago', c:'a-esp2', s:15};
+    else if(r.days>=30)   ac={l:'Contactar urgente', c:'a-urg',  s:90};
+    else if(r.days>=11)   ac={l:'Contactar',         c:'a-pron', s:60};
+    else if(r.days>=0)    ac={l:'Enviar mensaje',    c:'a-cont', s:40};
+    else                  ac={l:'Al día',            c:'a-ok',   s:5};
     r.prio = ac;
     r.prioScore = ac.s + Math.min(Math.max(r.days,0),999)/1000;   // más vencida = más arriba dentro del grupo
-    r.esTarea = ac.s>=50;   // Contactar / pronto / urgente / promesa vencida
+    r.esTarea = ac.s>=60;   // tarea = vencida >10 días (Contactar / Contactar urgente)
   }
 }
 
