@@ -372,11 +372,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .fi select{max-width:none;width:100%}
   .btn-excel{height:32px;padding:0 12px}
 
-  /* Filtros de Reservas colapsables (cerrados por defecto en móvil) */
+  /* Filtros colapsables (cerrados por defecto en móvil) — Reservas y Cartera */
   .filter-toggle{display:inline-flex}
-  #fbReservas .fi,#fbReservas .pill,#fbReservas .fsep{display:none}
-  #fbReservas.filters-open .fi{display:flex}
-  #fbReservas.filters-open .pill{display:inline-flex}
+  #fbReservas .fi,#fbReservas .pill,#fbReservas .fsep,
+  #fbCartera .fi,#fbCartera .pill,#fbCartera .fsep{display:none}
+  #fbReservas.filters-open .fi,#fbCartera.filters-open .fi{display:flex}
+  #fbReservas.filters-open .pill,#fbCartera.filters-open .pill{display:inline-flex}
 
   /* Resumen como carril horizontal deslizable (1 fila) en vez de apilarse */
   .resumen{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:8px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -433,7 +434,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
 <!-- FILTER BAR -->
 <div class="filterbar" id="fbReservas">
-  <button class="filter-toggle" onclick="toggleFilters()"><i data-lucide="sliders-horizontal"></i> Filtros</button>
+  <button class="filter-toggle" onclick="toggleFilters('fbReservas')"><i data-lucide="sliders-horizontal"></i> Filtros</button>
   <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="fQ" type="text" placeholder="Cliente…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="coffee"></i></span><input id="fCafe" type="text" placeholder="Café / Referencia…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="bookmark"></i></span><input id="fIco" type="text" placeholder="ICO…" oninput="onFilterDebounced()"></div>
@@ -512,7 +513,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <div id="viewCartera" class="view hidden">
 
   <!-- FILTER BAR CARTERA -->
-  <div class="filterbar">
+  <div class="filterbar" id="fbCartera">
+    <button class="filter-toggle" onclick="toggleFilters('fbCartera')"><i data-lucide="sliders-horizontal"></i> Filtros</button>
     <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="cQ" type="text" placeholder="Buscar…" oninput="onCartFilterDebounced()"></div>
     <div class="fi"><span class="fi-icon"><i data-lucide="user"></i></span>
       <select id="cComercial" onchange="onComercialChange()"><option value="">Comercial</option></select>
@@ -794,9 +796,9 @@ function toggleFee(el){
   onFilter();
 }
 
-// Muestra/oculta el bloque de filtros de Reservas (útil en móvil)
-function toggleFilters(){
-  document.getElementById('fbReservas').classList.toggle('filters-open');
+// Muestra/oculta el bloque de filtros en móvil (Reservas o Cartera)
+function toggleFilters(id){
+  document.getElementById(id||'fbReservas').classList.toggle('filters-open');
 }
 
 // NOTA: aplicarFiltros() (filtrado + orden + totales + alternancia de filas)
