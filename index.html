@@ -295,6 +295,8 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .est.e-inc {background:#fbe9e5;color:#a8351c}
 .est.e-disp{background:#f6ead6;color:#9c5e15}
 .est.e-esc {background:#efe0f0;color:#7a3d84}
+.est.e-plan{background:#e7ecfb;color:#3a4a8a}
+.est.e-jur {background:#6e1b10;color:#fff}
 .mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
 .comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
 .comp2.venc{color:var(--warn)}
@@ -325,6 +327,9 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .pn-inp:focus{border-color:var(--fc-navy)}
 textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 .pn-row{display:flex;gap:10px}.pn-row .pn-fld{flex:1;min-width:0}
+.pn-fld label.pn-check{display:flex;align-items:center;gap:8px;margin:9px 0 0;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text2);cursor:pointer}
+.pn-check input{width:16px;height:16px;accent-color:var(--fc-navy);cursor:pointer;flex-shrink:0}
+.pn-inp.locked{background:var(--cream,#f5f4ee);background:#f5f4ee;color:var(--text2);font-family:'DM Mono',monospace;font-weight:600}
 .pn-foot{border-top:1px solid var(--border);padding:12px 18px;display:flex;gap:10px}
 .pn-save{flex:1;height:40px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:8px;font-family:'Archivo',sans-serif;font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:12px;cursor:pointer}
 .pn-save:disabled{opacity:.6}
@@ -572,7 +577,10 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <div class="pn-fld"><label>Fecha de contacto</label><input type="date" class="pn-inp" id="pContacto"></div>
         <div class="pn-fld"><label>Fecha de pago esperada</label><input type="date" class="pn-inp" id="pCompromiso"></div>
       </div>
-      <div class="pn-fld"><label>Monto comprometido (opcional)</label><input type="text" class="pn-inp" id="pMonto" placeholder="ej. $5,000"></div>
+      <div class="pn-fld"><label>Monto comprometido (opcional)</label>
+        <input type="text" class="pn-inp" id="pMonto" placeholder="ej. $5,000">
+        <label class="pn-check"><input type="checkbox" id="pTotal" onchange="togglePagoTotal()"> Pago total (saldo completo)</label>
+      </div>
       <div class="pn-fld"><label>Próxima acción / compromiso</label>
         <textarea class="pn-inp" id="pNota" placeholder="ej. Paga por transferencia el viernes; confirmar recibo."></textarea></div>
     </div>
@@ -1210,8 +1218,8 @@ const CART_COLS = [
 ];
 // Estado de seguimiento (merge por Región|Factura) y selección múltiple
 let segData = {}, selKeys = new Set(), selClient = null, panelTargets = [];
-const EST_LIST = ['Sin gestión','Contactado','Compromiso de pago','Pago parcial','Promesa incumplida','En disputa','Escalado'];
-const EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Compromiso de pago':'e-comp','Pago parcial':'e-parc','Promesa incumplida':'e-inc','En disputa':'e-disp','Escalado':'e-esc'};
+const EST_LIST = ['Sin gestión','Contactado','Compromiso de pago','Plan de pago','Pago parcial','Promesa incumplida','En disputa','Escalado','Cobro Jurídico'];
+const EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Compromiso de pago':'e-comp','Plan de pago':'e-plan','Pago parcial':'e-parc','Promesa incumplida':'e-inc','En disputa':'e-disp','Escalado':'e-esc','Cobro Jurídico':'e-jur'};
 let cartData=[], cartFiltered=[], cartBase=[], cartLoaded=false, cartSc='days', cartSd=-1;
 let activeTab='reservas', cartDebounce=null;
 
@@ -1506,10 +1514,26 @@ function abrirPanel(){
   $('pCompromiso').value= pre.fechaCompromiso|| '';
   $('pMonto').value     = pre.monto || '';
   $('pNota').value      = pre.nota  || '';
+  $('pTotal').checked   = false;                 // reset "pago total"
+  $('pMonto').readOnly  = false; $('pMonto').classList.remove('locked');
   $('cartPanel').classList.remove('hidden');
   $('cartBackdrop').classList.remove('hidden');
 }
 function cerrarPanel(){ $('cartPanel').classList.add('hidden'); $('cartBackdrop').classList.add('hidden'); }
+
+// "Pago total": llena el monto con el saldo completo de la(s) factura(s) y lo bloquea
+function togglePagoTotal(){
+  const inp=$('pMonto');
+  if($('pTotal').checked){
+    const curs=new Set(panelTargets.map(r=>r.currency));
+    inp.value = curs.size===1
+      ? fmtCur(panelTargets.reduce((a,r)=>a+r.saldo,0), [...curs][0])
+      : money(panelTargets.reduce((a,r)=>a+r.saldoUsd,0));
+    inp.readOnly=true; inp.classList.add('locked');
+  }else{
+    inp.readOnly=false; inp.classList.remove('locked');
+  }
+}
 function fillSelect(sel, arr, val){ sel.innerHTML=arr.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join(''); }
 
 async function guardarGestion(){
