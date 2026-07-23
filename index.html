@@ -426,7 +426,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   </div>
   <div class="tb-sep"></div>
   <button class="btn-top btn-refresh" id="btnRefresh" onclick="refrescar()">
-    <span id="refreshIcon">↻</span> Actualizar
+    <span id="refreshIcon">↻</span> <span id="refreshLbl">Actualizar</span>
   </button>
   <div id="statusPill" class="status-pill loading">
     <span class="status-dot"></span>
@@ -436,18 +436,18 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <div class="tst rv"><div class="tst-n" id="sRows">—</div><div class="tst-l">Registros</div></div>
     <div class="tst rv"><div class="tst-n" id="sBags">—</div><div class="tst-l">Bags</div></div>
     <div class="tst rv"><div class="tst-n" id="sClientes">—</div><div class="tst-l">Clientes</div></div>
-    <div class="tst ct hidden"><div class="tst-n" id="cUsd">—</div><div class="tst-l">Cartera USD</div></div>
-    <div class="tst ct hidden"><div class="tst-n" id="cVenc">—</div><div class="tst-l">Vencido USD</div></div>
-    <div class="tst ct hidden"><div class="tst-n" id="cClientes">—</div><div class="tst-l">Clientes</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cUsd">—</div><div class="tst-l">AR USD</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cVenc">—</div><div class="tst-l">Overdue USD</div></div>
+    <div class="tst ct hidden"><div class="tst-n" id="cClientes">—</div><div class="tst-l">Customers</div></div>
   </div>
 </div>
 
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" id="tabReservas" onclick="switchTab('reservas')"><i data-lucide="package"></i> Reservas Activas</button>
-  <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Cartera</button>
-  <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> Historial</button>
-  <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Gerencia</button>
+  <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
+  <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
+  <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
 <!-- ══════════ VISTA: RESERVAS ══════════ -->
@@ -535,54 +535,54 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
   <!-- FILTER BAR CARTERA -->
   <div class="filterbar" id="fbCartera">
-    <button class="filter-toggle" onclick="toggleFilters('fbCartera')"><i data-lucide="sliders-horizontal"></i> Filtros</button>
-    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="cQ" type="text" placeholder="Buscar…" oninput="onCartFilterDebounced()"></div>
+    <button class="filter-toggle" onclick="toggleFilters('fbCartera')"><i data-lucide="sliders-horizontal"></i> Filters</button>
+    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="cQ" type="text" placeholder="Search…" oninput="onCartFilterDebounced()"></div>
     <div class="fi"><span class="fi-icon"><i data-lucide="user"></i></span>
-      <select id="cComercial" onchange="onComercialChange()"><option value="">Comercial</option></select>
+      <select id="cComercial" onchange="onComercialChange()"><option value="">Sales rep</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="building-2"></i></span>
-      <select id="cCliente" onchange="aplicarCartera()"><option value="">Cliente</option></select>
+      <select id="cCliente" onchange="aplicarCartera()"><option value="">Customer</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="globe"></i></span>
-      <select id="cRegion" onchange="aplicarCartera()"><option value="">Región</option></select>
+      <select id="cRegion" onchange="aplicarCartera()"><option value="">Region</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="arrow-left-right"></i></span>
-      <select id="cMoneda" onchange="aplicarCartera()"><option value="">Moneda</option></select>
+      <select id="cMoneda" onchange="aplicarCartera()"><option value="">Currency</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="clock"></i></span>
       <select id="cAging" onchange="aplicarCartera()">
-        <option value="">Antigüedad</option>
-        <option value="fut">Por vencer</option>
-        <option value="b0">0–10 días</option>
-        <option value="b10">11–30 días</option>
-        <option value="b30">31–60 días</option>
-        <option value="b60">61–90 días</option>
-        <option value="b90">90+ días</option>
+        <option value="">Aging</option>
+        <option value="fut">Not due</option>
+        <option value="b0">0–10 days</option>
+        <option value="b10">11–30 days</option>
+        <option value="b30">31–60 days</option>
+        <option value="b60">61–90 days</option>
+        <option value="b90">90+ days</option>
       </select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="list-checks"></i></span>
       <select id="cEstadoCobro" onchange="aplicarCartera()">
-        <option value="">Estado de cobro</option>
-        <optgroup label="Revisión semanal">
-          <option value="act:task">Por contactar (tareas)</option>
-          <option value="flag:inc">Incumplidos</option>
-          <option value="flag:week">Vencen esta semana</option>
-          <option value="flag:sin">Sin gestión</option>
+        <option value="">Collection status</option>
+        <optgroup label="Weekly review">
+          <option value="act:task">To contact (tasks)</option>
+          <option value="flag:inc">Broken promises</option>
+          <option value="flag:week">Due this week</option>
+          <option value="flag:sin">No action</option>
         </optgroup>
-        <optgroup label="Clasificación">
-          <option value="est:Contactado">Contactado</option>
-          <option value="est:Compromiso de pago">Compromiso de pago</option>
-          <option value="est:Plan de pago">Plan de pago</option>
-          <option value="est:Pago parcial">Pago parcial</option>
-          <option value="est:Promesa incumplida">Promesa incumplida</option>
-          <option value="est:En disputa">En disputa</option>
-          <option value="est:Escalado">Escalado</option>
-          <option value="est:Cobro Jurídico">Cobro Jurídico</option>
+        <optgroup label="Classification">
+          <option value="est:Contacted">Contacted</option>
+          <option value="est:Payment commitment">Payment commitment</option>
+          <option value="est:Payment plan">Payment plan</option>
+          <option value="est:Partial payment">Partial payment</option>
+          <option value="est:Broken promise">Broken promise</option>
+          <option value="est:In dispute">In dispute</option>
+          <option value="est:Escalated">Escalated</option>
+          <option value="est:Legal collection">Legal collection</option>
         </optgroup>
       </select>
     </div>
     <div class="fsep"></div>
-    <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Solo vencidos</span>
+    <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Overdue only</span>
     <span class="res-count" id="cResCount">—</span>
     <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
@@ -596,8 +596,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="bulk-cnt" id="bulkCnt">0</span>
     <span class="bulk-txt" id="bulkTxt"></span>
     <div class="bulk-act">
-      <button class="bbtn y" onclick="gestionSel()">Aplicar gestión</button>
-      <button class="bbtn g" onclick="limpiarSel()">Limpiar</button>
+      <button class="bbtn y" onclick="gestionSel()">Apply follow-up</button>
+      <button class="bbtn g" onclick="limpiarSel()">Clear</button>
     </div>
   </div>
 
@@ -609,16 +609,16 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <tbody id="tbodyCart"></tbody>
       <tfoot id="tfootCart"></tfoot>
     </table>
-    <div class="overlay" id="ovCartLoading"><div class="spinner"></div><div class="overlay-title">Cargando cartera…</div><div class="overlay-sub">Conectando con Google Sheets</div></div>
-    <div class="overlay hidden" id="ovCartError"><div class="overlay-icon">⚠️</div><div class="overlay-title">Error de conexión</div><div class="overlay-sub" id="ovCartErrorMsg">Verifica el acceso al Sheet.</div></div>
-    <div class="overlay hidden" id="ovCartEmpty"><div class="overlay-icon">🔍</div><div class="overlay-title">Sin resultados</div><div class="overlay-sub">Ajusta los filtros para ver cartera.</div></div>
+    <div class="overlay" id="ovCartLoading"><div class="spinner"></div><div class="overlay-title">Loading receivables…</div><div class="overlay-sub">Connecting to Google Sheets</div></div>
+    <div class="overlay hidden" id="ovCartError"><div class="overlay-icon">⚠️</div><div class="overlay-title">Connection error</div><div class="overlay-sub" id="ovCartErrorMsg">Check access to the Sheet.</div></div>
+    <div class="overlay hidden" id="ovCartEmpty"><div class="overlay-icon">🔍</div><div class="overlay-title">No results</div><div class="overlay-sub">Adjust the filters to see receivables.</div></div>
   </div>
 
   <!-- FOOTER CARTERA -->
   <div class="footer">
-    <span><strong id="cFacturas">—</strong> facturas</span>
-    <span><strong id="cFClientes">—</strong> clientes</span>
-    <span><strong id="cFVencido">—</strong> vencido (USD)</span>
+    <span><strong id="cFacturas">—</strong> invoices</span>
+    <span><strong id="cFClientes">—</strong> customers</span>
+    <span><strong id="cFVencido">—</strong> overdue (USD)</span>
     <span style="margin-left:auto;color:var(--text3)" id="cFooterTs">—</span>
   </div>
 
@@ -626,28 +626,28 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div id="cartBackdrop" class="pn-backdrop hidden" onclick="cerrarPanel()"></div>
   <div id="cartPanel" class="pn hidden">
     <div class="pn-head">
-      <div class="pn-ey">Gestión de cobro</div>
+      <div class="pn-ey">Collection follow-up</div>
       <div class="pn-t" id="pnTitle">—</div>
       <div class="pn-sub" id="pnSub">—</div>
     </div>
     <div class="pn-body">
       <div class="pn-applies" id="pnApplies">—</div>
-      <div class="pn-fld"><label>Estado / clasificación</label>
+      <div class="pn-fld"><label>Status / classification</label>
         <select class="pn-inp" id="pEstado"></select></div>
       <div class="pn-row">
-        <div class="pn-fld"><label>Fecha de contacto</label><input type="date" class="pn-inp" id="pContacto"></div>
-        <div class="pn-fld"><label>Fecha de pago esperada</label><input type="date" class="pn-inp" id="pCompromiso"></div>
+        <div class="pn-fld"><label>Contact date</label><input type="date" class="pn-inp" id="pContacto"></div>
+        <div class="pn-fld"><label>Expected payment date</label><input type="date" class="pn-inp" id="pCompromiso"></div>
       </div>
-      <div class="pn-fld"><label>Monto comprometido (opcional)</label>
-        <input type="text" class="pn-inp" id="pMonto" placeholder="ej. $5,000">
-        <label class="pn-check"><input type="checkbox" id="pTotal" onchange="togglePagoTotal()"> Pago total (saldo completo)</label>
+      <div class="pn-fld"><label>Committed amount (optional)</label>
+        <input type="text" class="pn-inp" id="pMonto" placeholder="e.g. $5,000">
+        <label class="pn-check"><input type="checkbox" id="pTotal" onchange="togglePagoTotal()"> Full payment (entire balance)</label>
       </div>
-      <div class="pn-fld"><label>Próxima acción / compromiso</label>
-        <textarea class="pn-inp" id="pNota" placeholder="ej. Paga por transferencia el viernes; confirmar recibo."></textarea></div>
+      <div class="pn-fld"><label>Next action / commitment</label>
+        <textarea class="pn-inp" id="pNota" placeholder="e.g. Paying by wire on Friday; confirm receipt."></textarea></div>
     </div>
     <div class="pn-foot">
-      <button class="pn-save" id="pSave" onclick="guardarGestion()">Guardar</button>
-      <button class="pn-cancel" onclick="cerrarPanel()">Cancelar</button>
+      <button class="pn-save" id="pSave" onclick="guardarGestion()">Save</button>
+      <button class="pn-cancel" onclick="cerrarPanel()">Cancel</button>
     </div>
   </div>
 </div><!-- /viewCartera -->
@@ -655,39 +655,39 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <!-- ══════════ VISTA: HISTORIAL (cerradas) ══════════ -->
 <div id="viewHistorial" class="view hidden">
   <div class="filterbar">
-    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="hQ" type="text" placeholder="Buscar cliente…" oninput="renderHistorial()"></div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="hQ" type="text" placeholder="Search customer…" oninput="renderHistorial()"></div>
     <div class="fi"><span class="fi-icon"><i data-lucide="user"></i></span>
-      <select id="hComercial" onchange="renderHistorial()"><option value="">Comercial</option></select>
+      <select id="hComercial" onchange="renderHistorial()"><option value="">Sales rep</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="check-check"></i></span>
       <select id="hCumplio" onchange="renderHistorial()">
-        <option value="">Cumplimiento</option>
-        <option value="SI">Cumplió compromiso</option>
-        <option value="NO">No cumplió</option>
+        <option value="">Commitment</option>
+        <option value="SI">Met commitment</option>
+        <option value="NO">Not met</option>
       </select>
     </div>
     <span class="res-count" id="hResCount">—</span>
     <button class="btn-excel" onclick="exportHistorial()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="resumen" id="histKpis">
-    <div class="rcard g"><div class="rc-l">Cobrado esta semana</div><div class="rc-n" id="kCobSem">—</div><div class="rc-s">gestionado (USD)</div></div>
-    <div class="rcard g"><div class="rc-l">Cobrado este mes</div><div class="rc-n" id="kCobMes">—</div><div class="rc-s">gestionado (USD)</div></div>
-    <div class="rcard b0"><div class="rc-l">Cerradas (semana)</div><div class="rc-n" id="kCerSem">—</div><div class="rc-s">facturas</div></div>
-    <div class="rcard tot"><div class="rc-l">Cumplieron (semana)</div><div class="rc-n" id="kCumSem">—</div><div class="rc-s">compromisos</div></div>
+    <div class="rcard g"><div class="rc-l">Collected this week</div><div class="rc-n" id="kCobSem">—</div><div class="rc-s">managed (USD)</div></div>
+    <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="kCobMes">—</div><div class="rc-s">managed (USD)</div></div>
+    <div class="rcard b0"><div class="rc-l">Closed (week)</div><div class="rc-n" id="kCerSem">—</div><div class="rc-s">invoices</div></div>
+    <div class="rcard tot"><div class="rc-l">Met (week)</div><div class="rc-n" id="kCumSem">—</div><div class="rc-s">commitments</div></div>
   </div>
   <div class="table-wrap" id="twHist">
     <table id="histTable">
       <thead><tr>
-        <th>Fecha cierre</th><th>Cliente</th><th>Comercial</th><th>Factura</th><th>Región</th>
-        <th>Monto comp.</th><th>Último estado</th><th>Compromiso</th><th>¿Cumplió?</th>
+        <th>Close date</th><th>Customer</th><th>Sales rep</th><th>Invoice</th><th>Region</th>
+        <th>Committed</th><th>Last status</th><th>Commitment</th><th>Met?</th>
       </tr></thead>
       <tbody id="tbodyHist"></tbody>
     </table>
-    <div class="overlay hidden" id="ovHist"><div class="overlay-icon">🗂️</div><div class="overlay-title">Sin historial aún</div><div class="overlay-sub">Aquí aparecerán las facturas pagadas/cerradas con su último compromiso.</div></div>
+    <div class="overlay hidden" id="ovHist"><div class="overlay-icon">🗂️</div><div class="overlay-title">No history yet</div><div class="overlay-sub">Paid/closed invoices will appear here with their last commitment.</div></div>
   </div>
   <div class="footer">
-    <span><strong id="hCount">—</strong> cerradas</span>
-    <span><strong id="hCumpl">—</strong> cumplieron compromiso</span>
+    <span><strong id="hCount">—</strong> closed</span>
+    <span><strong id="hCumpl">—</strong> met commitment</span>
     <span style="margin-left:auto;color:var(--text3)" id="hTs">—</span>
   </div>
 </div><!-- /viewHistorial -->
@@ -697,25 +697,25 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div id="gerLock" class="gerlock">
     <div class="gerlock-card">
       <div class="gerlock-ico"><i data-lucide="lock"></i></div>
-      <div class="gerlock-title">Vista de Gerencia</div>
-      <div class="gerlock-sub">Ingresa el código de acceso</div>
-      <input id="gerCode" type="password" class="gerlock-inp" placeholder="Código" onkeydown="if(event.key==='Enter')gerUnlock()">
-      <button class="gerlock-btn" onclick="gerUnlock()">Entrar</button>
+      <div class="gerlock-title">Management view</div>
+      <div class="gerlock-sub">Enter the access code</div>
+      <input id="gerCode" type="password" class="gerlock-inp" placeholder="Code" onkeydown="if(event.key==='Enter')gerUnlock()">
+      <button class="gerlock-btn" onclick="gerUnlock()">Enter</button>
       <div id="gerErr" class="gerlock-err"></div>
     </div>
   </div>
   <div id="gerContent" class="gercontent hidden">
     <div class="resumen" id="gerKpis">
-      <div class="rcard b0"><div class="rc-l">Cartera abierta</div><div class="rc-n" id="gAb">—</div><div class="rc-s">USD</div></div>
-      <div class="rcard b90"><div class="rc-l">Vencida</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
-      <div class="rcard g"><div class="rc-l">Cobrado esta semana</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">gestionado</div></div>
-      <div class="rcard g"><div class="rc-l">Cobrado este mes</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">gestionado</div></div>
+      <div class="rcard b0"><div class="rc-l">Open AR</div><div class="rc-n" id="gAb">—</div><div class="rc-s">USD</div></div>
+      <div class="rcard b90"><div class="rc-l">Overdue</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
+      <div class="rcard g"><div class="rc-l">Collected this week</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">managed</div></div>
+      <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">managed</div></div>
     </div>
     <div class="table-wrap" id="twGer">
       <table id="gerTable">
         <thead><tr>
-          <th>Comercial</th><th style="text-align:right">Abierta</th><th style="text-align:right">Corriente</th>
-          <th style="text-align:right">Vencida</th><th style="text-align:right">%V</th>
+          <th>Sales rep</th><th style="text-align:right">Open</th><th style="text-align:right">Current</th>
+          <th style="text-align:right">Overdue</th><th style="text-align:right">%O</th>
           <th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
           <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
         </tr></thead>
@@ -723,7 +723,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </table>
     </div>
     <div class="footer">
-      <span>Resumen por comercial · misma info que llega a gerencia por Slack</span>
+      <span>Summary by sales rep · same info sent to management via Slack</span>
       <span style="margin-left:auto;color:var(--text3)" id="gTs">—</span>
     </div>
   </div>
@@ -1341,27 +1341,40 @@ const INTERCO = ['forestcoffeesl'];
 const esInterco = c => INTERCO.includes(String(c||'').toLowerCase().replace(/[^a-z0-9]/g,''));
 const CART_COLS = [
   { key:'_sel',     label:'',             w:36,  nosort:true },
-  { key:'region',   label:'Región',       w:64  },
-  { key:'cliente',  label:'Cliente',      w:200 },
-  { key:'comercial',label:'Comercial',    w:100 },
-  { key:'factura',  label:'Factura',      w:72  },
-  { key:'due',      label:'Vencimiento',  w:100 },
-  { key:'currency', label:'Moneda',       w:66  },
+  { key:'region',   label:'Region',       w:64  },
+  { key:'cliente',  label:'Customer',     w:200 },
+  { key:'comercial',label:'Sales rep',    w:100 },
+  { key:'factura',  label:'Invoice',      w:72  },
+  { key:'due',      label:'Due date',     w:100 },
+  { key:'currency', label:'Currency',     w:66  },
   { key:'total',    label:'Total',        w:110, align:'right' },
-  { key:'saldo',    label:'Saldo',        w:110, align:'right' },
-  { key:'saldoUsd', label:'Saldo USD',    w:110, align:'right' },
-  { key:'days',     label:'Días Venc.',   w:96  },
-  { key:'aging',    label:'Antigüedad',   w:92  },
-  { key:'prio',     label:'Acción',       w:130 },
-  { key:'estado',   label:'Estado',       w:135 },
-  { key:'contacto', label:'Últ. contacto',w:100 },
-  { key:'compromiso',label:'Compromiso',  w:118 },
-  { key:'accion',   label:'Nota',         w:220 },
+  { key:'saldo',    label:'Balance',      w:110, align:'right' },
+  { key:'saldoUsd', label:'Balance USD',  w:110, align:'right' },
+  { key:'days',     label:'Days past due',w:96  },
+  { key:'aging',    label:'Aging',        w:92  },
+  { key:'prio',     label:'Action',       w:130 },
+  { key:'estado',   label:'Status',       w:135 },
+  { key:'contacto', label:'Last contact', w:100 },
+  { key:'compromiso',label:'Commitment',  w:118 },
+  { key:'accion',   label:'Note',         w:220 },
 ];
 // Estado de seguimiento (merge por Región|Factura) y selección múltiple
 let segData = {}, selKeys = new Set(), selClient = null, panelTargets = [];
-const EST_LIST = ['Sin gestión','Contactado','Compromiso de pago','Plan de pago','Pago parcial','Promesa incumplida','En disputa','Escalado','Cobro Jurídico'];
-const EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Compromiso de pago':'e-comp','Plan de pago':'e-plan','Pago parcial':'e-parc','Promesa incumplida':'e-inc','En disputa':'e-disp','Escalado':'e-esc','Cobro Jurídico':'e-jur'};
+const EST_LIST = ['No action','Contacted','Payment commitment','Payment plan','Partial payment','Broken promise','In dispute','Escalated','Legal collection'];
+const EST_CLASS = {'No action':'e-sin','Contacted':'e-cont','Payment commitment':'e-comp','Payment plan':'e-plan','Partial payment':'e-parc','Broken promise':'e-inc','In dispute':'e-disp','Escalated':'e-esc','Legal collection':'e-jur'};
+// Compat: estados guardados en español (datos previos en el Sheet) → valor en inglés
+const EST_ALIAS = {
+  'sin gestión':'No action','sin gestion':'No action',
+  'contactado':'Contacted',
+  'compromiso de pago':'Payment commitment',
+  'plan de pago':'Payment plan',
+  'pago parcial':'Partial payment',
+  'promesa incumplida':'Broken promise',
+  'en disputa':'In dispute',
+  'escalado':'Escalated',
+  'cobro jurídico':'Legal collection','cobro juridico':'Legal collection'
+};
+const normEst = e => { const s=String(e||'').trim(); if(!s) return ''; return EST_ALIAS[s.toLowerCase()] || s; };
 let cartData=[], cartFiltered=[], cartBase=[], cartLoaded=false, cartSc='days', cartSd=-1;
 let activeTab='reservas', cartDebounce=null;
 
@@ -1380,7 +1393,7 @@ function fmtCur(val, cur){
 const money = n => '$'+Math.round(Number(n)||0).toLocaleString('en-US');
 
 function agingOf(d){
-  if(d<0)   return { k:'fut', label:'Por vencer' };
+  if(d<0)   return { k:'fut', label:'Not due' };
   if(d<=10) return { k:'b0',  label:'0–10'  };
   if(d<=30) return { k:'b10', label:'11–30' };
   if(d<=60) return { k:'b30', label:'31–60' };
@@ -1443,7 +1456,7 @@ async function cargarCartera(forzar=false){
         region:    String(row[iReg]||'').trim(),
         factura:   String(row[iDoc]||'').trim(),
         cliente:   cliente,
-        comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Sin asignar',
+        comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Unassigned',
         due:       normalizeDate(row[iDue]),
         currency:  String(row[iCur]||'').trim().toUpperCase(),
         total:     cleanNum(row[iTotL]),
@@ -1459,14 +1472,14 @@ async function cargarCartera(forzar=false){
     aplicarCartera();
     if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1') renderGerencia();
     cargarSeguimiento();   // trae los compromisos guardados y re-mergea
-    const ts=new Date().toLocaleString('es');
-    $('cFooterTs').textContent=`Actualizado: ${ts}`;
+    const ts=new Date().toLocaleString('en-US');
+    $('cFooterTs').textContent=`Updated: ${ts}`;
     if(activeTab==='cartera') setStatus('ok', ts);
   }catch(err){
     console.error(err);
     showCartOverlay('error');
-    $('ovCartErrorMsg').textContent = `${err.message} — revisa que el Sheet esté compartido como “cualquiera con el link puede ver”.`;
-    if(activeTab==='cartera') setStatus('err','Error de conexión');
+    $('ovCartErrorMsg').textContent = `${err.message} — make sure the Sheet is shared as “anyone with the link can view”.`;
+    if(activeTab==='cartera') setStatus('err','Connection error');
   }finally{
     if(activeTab==='cartera') setLoading(false);
   }
@@ -1480,9 +1493,9 @@ function llenarFiltrosCartera(){
     vals.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);});
     sel.value=pv;
   };
-  fill($('cComercial'), uniq(cartData.map(r=>r.comercial)), 'Comercial');
-  fill($('cRegion'),    uniq(cartData.map(r=>r.region)),    'Región');
-  fill($('cMoneda'),    uniq(cartData.map(r=>r.currency)),  'Moneda');
+  fill($('cComercial'), uniq(cartData.map(r=>r.comercial)), 'Sales rep');
+  fill($('cRegion'),    uniq(cartData.map(r=>r.region)),    'Region');
+  fill($('cMoneda'),    uniq(cartData.map(r=>r.currency)),  'Currency');
   llenarClientes();
 }
 
@@ -1492,7 +1505,7 @@ function llenarClientes(){
   const clientes=[...new Set(cartData.filter(r=>!fc||r.comercial===fc).map(r=>r.cliente).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,'es'));
   const sel=$('cCliente'), pv=sel.value;
-  sel.innerHTML='<option value="">Cliente</option>'+clientes.map(c=>`<option>${esc(c)}</option>`).join('');
+  sel.innerHTML='<option value="">Customer</option>'+clientes.map(c=>`<option>${esc(c)}</option>`).join('');
   sel.value = clientes.includes(pv) ? pv : '';   // conserva si sigue válido
 }
 function onComercialChange(){ llenarClientes(); aplicarCartera(); }
@@ -1528,7 +1541,7 @@ function aplicarCartera(){
   let nInc=0,nWeek=0,nSin=0;
   for(const r of base){ if(r.flag==='inc')nInc++; else if(r.flag==='week')nWeek++; else if(r.flag==='sin')nSin++; }
   const setC=(v,l,n)=>{const o=document.querySelector('#cEstadoCobro option[value="'+v+'"]'); if(o) o.textContent=`${l} (${n})`;};
-  setC('flag:inc','Incumplidos',nInc); setC('flag:week','Vencen esta semana',nWeek); setC('flag:sin','Sin gestión',nSin);
+  setC('flag:inc','Broken promises',nInc); setC('flag:week','Due this week',nWeek); setC('flag:sin','No action',nSin);
   // Drill (bracket + solo vencidos + estado de cobro) → tabla de detalle
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
@@ -1557,8 +1570,8 @@ function aplicarCartera(){
   $('cUsd').textContent      = money(totUsd);
   $('cVenc').textContent     = money(vencUsd);
   $('cClientes').textContent = cli.size;
-  $('cResCount').textContent = `${cartFiltered.length} factura${cartFiltered.length!==1?'s':''}`;
-  $('cFacturas').textContent = `${cartFiltered.length} facturas`;
+  $('cResCount').textContent = `${cartFiltered.length} invoice${cartFiltered.length!==1?'s':''}`;
+  $('cFacturas').textContent = cartFiltered.length;
   $('cFClientes').textContent= cli.size;
   $('cFVencido').textContent = money(vencUsd);
   renderCartTotales(saldoPorMon, totalPorMon, totUsd, cartFiltered.length);
@@ -1573,12 +1586,12 @@ function renderResumen(rows, show, activeK){
   if(!show){ box.classList.add('hidden'); box.innerHTML=''; return; }
   box.classList.remove('hidden');
   const B=[
-    {k:'fut', label:'Por vencer', test:d=>d<0},
-    {k:'b0',  label:'0–10 días',  test:d=>d>=0 && d<=10},
-    {k:'b10', label:'11–30 días', test:d=>d>=11 && d<=30},
-    {k:'b30', label:'31–60 días', test:d=>d>=31 && d<=60},
-    {k:'b60', label:'61–90 días', test:d=>d>=61 && d<=90},
-    {k:'b90', label:'90+ días',   test:d=>d>90},
+    {k:'fut', label:'Not due',    test:d=>d<0},
+    {k:'b0',  label:'0–10 days',  test:d=>d>=0 && d<=10},
+    {k:'b10', label:'11–30 days', test:d=>d>=11 && d<=30},
+    {k:'b30', label:'31–60 days', test:d=>d>=31 && d<=60},
+    {k:'b60', label:'61–90 days', test:d=>d>=61 && d<=90},
+    {k:'b90', label:'90+ days',   test:d=>d>90},
   ].map(b=>({...b, usd:0, n:0}));
   const cli=new Set();
   for(const r of rows){
@@ -1586,9 +1599,9 @@ function renderResumen(rows, show, activeK){
     const b=B.find(x=>x.test(r.days));
     if(b){ b.usd+=r.saldoUsd; b.n++; }
   }
-  let html = B.map(b=>`<div class="rcard ${b.k} clickable${activeK===b.k?' active':''}" onclick="filtrarBracket('${b.k}')" title="${b.n} facturas · clic para filtrar"><div class="rc-l">${b.label}</div><div class="rc-n">${money(b.usd)}</div><div class="rc-s">${b.n} fact.</div></div>`).join('');
-  html += `<div class="rcard tot"><div class="rc-l">Clientes</div><div class="rc-n">${cli.size}</div><div class="rc-s">en cartera</div></div>`;
-  html += `<div class="rcard tot"><div class="rc-l">Facturas</div><div class="rc-n">${rows.length}</div><div class="rc-s">total</div></div>`;
+  let html = B.map(b=>`<div class="rcard ${b.k} clickable${activeK===b.k?' active':''}" onclick="filtrarBracket('${b.k}')" title="${b.n} invoices · click to filter"><div class="rc-l">${b.label}</div><div class="rc-n">${money(b.usd)}</div><div class="rc-s">${b.n} inv.</div></div>`).join('');
+  html += `<div class="rcard tot"><div class="rc-l">Customers</div><div class="rc-n">${cli.size}</div><div class="rc-s">in AR</div></div>`;
+  html += `<div class="rcard tot"><div class="rc-l">Invoices</div><div class="rc-n">${rows.length}</div><div class="rc-s">total</div></div>`;
   box.innerHTML = html;
 }
 
@@ -1607,7 +1620,7 @@ function mergeSeg(){
   const today=new Date(); today.setHours(0,0,0,0);
   for(const r of cartData){
     const s = segData[r.region+'|'+r.factura];
-    r.estado    = s ? (s.estado||'') : '';
+    r.estado    = s ? normEst(s.estado) : '';
     r.contacto  = s ? (s.fechaContacto||'') : '';
     r.compromiso= s ? (s.fechaCompromiso||'') : '';
     r.montoComp = s ? (s.monto||'') : '';
@@ -1618,19 +1631,19 @@ function mergeSeg(){
       const diff=Math.round((new Date(r.compromiso)-today)/86400000);
       if(diff<0) flag='inc'; else if(diff<=7) flag='week';
     }
-    if(!r.estado || r.estado==='Sin gestión') flag = flag || 'sin';
+    if(!r.estado || r.estado==='No action') flag = flag || 'sin';
     r.flag=flag;
 
     // Acción sugerida / prioridad (primera que aplique)
-    const especial = (r.estado==='Escalado' || r.estado==='Cobro Jurídico' || r.estado==='En disputa');
+    const especial = (r.estado==='Escalated' || r.estado==='Legal collection' || r.estado==='In dispute');
     const compFut  = r.compromiso && new Date(r.compromiso) >= today;
     let ac;
-    if(especial)          ac={l:'Gestión especial',  c:'a-esp',  s:20};
-    else if(compFut)      ac={l:'En espera de pago', c:'a-esp2', s:15};
-    else if(r.days>=30)   ac={l:'Contactar urgente', c:'a-urg',  s:90};
-    else if(r.days>=11)   ac={l:'Contactar',         c:'a-pron', s:60};
-    else if(r.days>=0)    ac={l:'Enviar mensaje',    c:'a-cont', s:40};
-    else                  ac={l:'Al día',            c:'a-ok',   s:5};
+    if(especial)          ac={l:'Special handling', c:'a-esp',  s:20};
+    else if(compFut)      ac={l:'Awaiting payment', c:'a-esp2', s:15};
+    else if(r.days>=30)   ac={l:'Contact urgently', c:'a-urg',  s:90};
+    else if(r.days>=11)   ac={l:'Contact',          c:'a-pron', s:60};
+    else if(r.days>=0)    ac={l:'Send reminder',    c:'a-cont', s:40};
+    else                  ac={l:'Current',          c:'a-ok',   s:5};
     r.prio = ac;
     r.prioScore = ac.s + Math.min(Math.max(r.days,0),999)/1000;   // más vencida = más arriba dentro del grupo
     r.esTarea = ac.s>=60;   // tarea = vencida >10 días (Contactar / Contactar urgente)
@@ -1669,7 +1682,7 @@ function renderBulk(){
   bar.classList.remove('hidden');
   let tot=0; for(const r of cartFiltered){ if(selKeys.has(r.region+'|'+r.factura)) tot+=r.saldoUsd; }
   $('bulkCnt').textContent=selKeys.size;
-  $('bulkTxt').innerHTML=`factura${selKeys.size!==1?'s':''} seleccionada${selKeys.size!==1?'s':''} · <b>${esc(selClient)}</b> · Saldo <span class="mono" style="color:var(--fc-yellow)">${money(tot)}</span>`;
+  $('bulkTxt').innerHTML=`invoice${selKeys.size!==1?'s':''} selected · <b>${esc(selClient)}</b> · Balance <span class="mono" style="color:var(--fc-yellow)">${money(tot)}</span>`;
 }
 
 // ── Abrir panel: en lote (selección) o una sola factura ──
@@ -1687,15 +1700,15 @@ function abrirPanel(){
   const base=panelTargets[0];
   const cli=panelTargets[0].cliente;
   const tot=panelTargets.reduce((a,r)=>a+r.saldoUsd,0);
-  $('pnTitle').textContent = panelTargets.length>1 ? `${panelTargets.length} facturas` : `Factura ${base.factura}`;
-  $('pnSub').textContent = `${cli} · ${base.comercial} · Saldo ${money(tot)}`;
+  $('pnTitle').textContent = panelTargets.length>1 ? `${panelTargets.length} invoices` : `Invoice ${base.factura}`;
+  $('pnSub').textContent = `${cli} · ${base.comercial} · Balance ${money(tot)}`;
   const facts = panelTargets.map(r=>r.factura).join(', ');
   $('pnApplies').textContent = panelTargets.length>1
-    ? `Se aplicará a las ${panelTargets.length} facturas seleccionadas (${facts})`
-    : `Factura ${facts} · ${cli}`;
+    ? `Will be applied to the ${panelTargets.length} selected invoices (${facts})`
+    : `Invoice ${facts} · ${cli}`;
   // Prefill (si es una sola factura y ya tiene gestión)
   const pre = panelTargets.length===1 ? (segData[base.region+'|'+base.factura]||{}) : {};
-  fillSelect($('pEstado'), EST_LIST, pre.estado||'Sin gestión');
+  fillSelect($('pEstado'), EST_LIST, normEst(pre.estado)||'No action');
   $('pContacto').value  = pre.fechaContacto  || new Date().toISOString().slice(0,10);
   $('pCompromiso').value= pre.fechaCompromiso|| '';
   $('pMonto').value     = pre.monto || '';
@@ -1724,14 +1737,14 @@ function fillSelect(sel, arr, val){ sel.innerHTML=arr.map(o=>`<option${o===val?'
 
 async function guardarGestion(){
   if(!panelTargets.length) return;
-  if(!SEG_API_URL){ alert('Falta configurar la URL del backend de seguimiento (SEG_API_URL).'); return; }
+  if(!SEG_API_URL){ alert('The follow-up backend URL (SEG_API_URL) is not configured.'); return; }
   const pagoTotal = $('pTotal').checked ? 'SI' : 'NO';
   const payload = {
     keys: panelTargets.map(r=>({ key:r.region+'|'+r.factura, region:r.region, factura:r.factura, cliente:r.cliente, comercial:r.comercial, saldoUsd:Math.round(r.saldoUsd||0) })),
     estado:$('pEstado').value, fechaContacto:$('pContacto').value, fechaCompromiso:$('pCompromiso').value,
     monto:$('pMonto').value, pagoTotal, nota:$('pNota').value, usuario:($('cComercial')&&$('cComercial').value)||''
   };
-  const btn=$('pSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
+  const btn=$('pSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Saving…';
   try{
     const resp = await fetch(SEG_API_URL, { method:'POST', body: JSON.stringify(payload) });
     const j = await resp.json();
@@ -1739,7 +1752,7 @@ async function guardarGestion(){
     const now=new Date().toISOString();
     payload.keys.forEach(k=>{ segData[k.key]={ key:k.key, estado:payload.estado, fechaContacto:payload.fechaContacto, fechaCompromiso:payload.fechaCompromiso, monto:payload.monto, pagoTotal, nota:payload.nota, actualizado:now }; });
     mergeSeg(); cerrarPanel(); limpiarSel(); aplicarCartera();
-  }catch(err){ alert('No se pudo guardar: '+err.message); }
+  }catch(err){ alert('Could not save: '+err.message); }
   finally{ btn.disabled=false; btn.textContent=old; }
 }
 
@@ -1772,7 +1785,7 @@ function renderCartera(){
       let inner='', cls='';
       switch(col.key){
         case '_sel':     inner = `<span class="cb${selKeys.has(k)?' on':''}" onclick="event.stopPropagation();toggleSel('${escAttr(r.region)}','${escAttr(r.factura)}','${escAttr(r.cliente)}')"></span>`; cls=' class="c-sel"'; break;
-        case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age fut">al día</span>'; break;
+        case 'days':     inner = r.days>0 ? `<span class="age ${ag.k}">${r.days}d</span>` : '<span class="age fut">current</span>'; break;
         case 'aging':    inner = `<span class="age ${ag.k}">${ag.label}</span>`; break;
         case 'total':    inner = fmtCur(r.total, r.currency);  cls=' class="c-total"'; break;
         case 'saldo':    inner = fmtCur(r.saldo, r.currency); cls=' class="c-saldo"'; break;
@@ -1784,10 +1797,10 @@ function renderCartera(){
         case 'due':      inner = esc(r.due);     cls=' class="c-mono"';    break;
         case 'comercial':inner = esc(r.comercial);cls=' class="c-muted"'; break;
         case 'prio':     inner = r.prio ? `<span class="acc ${r.prio.c}">${esc(r.prio.l)}</span>` : ''; break;
-        case 'estado':   inner = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : `<span class="est e-sin">Sin gestión</span>`; break;
+        case 'estado':   inner = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : `<span class="est e-sin">No action</span>`; break;
         case 'contacto': inner = r.contacto ? `<span class="mut2">${esc(r.contacto)}</span>` : '<span class="mut2">—</span>'; break;
         case 'compromiso':
-          if(r.compromiso){ const venc=r.flag==='inc'; inner=`<span class="comp2${venc?' venc':''}">${esc(r.compromiso)}${r.montoComp?`<small>${esc(String(r.montoComp))}${r.pagoTotal==='SI'?' · total':''}</small>`:(r.pagoTotal==='SI'?'<small>pago total</small>':'')}</span>`; }
+          if(r.compromiso){ const venc=r.flag==='inc'; inner=`<span class="comp2${venc?' venc':''}">${esc(r.compromiso)}${r.montoComp?`<small>${esc(String(r.montoComp))}${r.pagoTotal==='SI'?' · full':''}</small>`:(r.pagoTotal==='SI'?'<small>full payment</small>':'')}</span>`; }
           else inner='<span class="mut2">—</span>'; break;
         case 'accion':   inner = r.accion ? `<span class="accion" title="${escAttr(r.accion)}">${esc(r.accion)}</span>` : '<span class="mut2">—</span>'; break;
         default:         inner = esc(r[col.key]||'—');
@@ -1808,15 +1821,15 @@ function renderCartTotales(saldoPorMon, totalPorMon, totUsd, n){
   let cells='';
   CART_COLS.forEach((col,ci)=>{
     let v='', cls='', title='';
-    if(col.key==='region'){ v='TOTALES'; cls=' class="tot-label"'; }
-    else if(col.key==='cliente'){ v=`${n} factura${n!==1?'s':''}`; cls=' class="tot-label"'; }
+    if(col.key==='region'){ v='TOTALS'; cls=' class="tot-label"'; }
+    else if(col.key==='cliente'){ v=`${n} invoice${n!==1?'s':''}`; cls=' class="tot-label"'; }
     else if(col.key==='total'){
       v = oneOr(totalPorMon);
-      cls=' class="tot-fee"'; title=` title="Total por moneda: ${join(totalPorMon)}"`;
+      cls=' class="tot-fee"'; title=` title="Total by currency: ${join(totalPorMon)}"`;
     }
     else if(col.key==='saldo'){
       v = oneOr(saldoPorMon);   // evita sumatoria multi-moneda
-      cls=' class="tot-fee"'; title=` title="Saldo por moneda: ${join(saldoPorMon)}"`;
+      cls=' class="tot-fee"'; title=` title="Balance by currency: ${join(saldoPorMon)}"`;
     }
     else if(col.key==='saldoUsd'){ v=money(totUsd); cls=' class="tot-fee"'; }
     const align = col.align ? ` style="text-align:${col.align}"` : '';
@@ -1843,7 +1856,7 @@ function exportCartera(){
   const st=(ev,al,bold,fg)=>({fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{sz:10,name:'Calibri',bold:!!bold,color:{rgb:fg||'1A1710'}},alignment:{horizontal:al||'left',vertical:'center'},border:allB(BORDER_C)});
   const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:GREEN}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB(GREEN)}});
   const ws={};
-  const headers=['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total Local','Saldo Local','Saldo USD','Días Vencido','Antigüedad'];
+  const headers=['Region','Customer','Sales rep','Invoice','Due date','Currency','Total (local)','Balance (local)','Balance USD','Days past due','Aging'];
   headers.forEach((h,c)=>ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
   let tog=false,lastRep=null;
   cartFiltered.forEach((r,i)=>{
@@ -1867,16 +1880,16 @@ function exportCartera(){
   ws['!rows']=[{hpt:22}];for(let i=1;i<=cartFiltered.length;i++)ws['!rows'].push({hpt:20});
   ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2'};
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Cartera');
-  XLSX.writeFile(wb,`Forest_Cartera_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb,ws,'Receivables');
+  XLSX.writeFile(wb,`Forest_Receivables_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-const AG_LABELS = {fut:'Por vencer', b0:'0–10 días', b10:'11–30 días', b30:'31–60 días', b60:'61–90 días', b90:'90+ días'};
+const AG_LABELS = {fut:'Not due', b0:'0–10 days', b10:'11–30 days', b30:'31–60 days', b60:'61–90 days', b90:'90+ days'};
 
 // Descarga PDF del detalle filtrado (para que el comercial baje lo vencido)
 function exportCarteraPDF(){
-  if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
-  if(!cartFiltered.length){ alert('No hay facturas para exportar con los filtros actuales.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('The PDF generator is still loading, please try again in a moment.'); return; }
+  if(!cartFiltered.length){ alert('No invoices to export with the current filters.'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
   const W = doc.internal.pageSize.getWidth();
@@ -1885,45 +1898,45 @@ function exportCarteraPDF(){
 
   // Encabezado
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...GREEN);
-  doc.text('Forest — Cartera / Cuentas por Cobrar', 40, 42);
+  doc.text('Forest — Accounts Receivable', 40, 42);
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
-  doc.text('Generado: '+new Date().toLocaleString('es'), W-40, 42, {align:'right'});
+  doc.text('Generated: '+new Date().toLocaleString('en-US'), W-40, 42, {align:'right'});
 
   // Filtros activos
   const F=[];
-  if($('cComercial').value) F.push('Comercial: '+$('cComercial').value);
-  if($('cRegion').value)    F.push('Región: '+$('cRegion').value);
-  if($('cMoneda').value)    F.push('Moneda: '+$('cMoneda').value);
-  if($('cAging').value)     F.push('Antigüedad: '+(AG_LABELS[$('cAging').value]||''));
-  if($('cVencidos')._on)    F.push('Solo vencidos');
-  if($('cQ').value.trim())  F.push('Cliente: "'+$('cQ').value.trim()+'"');
+  if($('cComercial').value) F.push('Sales rep: '+$('cComercial').value);
+  if($('cRegion').value)    F.push('Region: '+$('cRegion').value);
+  if($('cMoneda').value)    F.push('Currency: '+$('cMoneda').value);
+  if($('cAging').value)     F.push('Aging: '+(AG_LABELS[$('cAging').value]||''));
+  if($('cVencidos')._on)    F.push('Overdue only');
+  if($('cQ').value.trim())  F.push('Customer: "'+$('cQ').value.trim()+'"');
   doc.setFontSize(9); doc.setTextColor(70);
-  doc.text('Filtros: '+(F.length?F.join('   ·   '):'ninguno (toda la cartera)'), 40, 60);
+  doc.text('Filters: '+(F.length?F.join('   ·   '):'none (full AR)'), 40, 60);
 
   // Totales de cabecera
   let totUsd=0, vencUsd=0; const cli=new Set(); const porMon={};
   cartFiltered.forEach(r=>{ totUsd+=r.saldoUsd; if(r.days>0) vencUsd+=r.saldoUsd; cli.add(r.cliente); porMon[r.currency]=(porMon[r.currency]||0)+r.saldo; });
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...GREEN);
-  doc.text(`Total: ${money(totUsd)} USD    ·    Vencido: ${money(vencUsd)} USD    ·    ${cartFiltered.length} facturas    ·    ${cli.size} clientes`, 40, 78);
+  doc.text(`Total: ${money(totUsd)} USD    ·    Overdue: ${money(vencUsd)} USD    ·    ${cartFiltered.length} invoices    ·    ${cli.size} customers`, 40, 78);
 
   // Resumen por brackets (sobre el contexto comercial/región = mismo que en pantalla)
   const ctx = cartBase.length ? cartBase : cartFiltered;
   const brk=[
-    {label:'Por vencer', test:d=>d<0},
-    {label:'0–10',       test:d=>d>=0 && d<=10},
-    {label:'11–30',      test:d=>d>=11 && d<=30},
-    {label:'31–60',      test:d=>d>=31 && d<=60},
-    {label:'61–90',      test:d=>d>=61 && d<=90},
-    {label:'90+',        test:d=>d>90},
+    {label:'Not due', test:d=>d<0},
+    {label:'0–10',    test:d=>d>=0 && d<=10},
+    {label:'11–30',   test:d=>d>=11 && d<=30},
+    {label:'31–60',   test:d=>d>=31 && d<=60},
+    {label:'61–90',   test:d=>d>=61 && d<=90},
+    {label:'90+',     test:d=>d>90},
   ].map(b=>({...b, usd:0, n:0}));
   const cliB=new Set();
   ctx.forEach(r=>{ cliB.add(r.cliente); const b=brk.find(x=>x.test(r.days)); if(b){ b.usd+=r.saldoUsd; b.n++; } });
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
-  doc.text('RESUMEN POR ANTIGÜEDAD (USD)', 40, 98);
+  doc.text('AGING SUMMARY (USD)', 40, 98);
   doc.autoTable({
     startY: 104,
-    head: [[...brk.map(b=>b.label), 'Clientes', 'Facturas']],
-    body: [[...brk.map(b=>`${money(b.usd)}\n${b.n} fact.`), String(cliB.size), String(ctx.length)]],
+    head: [[...brk.map(b=>b.label), 'Customers', 'Invoices']],
+    body: [[...brk.map(b=>`${money(b.usd)}\n${b.n} inv.`), String(cliB.size), String(ctx.length)]],
     styles:{fontSize:8, cellPadding:5, halign:'center', valign:'middle', lineColor:[221,217,207], lineWidth:.5},
     headStyles:{fillColor:[27,32,61], textColor:[231,226,68], fontSize:7.5, fontStyle:'bold'},
     bodyStyles:{fontStyle:'bold', textColor:[27,32,61], fontSize:9},
@@ -1935,15 +1948,15 @@ function exportCarteraPDF(){
   const body = pdfRows.map(r=>[
     r.region, r.cliente, r.comercial, r.factura, r.due, r.currency,
     fmtCur(r.total, r.currency), fmtCur(r.saldo, r.currency), money(r.saldoUsd),
-    r.days>0 ? r.days+'d' : 'al día', agingOf(r.days).label, (r.prio?r.prio.l:'')
+    r.days>0 ? r.days+'d' : 'current', agingOf(r.days).label, (r.prio?r.prio.l:'')
   ]);
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110);
-  doc.text('DETALLE DE FACTURAS (por días de vencido)', 40, doc.lastAutoTable.finalY + 18);
+  doc.text('INVOICE DETAIL (by days past due)', 40, doc.lastAutoTable.finalY + 18);
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 24,
-    head: [['Región','Cliente','Comercial','Factura','Vencimiento','Moneda','Total','Saldo','Saldo USD','Días Venc.','Antigüedad','Acción']],
+    head: [['Region','Customer','Sales rep','Invoice','Due date','Currency','Total','Balance','Balance USD','Days past due','Aging','Action']],
     body,
-    foot: [['','','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' fact.', '']],
+    foot: [['','','','','','','','TOTAL USD →', money(totUsd), '', cartFiltered.length+' inv.', '']],
     styles:{fontSize:7, cellPadding:3, overflow:'linebreak', lineColor:[221,217,207], lineWidth:.5},
     headStyles:{fillColor:GREEN, textColor:255, fontSize:7.5, halign:'left'},
     footStyles:{fillColor:[232,242,230], textColor:GREEN, fontStyle:'bold', fontSize:7.5},
@@ -1961,13 +1974,13 @@ function exportCarteraPDF(){
     },
     didDrawPage:(data)=>{
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
-      doc.text('Forest Reservas — Cartera', 40, H-18);
-      doc.text('Página '+data.pageNumber, W-40, H-18, {align:'right'});
+      doc.text('Forest Reservas — Accounts Receivable', 40, H-18);
+      doc.text('Page '+data.pageNumber, W-40, H-18, {align:'right'});
     }
   });
 
   const tag = ($('cComercial').value ? $('cComercial').value.replace(/\s+/g,'_')+'_' : '');
-  doc.save(`Forest_Cartera_${tag}${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`Forest_Receivables_${tag}${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1986,7 +1999,8 @@ function switchTab(tab){
   $('tabGerencia').classList.toggle('active', isG);
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Gerencia · resumen de cartera' : isH ? 'Cartera · historial de cerradas' : isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : `Posiciones activas · ${DATA.length} registros`;
+  { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = isR ? 'Actualizar' : 'Refresh'; }
   if((isC||isH||isG) && !cartLoaded) cargarCartera(false);
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
@@ -2001,7 +2015,7 @@ const GERENCIA_CODE = 'forest2026';   // ← cámbialo por el código que quiera
 function gerUnlock(){
   const v=($('gerCode').value||'').trim();
   if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarGerencia(); }
-  else { $('gerErr').textContent='Código incorrecto'; $('gerCode').select(); }
+  else { $('gerErr').textContent='Incorrect code'; $('gerCode').select(); }
 }
 function mostrarGerencia(){
   $('gerLock').classList.add('hidden'); $('gerContent').classList.remove('hidden');
@@ -2009,7 +2023,7 @@ function mostrarGerencia(){
 }
 function renderGerencia(){
   const rep={};
-  cartData.forEach(o=>{ const c=o.comercial||'Sin asignar'; const g=rep[c]=rep[c]||{ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0};
+  cartData.forEach(o=>{ const c=o.comercial||'Unassigned'; const g=rep[c]=rep[c]||{ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0};
     const s=o.saldoUsd; g.ab+=s;
     if(o.days>0){ g.ve+=s; if(o.days<=30)g.b1+=s; else if(o.days<=60)g.b2+=s; else if(o.days<=90)g.b3+=s; else g.b4+=s; }
     else g.co+=s;
@@ -2028,13 +2042,13 @@ function renderGerencia(){
   $('tbodyGer').innerHTML = rows.map(r=>rowHtml(r,false)).join('') + rowHtml(tot,true);
   $('gAb').textContent=money(tot.ab);
   $('gVe').textContent=money(tot.ve);
-  $('gVeP').textContent=(tot.ab?Math.round(tot.ve/tot.ab*100):0)+'% de la cartera';
+  $('gVeP').textContent=(tot.ab?Math.round(tot.ve/tot.ab*100):0)+'% of AR';
   const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
   const moStart=new Date(now.getFullYear(),now.getMonth(),1);
   let cobS=0,cobM=0;
   cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(d>=wk)cobS+=m; if(d>=moStart)cobM+=m; });
   $('gCobS').textContent=money(cobS); $('gCobM').textContent=money(cobM);
-  $('gTs').textContent='Actualizado: '+new Date().toLocaleString('es');
+  $('gTs').textContent='Updated: '+new Date().toLocaleString('en-US');
 }
 function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
 
@@ -2044,7 +2058,7 @@ function renderHistorial(){
   const q=($('hQ').value||'').toLowerCase().trim(), fc=$('hComercial').value, fcu=$('hCumplio').value;
   const coms=[...new Set(cerradasData.map(r=>r.comercial).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const sel=$('hComercial'), pv=sel.value;
-  sel.innerHTML='<option value="">Comercial</option>'+coms.map(c=>`<option${c===pv?' selected':''}>${esc(c)}</option>`).join('');
+  sel.innerHTML='<option value="">Sales rep</option>'+coms.map(c=>`<option${c===pv?' selected':''}>${esc(c)}</option>`).join('');
   const rows=cerradasData.filter(r=>{
     if(fc && r.comercial!==fc) return false;
     if(fcu && (r.cumplio||'')!==fcu) return false;
@@ -2052,15 +2066,16 @@ function renderHistorial(){
     return true;
   }).sort((a,b)=>String(b.fechaCierre).localeCompare(String(a.fechaCierre)));
   $('tbodyHist').innerHTML = rows.map(r=>{
-    const cum = r.cumplio==='SI' ? '<span class="est e-parc">Cumplió</span>'
-             : r.cumplio==='NO' ? '<span class="est e-inc">No cumplió</span>'
+    const cum = r.cumplio==='SI' ? '<span class="est e-parc">Met</span>'
+             : r.cumplio==='NO' ? '<span class="est e-inc">Not met</span>'
              : '<span class="mut2">—</span>';
-    const est = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : '<span class="mut2">—</span>';
+    const estN = normEst(r.estado);
+    const est = estN ? `<span class="est ${EST_CLASS[estN]||'e-sin'}">${esc(estN)}</span>` : '<span class="mut2">—</span>';
     return `<tr><td class="c-mono">${esc(r.fechaCierre||'—')}</td><td class="c-cliente">${esc(r.cliente||'')}</td><td class="c-muted">${esc(r.comercial||'')}</td><td class="c-mono">${esc(r.factura||'')}</td><td class="c-bodega">${esc(r.region||'')}</td><td class="c-total">${esc(String(r.monto||'—'))}</td><td>${est}</td><td class="mut2">${esc(r.compromiso||'—')}</td><td>${cum}</td></tr>`;
   }).join('');
-  $('hResCount').textContent=`${rows.length} cerrada${rows.length!==1?'s':''}`;
-  $('hCount').textContent=`${rows.length} cerradas`;
-  $('hCumpl').textContent=`${rows.filter(r=>r.cumplio==='SI').length} cumplieron compromiso`;
+  $('hResCount').textContent=`${rows.length} closed`;
+  $('hCount').textContent=rows.length;
+  $('hCumpl').textContent=rows.filter(r=>r.cumplio==='SI').length;
   $('ovHist').classList.toggle('hidden', rows.length>0);
 
   // KPIs de cobro (sobre las cerradas filtradas)
@@ -2078,11 +2093,11 @@ function renderHistorial(){
 }
 function exportHistorial(){
   const wb=XLSX.utils.book_new();
-  const data=[['Fecha cierre','Cliente','Comercial','Factura','Región','Monto comprometido','Último estado','Compromiso','Cumplió']]
-    .concat(cerradasData.map(r=>[r.fechaCierre,r.cliente,r.comercial,r.factura,r.region,r.monto,r.estado,r.compromiso,r.cumplio]));
+  const data=[['Close date','Customer','Sales rep','Invoice','Region','Committed amount','Last status','Commitment','Met']]
+    .concat(cerradasData.map(r=>[r.fechaCierre,r.cliente,r.comercial,r.factura,r.region,r.monto,normEst(r.estado),r.compromiso,r.cumplio==='SI'?'Yes':r.cumplio==='NO'?'No':'']));
   const ws=XLSX.utils.aoa_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb,ws,'Historial');
-  XLSX.writeFile(wb,`Forest_Cartera_Historial_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb,ws,'History');
+  XLSX.writeFile(wb,`Forest_Receivables_History_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
