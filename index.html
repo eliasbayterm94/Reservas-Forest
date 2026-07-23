@@ -297,6 +297,13 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .est.e-esc {background:#efe0f0;color:#7a3d84}
 .est.e-plan{background:#e7ecfb;color:#3a4a8a}
 .est.e-jur {background:#6e1b10;color:#fff}
+.acc{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
+.acc.a-urg {background:#f7cdc6;color:#8a2414}
+.acc.a-pron{background:#f6ead6;color:#9c5e15}
+.acc.a-cont{background:#fbf3d8;color:#8a6c00}
+.acc.a-esp {background:#ece0f0;color:#6b3a78}
+.acc.a-esp2{background:#e6eef5;color:#2e4a63}
+.acc.a-ok  {background:#dcf2dc;color:#3d6224}
 .pill.flag-inc{background:var(--warn-bg);color:var(--warn);border-color:#efb0a4}
 .pill.flag-week{background:#fbf3d8;color:#8a6c00;border-color:#e6d488}
 .pill.flag-sin{background:#ececec;color:#666;border-color:#d5d5d5}
@@ -534,6 +541,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <select id="cEstadoCobro" onchange="aplicarCartera()">
         <option value="">Estado de cobro</option>
         <optgroup label="Revisión semanal">
+          <option value="act:task">Por contactar (tareas)</option>
           <option value="flag:inc">Incumplidos</option>
           <option value="flag:week">Vencen esta semana</option>
           <option value="flag:sin">Sin gestión</option>
@@ -1275,10 +1283,11 @@ const CART_COLS = [
   { key:'saldoUsd', label:'Saldo USD',    w:110, align:'right' },
   { key:'days',     label:'Días Venc.',   w:96  },
   { key:'aging',    label:'Antigüedad',   w:92  },
+  { key:'prio',     label:'Acción',       w:130 },
   { key:'estado',   label:'Estado',       w:135 },
   { key:'contacto', label:'Últ. contacto',w:100 },
   { key:'compromiso',label:'Compromiso',  w:118 },
-  { key:'accion',   label:'Próxima acción',w:230 },
+  { key:'accion',   label:'Nota',         w:220 },
 ];
 // Estado de seguimiento (merge por Región|Factura) y selección múltiple
 let segData = {}, selKeys = new Set(), selClient = null, panelTargets = [];
@@ -1452,13 +1461,15 @@ function aplicarCartera(){
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
     if(soloVenc && !(r.days>0)) return false;
-    if(ec.startsWith('flag:')){ if(r.flag !== ec.slice(5)) return false; }
+    if(ec==='act:task'){ if(!r.esTarea) return false; }
+    else if(ec.startsWith('flag:')){ if(r.flag !== ec.slice(5)) return false; }
     else if(ec.startsWith('est:')){ if((r.estado||'') !== ec.slice(4)) return false; }
     return true;
   });
 
   const numeric = new Set(['total','totalUsd','saldo','saldoUsd','days']);
-  if(numeric.has(cartSc)) cartFiltered.sort((a,b)=>cartSd*((a[cartSc]||0)-(b[cartSc]||0)));
+  if(cartSc==='prio') cartFiltered.sort((a,b)=>cartSd*((a.prioScore||0)-(b.prioScore||0)));
+  else if(numeric.has(cartSc)) cartFiltered.sort((a,b)=>cartSd*((a[cartSc]||0)-(b[cartSc]||0)));
   else cartFiltered.sort((a,b)=>cartSd*String(a[cartSc]||'').localeCompare(String(b[cartSc]||''),'es',{sensitivity:'base'}));
 
   renderCartera();
@@ -1536,6 +1547,21 @@ function mergeSeg(){
     }
     if(!r.estado || r.estado==='Sin gestión') flag = flag || 'sin';
     r.flag=flag;
+
+    // Acción sugerida / prioridad (primera que aplique)
+    const especial = (r.estado==='Escalado' || r.estado==='Cobro Jurídico' || r.estado==='En disputa');
+    const compFut  = r.compromiso && new Date(r.compromiso) >= today;
+    let ac;
+    if(especial)                 ac={l:'Gestión especial',  c:'a-esp',  s:20};
+    else if(compFut)             ac={l:'En espera de pago', c:'a-esp2', s:15};
+    else if(r.compromiso)        ac={l:'Promesa vencida',   c:'a-urg',  s:100}; // tenía promesa y venció
+    else if(r.days>60)           ac={l:'Contacto urgente',  c:'a-urg',  s:90};
+    else if(r.days>30)           ac={l:'Contactar pronto',  c:'a-pron', s:70};
+    else if(r.days>10)           ac={l:'Contactar',         c:'a-cont', s:50};
+    else                         ac={l:'Al día',            c:'a-ok',   s:5};
+    r.prio = ac;
+    r.prioScore = ac.s + Math.min(Math.max(r.days,0),999)/1000;   // más vencida = más arriba dentro del grupo
+    r.esTarea = ac.s>=50;   // Contactar / pronto / urgente / promesa vencida
   }
 }
 
@@ -1683,6 +1709,7 @@ function renderCartera(){
         case 'currency': inner = esc(r.currency);cls=' class="c-mono"';    break;
         case 'due':      inner = esc(r.due);     cls=' class="c-mono"';    break;
         case 'comercial':inner = esc(r.comercial);cls=' class="c-muted"'; break;
+        case 'prio':     inner = r.prio ? `<span class="acc ${r.prio.c}">${esc(r.prio.l)}</span>` : ''; break;
         case 'estado':   inner = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : `<span class="est e-sin">Sin gestión</span>`; break;
         case 'contacto': inner = r.contacto ? `<span class="mut2">${esc(r.contacto)}</span>` : '<span class="mut2">—</span>'; break;
         case 'compromiso':
