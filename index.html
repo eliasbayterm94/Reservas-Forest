@@ -1336,6 +1336,9 @@ function exportExcel(){
 const CART_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&gid=0';
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
+// Clientes intercompany: sus facturas se omiten de toda la cartera.
+const INTERCO = ['forestcoffeesl'];
+const esInterco = c => INTERCO.includes(String(c||'').toLowerCase().replace(/[^a-z0-9]/g,''));
 const CART_COLS = [
   { key:'_sel',     label:'',             w:36,  nosort:true },
   { key:'region',   label:'Región',       w:64  },
@@ -1434,10 +1437,12 @@ async function cargarCartera(forzar=false){
       const row=aoa[r]; if(!row||!row.length) continue;
       const saldo=cleanNum(row[iBalL]);
       if(saldo<=0) continue;                       // solo facturas con saldo pendiente
+      const cliente=String(row[iCus]||'').trim();
+      if(esInterco(cliente)) continue;             // omite facturas intercompany (Forest Coffee SL)
       rows.push({
         region:    String(row[iReg]||'').trim(),
         factura:   String(row[iDoc]||'').trim(),
-        cliente:   String(row[iCus]||'').trim(),
+        cliente:   cliente,
         comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Sin asignar',
         due:       normalizeDate(row[iDue]),
         currency:  String(row[iCur]||'').trim().toUpperCase(),
