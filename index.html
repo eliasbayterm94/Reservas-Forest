@@ -648,6 +648,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="res-count" id="hResCount">—</span>
     <button class="btn-excel" onclick="exportHistorial()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
   </div>
+  <div class="resumen" id="histKpis">
+    <div class="rcard g"><div class="rc-l">Cobrado esta semana</div><div class="rc-n" id="kCobSem">—</div><div class="rc-s">gestionado (USD)</div></div>
+    <div class="rcard g"><div class="rc-l">Cobrado este mes</div><div class="rc-n" id="kCobMes">—</div><div class="rc-s">gestionado (USD)</div></div>
+    <div class="rcard b0"><div class="rc-l">Cerradas (semana)</div><div class="rc-n" id="kCerSem">—</div><div class="rc-s">facturas</div></div>
+    <div class="rcard tot"><div class="rc-l">Cumplieron (semana)</div><div class="rc-n" id="kCumSem">—</div><div class="rc-s">compromisos</div></div>
+  </div>
   <div class="table-wrap" id="twHist">
     <table id="histTable">
       <thead><tr>
@@ -1541,6 +1547,7 @@ function mergeSeg(){
     r.contacto  = s ? (s.fechaContacto||'') : '';
     r.compromiso= s ? (s.fechaCompromiso||'') : '';
     r.montoComp = s ? (s.monto||'') : '';
+    r.pagoTotal = s ? (s.pagoTotal||'') : '';
     r.accion    = s ? (s.nota||'') : '';
     let flag='';
     if(r.compromiso){
@@ -1653,10 +1660,11 @@ function fillSelect(sel, arr, val){ sel.innerHTML=arr.map(o=>`<option${o===val?'
 async function guardarGestion(){
   if(!panelTargets.length) return;
   if(!SEG_API_URL){ alert('Falta configurar la URL del backend de seguimiento (SEG_API_URL).'); return; }
+  const pagoTotal = $('pTotal').checked ? 'SI' : 'NO';
   const payload = {
-    keys: panelTargets.map(r=>({ key:r.region+'|'+r.factura, region:r.region, factura:r.factura, cliente:r.cliente, comercial:r.comercial })),
+    keys: panelTargets.map(r=>({ key:r.region+'|'+r.factura, region:r.region, factura:r.factura, cliente:r.cliente, comercial:r.comercial, saldoUsd:Math.round(r.saldoUsd||0) })),
     estado:$('pEstado').value, fechaContacto:$('pContacto').value, fechaCompromiso:$('pCompromiso').value,
-    monto:$('pMonto').value, nota:$('pNota').value, usuario:($('cComercial')&&$('cComercial').value)||''
+    monto:$('pMonto').value, pagoTotal, nota:$('pNota').value, usuario:($('cComercial')&&$('cComercial').value)||''
   };
   const btn=$('pSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
   try{
@@ -1664,7 +1672,7 @@ async function guardarGestion(){
     const j = await resp.json();
     if(!j || !j.ok) throw new Error((j&&j.error)||'Error');
     const now=new Date().toISOString();
-    payload.keys.forEach(k=>{ segData[k.key]={ key:k.key, estado:payload.estado, fechaContacto:payload.fechaContacto, fechaCompromiso:payload.fechaCompromiso, monto:payload.monto, nota:payload.nota, actualizado:now }; });
+    payload.keys.forEach(k=>{ segData[k.key]={ key:k.key, estado:payload.estado, fechaContacto:payload.fechaContacto, fechaCompromiso:payload.fechaCompromiso, monto:payload.monto, pagoTotal, nota:payload.nota, actualizado:now }; });
     mergeSeg(); cerrarPanel(); limpiarSel(); aplicarCartera();
   }catch(err){ alert('No se pudo guardar: '+err.message); }
   finally{ btn.disabled=false; btn.textContent=old; }
@@ -1714,7 +1722,7 @@ function renderCartera(){
         case 'estado':   inner = r.estado ? `<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>` : `<span class="est e-sin">Sin gestión</span>`; break;
         case 'contacto': inner = r.contacto ? `<span class="mut2">${esc(r.contacto)}</span>` : '<span class="mut2">—</span>'; break;
         case 'compromiso':
-          if(r.compromiso){ const venc=r.flag==='inc'; inner=`<span class="comp2${venc?' venc':''}">${esc(r.compromiso)}${r.montoComp?`<small>${esc(String(r.montoComp))}</small>`:''}</span>`; }
+          if(r.compromiso){ const venc=r.flag==='inc'; inner=`<span class="comp2${venc?' venc':''}">${esc(r.compromiso)}${r.montoComp?`<small>${esc(String(r.montoComp))}${r.pagoTotal==='SI'?' · total':''}</small>`:(r.pagoTotal==='SI'?'<small>pago total</small>':'')}</span>`; }
           else inner='<span class="mut2">—</span>'; break;
         case 'accion':   inner = r.accion ? `<span class="accion" title="${escAttr(r.accion)}">${esc(r.accion)}</span>` : '<span class="mut2">—</span>'; break;
         default:         inner = esc(r[col.key]||'—');
@@ -1941,6 +1949,19 @@ function renderHistorial(){
   $('hCount').textContent=`${rows.length} cerradas`;
   $('hCumpl').textContent=`${rows.filter(r=>r.cumplio==='SI').length} cumplieron compromiso`;
   $('ovHist').classList.toggle('hidden', rows.length>0);
+
+  // KPIs de cobro (sobre las cerradas filtradas)
+  const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0); // lunes
+  const moStart=new Date(now.getFullYear(),now.getMonth(),1);
+  let cobSem=0,cobMes=0,cerSem=0,cumSem=0;
+  rows.forEach(r=>{
+    const d=new Date(r.fechaCierre); if(isNaN(d)) return;
+    const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
+    if(d>=wk){ cobSem+=m; cerSem++; if(r.cumplio==='SI') cumSem++; }
+    if(d>=moStart) cobMes+=m;
+  });
+  $('kCobSem').textContent=money(cobSem); $('kCobMes').textContent=money(cobMes);
+  $('kCerSem').textContent=cerSem; $('kCumSem').textContent=cumSem;
 }
 function exportHistorial(){
   const wb=XLSX.utils.book_new();
