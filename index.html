@@ -310,6 +310,26 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .pill b{font-family:'DM Mono',monospace;margin-left:3px;font-weight:600}
 #histTable{table-layout:auto}
 #histTable th{padding:0 12px;height:38px}
+/* ══ GERENCIA ══ */
+.gerlock{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.gerlock.hidden{display:none}
+.gerlock-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:34px 40px;text-align:center;box-shadow:0 6px 20px rgba(12,12,11,.08);max-width:360px;width:90%}
+.gerlock-ico{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;background:var(--fc-navy);display:flex;align-items:center;justify-content:center}
+.gerlock-ico svg{width:24px;height:24px;color:var(--fc-yellow);stroke-width:2}
+.gerlock-title{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;text-transform:uppercase;letter-spacing:.04em;color:var(--fc-navy)}
+.gerlock-sub{font-size:12.5px;color:var(--text2);margin-top:6px}
+.gerlock-inp{width:100%;height:42px;border:1.5px solid var(--border2);border-radius:9px;padding:0 14px;font-family:'Montserrat',sans-serif;font-size:15px;text-align:center;letter-spacing:.15em;margin-top:16px;outline:none}
+.gerlock-inp:focus{border-color:var(--fc-navy)}
+.gerlock-btn{width:100%;height:42px;margin-top:10px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:9px;font-family:'Archivo',sans-serif;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;cursor:pointer}
+.gerlock-btn:hover{background:var(--fc-navy-dark)}
+.gerlock-err{color:var(--warn);font-size:12px;font-weight:600;margin-top:10px;min-height:16px}
+.gercontent{flex:1;display:flex;flex-direction:column;min-height:0}
+.gercontent.hidden{display:none}
+#gerTable{table-layout:auto}
+#gerTable th{padding:0 14px;height:38px}
+#gerTable td{padding:0 14px}
+#gerTable .c-num{font-family:'DM Mono',monospace;font-size:12.5px;text-align:right}
+tbody#tbodyGer tr.ger-tot td{background:var(--surface3);font-weight:700;border-top:2px solid var(--border2);color:var(--fc-navy)}
 .mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
 .comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
 .comp2.venc{color:var(--warn)}
@@ -427,6 +447,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab active" id="tabReservas" onclick="switchTab('reservas')"><i data-lucide="package"></i> Reservas Activas</button>
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Cartera</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> Historial</button>
+  <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Gerencia</button>
 </div>
 
 <!-- ══════════ VISTA: RESERVAS ══════════ -->
@@ -670,6 +691,43 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span style="margin-left:auto;color:var(--text3)" id="hTs">—</span>
   </div>
 </div><!-- /viewHistorial -->
+
+<!-- ══════════ VISTA: GERENCIA (con código) ══════════ -->
+<div id="viewGerencia" class="view hidden">
+  <div id="gerLock" class="gerlock">
+    <div class="gerlock-card">
+      <div class="gerlock-ico"><i data-lucide="lock"></i></div>
+      <div class="gerlock-title">Vista de Gerencia</div>
+      <div class="gerlock-sub">Ingresa el código de acceso</div>
+      <input id="gerCode" type="password" class="gerlock-inp" placeholder="Código" onkeydown="if(event.key==='Enter')gerUnlock()">
+      <button class="gerlock-btn" onclick="gerUnlock()">Entrar</button>
+      <div id="gerErr" class="gerlock-err"></div>
+    </div>
+  </div>
+  <div id="gerContent" class="gercontent hidden">
+    <div class="resumen" id="gerKpis">
+      <div class="rcard b0"><div class="rc-l">Cartera abierta</div><div class="rc-n" id="gAb">—</div><div class="rc-s">USD</div></div>
+      <div class="rcard b90"><div class="rc-l">Vencida</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
+      <div class="rcard g"><div class="rc-l">Cobrado esta semana</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">gestionado</div></div>
+      <div class="rcard g"><div class="rc-l">Cobrado este mes</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">gestionado</div></div>
+    </div>
+    <div class="table-wrap" id="twGer">
+      <table id="gerTable">
+        <thead><tr>
+          <th>Comercial</th><th style="text-align:right">Abierta</th><th style="text-align:right">Corriente</th>
+          <th style="text-align:right">Vencida</th><th style="text-align:right">%V</th>
+          <th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
+          <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
+        </tr></thead>
+        <tbody id="tbodyGer"></tbody>
+      </table>
+    </div>
+    <div class="footer">
+      <span>Resumen por comercial · misma info que llega a gerencia por Slack</span>
+      <span style="margin-left:auto;color:var(--text3)" id="gTs">—</span>
+    </div>
+  </div>
+</div><!-- /viewGerencia -->
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -1394,6 +1452,7 @@ async function cargarCartera(forzar=false){
     mergeSeg();
     llenarFiltrosCartera();
     aplicarCartera();
+    if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1') renderGerencia();
     cargarSeguimiento();   // trae los compromisos guardados y re-mergea
     const ts=new Date().toLocaleString('es');
     $('cFooterTs').textContent=`Actualizado: ${ts}`;
@@ -1583,6 +1642,7 @@ async function cargarSeguimiento(){
       cerradasData = j.cerradas || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
       if(activeTab==='historial') renderHistorial();
+      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1') renderGerencia();
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -1910,18 +1970,66 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial';
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia';
   $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
   $('viewHistorial').classList.toggle('hidden', !isH);
+  $('viewGerencia').classList.toggle('hidden', !isG);
   $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
   $('tabHistorial').classList.toggle('active', isH);
+  $('tabGerencia').classList.toggle('active', isG);
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isH ? 'Cartera · historial de cerradas' : isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
-  if(isC && !cartLoaded) cargarCartera(false);
-  if(isH){ if(!cartLoaded) cargarCartera(false); cargarSeguimiento(); renderHistorial(); }
+  DOM.brandSub.textContent = isG ? 'Gerencia · resumen de cartera' : isH ? 'Cartera · historial de cerradas' : isC ? 'Cartera · cuentas por cobrar' : `Posiciones activas · ${DATA.length} registros`;
+  if((isC||isH||isG) && !cartLoaded) cargarCartera(false);
+  if(isH){ cargarSeguimiento(); renderHistorial(); }
+  if(isG){
+    cargarSeguimiento();
+    if(sessionStorage.getItem('gerOK')==='1'){ mostrarGerencia(); }
+    else { $('gerLock').classList.remove('hidden'); $('gerContent').classList.add('hidden'); $('gerCode').value=''; $('gerErr').textContent=''; setTimeout(()=>{try{$('gerCode').focus();}catch(e){}},60); }
+  }
+}
+
+// ── Vista Gerencia (con código) ──
+const GERENCIA_CODE = 'forest2026';   // ← cámbialo por el código que quieras
+function gerUnlock(){
+  const v=($('gerCode').value||'').trim();
+  if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarGerencia(); }
+  else { $('gerErr').textContent='Código incorrecto'; $('gerCode').select(); }
+}
+function mostrarGerencia(){
+  $('gerLock').classList.add('hidden'); $('gerContent').classList.remove('hidden');
+  renderGerencia();
+}
+function renderGerencia(){
+  const rep={};
+  cartData.forEach(o=>{ const c=o.comercial||'Sin asignar'; const g=rep[c]=rep[c]||{ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0};
+    const s=o.saldoUsd; g.ab+=s;
+    if(o.days>0){ g.ve+=s; if(o.days<=30)g.b1+=s; else if(o.days<=60)g.b2+=s; else if(o.days<=90)g.b3+=s; else g.b4+=s; }
+    else g.co+=s;
+  });
+  const rows=Object.keys(rep).map(c=>Object.assign({c},rep[c])).sort((a,b)=>b.ab-a.ab);
+  const tot=rows.reduce((t,r)=>{['ab','ve','co','b1','b2','b3','b4'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{c:'TOTAL'});
+  const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
+  const rowHtml=(r,isTot)=>{ const hot=pct(r)>=60;
+    return `<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
+      +`<td class="c-num">${money(r.ab)}</td>`
+      +`<td class="c-num" style="color:var(--text3)">${money(r.co)}</td>`
+      +`<td class="c-num"${hot?' style="color:var(--warn)"':''}>${money(r.ve)}</td>`
+      +`<td class="c-num"${hot?' style="color:var(--warn);font-weight:700"':''}>${pct(r)}%</td>`
+      +`<td class="c-num">${money(r.b1)}</td><td class="c-num">${money(r.b2)}</td><td class="c-num">${money(r.b3)}</td><td class="c-num">${money(r.b4)}</td></tr>`;
+  };
+  $('tbodyGer').innerHTML = rows.map(r=>rowHtml(r,false)).join('') + rowHtml(tot,true);
+  $('gAb').textContent=money(tot.ab);
+  $('gVe').textContent=money(tot.ve);
+  $('gVeP').textContent=(tot.ab?Math.round(tot.ve/tot.ab*100):0)+'% de la cartera';
+  const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
+  const moStart=new Date(now.getFullYear(),now.getMonth(),1);
+  let cobS=0,cobM=0;
+  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(d>=wk)cobS+=m; if(d>=moStart)cobM+=m; });
+  $('gCobS').textContent=money(cobS); $('gCobM').textContent=money(cobM);
+  $('gTs').textContent='Actualizado: '+new Date().toLocaleString('es');
 }
 function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
 
