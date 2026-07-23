@@ -297,6 +297,10 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .est.e-esc {background:#efe0f0;color:#7a3d84}
 .est.e-plan{background:#e7ecfb;color:#3a4a8a}
 .est.e-jur {background:#6e1b10;color:#fff}
+.pill.flag-inc{background:var(--warn-bg);color:var(--warn);border-color:#efb0a4}
+.pill.flag-week{background:#fbf3d8;color:#8a6c00;border-color:#e6d488}
+.pill.flag-sin{background:#ececec;color:#666;border-color:#d5d5d5}
+.pill b{font-family:'DM Mono',monospace;margin-left:3px;font-weight:600}
 .mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
 .comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
 .comp2.venc{color:var(--warn)}
@@ -499,9 +503,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
   <!-- FILTER BAR CARTERA -->
   <div class="filterbar">
-    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="cQ" type="text" placeholder="Cliente…" oninput="onCartFilterDebounced()"></div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="cQ" type="text" placeholder="Buscar…" oninput="onCartFilterDebounced()"></div>
     <div class="fi"><span class="fi-icon"><i data-lucide="user"></i></span>
-      <select id="cComercial" onchange="aplicarCartera()"><option value="">Comercial</option></select>
+      <select id="cComercial" onchange="onComercialChange()"><option value="">Comercial</option></select>
+    </div>
+    <div class="fi"><span class="fi-icon"><i data-lucide="building-2"></i></span>
+      <select id="cCliente" onchange="aplicarCartera()"><option value="">Cliente</option></select>
     </div>
     <div class="fi"><span class="fi-icon"><i data-lucide="globe"></i></span>
       <select id="cRegion" onchange="aplicarCartera()"><option value="">Región</option></select>
@@ -522,6 +529,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </div>
     <div class="fsep"></div>
     <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Solo vencidos</span>
+    <span class="pill flag-inc off"  id="fInc"  onclick="toggleFlag('inc',this)">Incumplidos <b id="nInc">0</b></span>
+    <span class="pill flag-week off" id="fWeek" onclick="toggleFlag('week',this)">Vencen semana <b id="nWeek">0</b></span>
+    <span class="pill flag-sin off"  id="fSin"  onclick="toggleFlag('sin',this)">Sin gestión <b id="nSin">0</b></span>
     <span class="res-count" id="cResCount">—</span>
     <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
@@ -1338,10 +1348,28 @@ function llenarFiltrosCartera(){
   fill($('cComercial'), uniq(cartData.map(r=>r.comercial)), 'Comercial');
   fill($('cRegion'),    uniq(cartData.map(r=>r.region)),    'Región');
   fill($('cMoneda'),    uniq(cartData.map(r=>r.currency)),  'Moneda');
+  llenarClientes();
 }
+
+// Dropdown de clientes, dependiente del comercial seleccionado
+function llenarClientes(){
+  const fc=$('cComercial').value;
+  const clientes=[...new Set(cartData.filter(r=>!fc||r.comercial===fc).map(r=>r.cliente).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'es'));
+  const sel=$('cCliente'), pv=sel.value;
+  sel.innerHTML='<option value="">Cliente</option>'+clientes.map(c=>`<option>${esc(c)}</option>`).join('');
+  sel.value = clientes.includes(pv) ? pv : '';   // conserva si sigue válido
+}
+function onComercialChange(){ llenarClientes(); aplicarCartera(); }
 
 function onCartFilterDebounced(){ clearTimeout(cartDebounce); cartDebounce=setTimeout(aplicarCartera,120); }
 function toggleVencidos(el){ el._on=!el._on; el.classList.toggle('off',!el._on); aplicarCartera(); }
+let flagFilters = new Set();
+function toggleFlag(f, el){
+  if(flagFilters.has(f)){ flagFilters.delete(f); el.classList.add('off'); }
+  else { flagFilters.add(f); el.classList.remove('off'); }
+  aplicarCartera();
+}
 
 function cartSortBy(key,th){
   cartSc===key ? cartSd*=-1 : (cartSc=key, cartSd=1);
@@ -1353,22 +1381,28 @@ function cartSortBy(key,th){
 function aplicarCartera(){
   if(!cartLoaded) return;
   const q  = $('cQ').value.toLowerCase().trim();
-  const fc = $('cComercial').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
+  const fc = $('cComercial').value, fcli = $('cCliente').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
   const soloVenc = !!$('cVencidos')._on;
 
-  // Contexto (comercial + región + cliente + moneda) → base del resumen por brackets
+  // Contexto (comercial + cliente + región + moneda) → base del resumen por brackets
   const base = cartData.filter(r=>{
     if(fc && r.comercial!==fc) return false;
+    if(fcli && r.cliente !==fcli) return false;
     if(fr && r.region   !==fr) return false;
     if(fm && r.currency !==fm) return false;
     if(q && !r.cliente.toLowerCase().includes(q)) return false;
     return true;
   });
   cartBase = base;
-  // Drill (bracket de antigüedad + solo vencidos) → tabla de detalle
+  // Contadores de banderas (sobre el contexto) para los chips semanales
+  let nInc=0,nWeek=0,nSin=0;
+  for(const r of base){ if(r.flag==='inc')nInc++; else if(r.flag==='week')nWeek++; else if(r.flag==='sin')nSin++; }
+  $('nInc').textContent=nInc; $('nWeek').textContent=nWeek; $('nSin').textContent=nSin;
+  // Drill (bracket + solo vencidos + banderas semanales) → tabla de detalle
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
     if(soloVenc && !(r.days>0)) return false;
+    if(flagFilters.size && !flagFilters.has(r.flag)) return false;
     return true;
   });
 
