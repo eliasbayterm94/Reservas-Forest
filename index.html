@@ -481,6 +481,13 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <option value="180+">+180 días</option>
     </select>
   </div>
+  <div class="fi"><span class="fi-icon"><i data-lucide="ship"></i></span>
+    <select id="fContainer" onchange="onFilter()">
+      <option value="">Contenedor</option>
+      <option value="Spot">Spot · en bodega</option>
+      <option value="On float">On float · en tránsito</option>
+    </select>
+  </div>
   <div class="fsep"></div>
   <span class="pill spot" id="pS" onclick="togglePill(this,'tipo','SPOT')">✓ Spot</span>
   <span class="pill ctr"  id="pC" onclick="togglePill(this,'tipo','CONTRACT')">✓ Contrato</span>
@@ -783,7 +790,7 @@ const DOM = {};
 ['sRows','sBags','sClientes','resCount','fBags','fClientes','fWH','footerTs','brandSub',
  'statusPill','statusText','btnRefresh','refreshIcon',
  'pgCurrent','pgTotal','pgFrom','pgTo','pgAll','pgFirst','pgPrev','pgNext','pgLast','pgNums',
- 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias',
+ 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer',
  'thead','tbody','tfoot','colgroup',
  'ovLoading','ovError','ovEmpty','ovErrorMsg','tw'
 ].forEach(id=>DOM[id]=$( id));
@@ -1188,6 +1195,7 @@ function aplicarFiltros(){
   const fm = DOM.fComercial.value;
   const fs = DOM.fSerie.value;
   const fd = DOM.fDias.value;
+  const fcont = DOM.fContainer.value;
   const tipoSet   = af.tipo;
   const estadoSet = af.estado;
 
@@ -1196,6 +1204,7 @@ function aplicarFiltros(){
     if(fb && r.bodega    !== fb) return false;
     if(fm && r.comercial !== fm) return false;
     if(fs && r.serie     !== fs) return false;
+    if(fcont && r.container !== fcont) return false;
     if(fc && !(r.contrato||'').toLowerCase().includes(fc)) return false;
     if(ff && !(r.factura||'').toLowerCase().includes(ff))  return false;
     if(fd){
