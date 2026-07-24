@@ -178,6 +178,8 @@ td:last-child{border-right:none}
 .badge.ctr{background:var(--ctr-bg);color:var(--ctr-fg)}
 .badge.res{background:var(--res-bg);color:var(--res-fg)}
 .badge.fsr{background:var(--fsr-bg);color:var(--fsr-fg)}
+.badge.float{background:#e3edf4;color:#2e4a63}
+.badge.landed{background:#e7f0e0;color:#3d6224}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
 .dias-badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
@@ -753,6 +755,7 @@ const COLS = [
   { key:'serie',        label:'Categoría',         w:120, cls:'c-mono' },
   { key:'pallet_price', label:'Pallet Price',      w:100, cls:'c-num',    align:'right', precio:true },
   { key:'eta',          label:'ETA Bodega',        w:100, cls:'c-mono' },
+  { key:'container',    label:'Contenedor',        w:96,  cls:'',         containerBadge:true },
   { key:'dias',         label:'Vejez',             w:85,  cls:'',         diasBadge:true },
   { key:'dias_reserva', label:'Días Reserv.',      w:95,  cls:'',         diasBadge:true },
   { key:'warehouse_fee',label:'Storage Fee',       w:110, cls:'',         feecell:true, secFee:true },
@@ -761,7 +764,8 @@ const COLS = [
   { key:'comercial',    label:'Comercial',         w:110, cls:'c-muted' },
 ];
 
-let colWidths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'null') || COLS.map(c=>c.w);
+let colWidths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'null');
+if(!Array.isArray(colWidths) || colWidths.length!==COLS.length) colWidths = COLS.map(c=>c.w);   // reset si cambió el nº de columnas
 
 // ═══════════════════════════════════════════════════
 // STATE
@@ -813,6 +817,7 @@ async function cargarDatos(forzar=false){
       r.finance_fee  = Number(r.finance_fee)||0;
       r.pallet_price = Number(r.pallet_price)||0;
       r.fee_en       = r.fee_en!=null ? Number(r.fee_en) : null;
+      r.container    = containerStatus(r.eta);   // Spot / On float, derivado de la ETA
     });
 
     localStorage.setItem(LAST_LOAD_KEY, new Date().toISOString());
@@ -964,6 +969,11 @@ function badgeHTML(col, r){
     if(v<=30) return `<span class="fee-badge-pronto" title="Fee en ${v} días">en ${v}d</span>`;
     return     `<span class="fee-badge-lejos" title="Fee en ${v} días">en ${v}d</span>`;
   }
+  if(col.containerBadge){
+    return r.container==='On float'
+      ? '<span class="badge float" title="En tránsito (ETA a bodega futura)">On float</span>'
+      : '<span class="badge landed" title="En bodega (ETA cumplida)">Spot</span>';
+  }
   return '';
 }
 
@@ -986,7 +996,7 @@ function renderFilas(rows, fromIdx){
       let inner = '';
       let extra = '';
 
-      if(col.badge || col.diasBadge || col.feeBadge){
+      if(col.badge || col.diasBadge || col.feeBadge || col.containerBadge){
         inner = badgeHTML(col, r);
       } else if(col.feecell){
         const val=r[col.key];
@@ -1301,25 +1311,31 @@ function exportExcel(){
     const key=r.bodega+r.cliente;if(key!==lk2){tog2=!tog2;lk2=key;}
     const ev=tog2,row=i+1;
     const setCell=(c,v,s)=>{ws[XLSX.utils.encode_cell({r:row,c})]={v,t:typeof v==='number'?'n':'s',s};};
-    setCell(0,r.bodega,{fill:{patternType:'solid',fgColor:{rgb:GREEN_L}},font:{bold:true,sz:9.5,name:'Calibri',color:{rgb:GREEN}},alignment:{horizontal:'center',vertical:'center'},border:allB(BORDER_C)});
-    setCell(1,r.cliente,{fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{bold:true,sz:10,name:'Calibri',color:{rgb:'1A1710'}},alignment:{horizontal:'left',vertical:'center'},border:allB(BORDER_C)});
-    setCell(2,r.cafe,base(ev));
-    setCell(3,r.ico,mono(ev,TEXT2,'center'));
-    setCell(4,r.cantidad,{fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{bold:true,sz:10,name:'Courier New',color:{rgb:GREEN}},alignment:{horizontal:'right',vertical:'center'},border:allB(BORDER_C)});
-    setCell(5,r.tipo==='SPOT'?'Spot':'Contrato',badge(r.tipo==='SPOT'?SPOT_BG:CTR_BG,r.tipo==='SPOT'?SPOT_FG:CTR_FG));
-    setCell(6,r.estado==='RESERVADO'?'Reservado':'Fact. Sin Rotar',badge(r.estado==='RESERVADO'?RES_BG:FSR_BG,r.estado==='RESERVADO'?RES_FG:FSR_FG));
-    setCell(7,r.contrato||'',mono(ev,TEXT2));
-    setCell(8,r.factura||'—',mono(ev,r.factura?FSR_FG:TEXT2,'center'));
-    setCell(9,r.serie||'—',mono(ev,TEXT2));
-    setCell(10,r.pallet_price||0,mono(ev,TEXT2,'right'));
-    setCell(11,r.eta||'—',mono(ev,TEXT2,'center'));
-    const dv=r.dias??0;
-    setCell(12,`${dv}d`,badge(dv>180?WARN_BG:dv>90?'FFF4E0':OK_BG,dv>180?WARN_FG:dv>90?'B86000':OK_FG));
-    const dr=r.dias_reserva;
-    setCell(13,dr!=null?`${dr}d`:'—',dr!=null?badge(dr>180?WARN_BG:dr>90?'FFF4E0':OK_BG,dr>180?WARN_FG:dr>90?'B86000':OK_FG):base(ev));
-    setCell(14,r.warehouse_fee>0?r.warehouse_fee:0,r.warehouse_fee>0?feeS(ev):base(ev));
-    setCell(15,r.finance_fee>0?r.finance_fee:0,r.finance_fee>0?feeS(ev):base(ev));
-    setCell(16,r.comercial||'—',base(ev));
+    // Manejado por COLS → se auto-alinea con los encabezados aunque cambie el nº/orden de columnas
+    COLS.forEach((col,c)=>{
+      switch(col.key){
+        case 'bodega':       setCell(c,r.bodega,{fill:{patternType:'solid',fgColor:{rgb:GREEN_L}},font:{bold:true,sz:9.5,name:'Calibri',color:{rgb:GREEN}},alignment:{horizontal:'center',vertical:'center'},border:allB(BORDER_C)}); break;
+        case 'cliente':      setCell(c,r.cliente,{fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{bold:true,sz:10,name:'Calibri',color:{rgb:'1A1710'}},alignment:{horizontal:'left',vertical:'center'},border:allB(BORDER_C)}); break;
+        case 'cafe':         setCell(c,r.cafe,base(ev)); break;
+        case 'ico':          setCell(c,r.ico,mono(ev,TEXT2,'center')); break;
+        case 'cantidad':     setCell(c,r.cantidad,{fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{bold:true,sz:10,name:'Courier New',color:{rgb:GREEN}},alignment:{horizontal:'right',vertical:'center'},border:allB(BORDER_C)}); break;
+        case 'tipo':         setCell(c,r.tipo==='SPOT'?'Spot':'Contrato',badge(r.tipo==='SPOT'?SPOT_BG:CTR_BG,r.tipo==='SPOT'?SPOT_FG:CTR_FG)); break;
+        case 'estado':       setCell(c,r.estado==='RESERVADO'?'Reservado':'Fact. Sin Rotar',badge(r.estado==='RESERVADO'?RES_BG:FSR_BG,r.estado==='RESERVADO'?RES_FG:FSR_FG)); break;
+        case 'container':    setCell(c,r.container,badge(r.container==='On float'?CTR_BG:RES_BG,r.container==='On float'?CTR_FG:RES_FG)); break;
+        case 'contrato':     setCell(c,r.contrato||'',mono(ev,TEXT2)); break;
+        case 'factura':      setCell(c,r.factura||'—',mono(ev,r.factura?FSR_FG:TEXT2,'center')); break;
+        case 'serie':        setCell(c,r.serie||'—',mono(ev,TEXT2)); break;
+        case 'pallet_price': setCell(c,r.pallet_price||0,mono(ev,TEXT2,'right')); break;
+        case 'eta':          setCell(c,r.eta||'—',mono(ev,TEXT2,'center')); break;
+        case 'dias':       { const dv=r.dias??0; setCell(c,`${dv}d`,badge(dv>180?WARN_BG:dv>90?'FFF4E0':OK_BG,dv>180?WARN_FG:dv>90?'B86000':OK_FG)); break; }
+        case 'dias_reserva':{ const dr=r.dias_reserva; setCell(c,dr!=null?`${dr}d`:'—',dr!=null?badge(dr>180?WARN_BG:dr>90?'FFF4E0':OK_BG,dr>180?WARN_FG:dr>90?'B86000':OK_FG):base(ev)); break; }
+        case 'warehouse_fee':setCell(c,r.warehouse_fee>0?r.warehouse_fee:0,r.warehouse_fee>0?feeS(ev):base(ev)); break;
+        case 'finance_fee':  setCell(c,r.finance_fee>0?r.finance_fee:0,r.finance_fee>0?feeS(ev):base(ev)); break;
+        case 'fee_en':     { const fv=r.fee_en; setCell(c, fv==null?'Sin fecha':(fv<=0?'Aplica ya':`en ${fv}d`), base(ev)); break; }
+        case 'comercial':    setCell(c,r.comercial||'—',base(ev)); break;
+        default:             setCell(c, r[col.key]==null?'':r[col.key], base(ev));
+      }
+    });
   });
 
   ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:filtered.length,c:COLS.length-1}});
@@ -1425,6 +1441,16 @@ function normalizeDate(v){
     if(n>20000&&n<80000) return new Date(Math.round((n-25569)*86400000)).toISOString().slice(0,10);
   }
   return s.slice(0,10);
+}
+
+// Status del contenedor del lote, derivado de la ETA a bodega:
+//   ETA futura  → On float (en tránsito)   ·   ETA cumplida / sin ETA → Spot (en bodega)
+function containerStatus(eta){
+  const iso = normalizeDate(eta);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return 'Spot';   // sin ETA válida → asumir en bodega
+  const t = new Date();
+  const today = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  return iso > today ? 'On float' : 'Spot';
 }
 
 async function cargarCartera(forzar=false){
