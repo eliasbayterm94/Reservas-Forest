@@ -180,6 +180,8 @@ td:last-child{border-right:none}
 .badge.fsr{background:var(--fsr-bg);color:var(--fsr-fg)}
 .badge.float{background:#e3edf4;color:#2e4a63}
 .badge.landed{background:#e7f0e0;color:#3d6224}
+.ger-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.ger-toolbar .res-count{font-weight:600;color:var(--text2)}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
 .dias-badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
@@ -719,6 +721,11 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="rcard b90"><div class="rc-l">Overdue</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
       <div class="rcard g"><div class="rc-l">Collected this week</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">collected</div></div>
       <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">collected</div></div>
+    </div>
+    <div class="ger-toolbar">
+      <span class="res-count">AR by sales rep</span>
+      <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+      <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
     </div>
     <div class="table-wrap" id="twGer">
       <table id="gerTable">
@@ -2056,7 +2063,8 @@ function mostrarGerencia(){
   $('gerLock').classList.add('hidden'); $('gerContent').classList.remove('hidden');
   renderGerencia();
 }
-function renderGerencia(){
+// Agrega la cartera por comercial (mismo cálculo para pantalla y exports)
+function gerenciaRows(){
   const rep={};
   cartData.forEach(o=>{ const c=o.comercial||'Unassigned'; const g=rep[c]=rep[c]||{ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0};
     const s=o.saldoUsd; g.ab+=s;
@@ -2065,6 +2073,17 @@ function renderGerencia(){
   });
   const rows=Object.keys(rep).map(c=>Object.assign({c},rep[c])).sort((a,b)=>b.ab-a.ab);
   const tot=rows.reduce((t,r)=>{['ab','ve','co','b1','b2','b3','b4'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{c:'TOTAL'});
+  return {rows, tot};
+}
+function gerCobrado(){   // cobrado esta semana / este mes (desde cerradas)
+  const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
+  const moStart=new Date(now.getFullYear(),now.getMonth(),1);
+  let cobS=0,cobM=0;
+  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(d>=wk)cobS+=m; if(d>=moStart)cobM+=m; });
+  return {cobS, cobM};
+}
+function renderGerencia(){
+  const {rows, tot} = gerenciaRows();
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const rowHtml=(r,isTot)=>{ const hot=pct(r)>=60;
     return `<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
@@ -2078,12 +2097,87 @@ function renderGerencia(){
   $('gAb').textContent=money(tot.ab);
   $('gVe').textContent=money(tot.ve);
   $('gVeP').textContent=(tot.ab?Math.round(tot.ve/tot.ab*100):0)+'% of AR';
-  const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
-  const moStart=new Date(now.getFullYear(),now.getMonth(),1);
-  let cobS=0,cobM=0;
-  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(d>=wk)cobS+=m; if(d>=moStart)cobM+=m; });
+  const {cobS, cobM} = gerCobrado();
   $('gCobS').textContent=money(cobS); $('gCobM').textContent=money(cobM);
   $('gTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+
+// ── Exportar la vista de Gerencia (cartera por comercial) ──
+function exportGerenciaExcel(){
+  if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
+  const {rows, tot} = gerenciaRows();
+  const {cobS, cobM} = gerCobrado();
+  const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
+  const R = r => [r.c, Math.round(r.ab), Math.round(r.co), Math.round(r.ve), pct(r)/100, Math.round(r.b1), Math.round(r.b2), Math.round(r.b3), Math.round(r.b4)];
+
+  const NAVY='1B203D', YELLOW='E7E244', WHITE='FFFFFF', BORDER='DDD9CF', ALT='F5F4EE', INK='1A1710';
+  const thin=()=>({style:'thin',color:{rgb:BORDER}});
+  const allB=()=>({top:thin(),bottom:thin(),left:thin(),right:thin()});
+  const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:NAVY}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB()}});
+  const cell=(v,ev,bold,al,pctFmt)=>{ const o={v,t:typeof v==='number'?'n':'s',s:{fill:{patternType:'solid',fgColor:{rgb:ev?ALT:WHITE}},font:{sz:10,name:'Calibri',bold:!!bold,color:{rgb:INK}},alignment:{horizontal:al||'right',vertical:'center'},border:allB()}}; if(typeof v==='number') o.z = pctFmt?'0%':'#,##0'; return o; };
+
+  const headers=['Sales rep','Open','Current','Overdue','%O','1-30','31-60','61-90','90+'];
+  const ws={}; headers.forEach((h,c)=> ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
+  let rn=1;
+  rows.forEach((r,i)=>{ const ev=i%2===1, a=R(r); a.forEach((v,c)=> ws[XLSX.utils.encode_cell({r:rn,c})]=cell(v,ev,false,c===0?'left':'right',c===4)); rn++; });
+  // Fila TOTAL (resaltada en amarillo)
+  const ta=R(Object.assign({c:'TOTAL'},tot));
+  ta.forEach((v,c)=>{ ws[XLSX.utils.encode_cell({r:rn,c})]={v,t:typeof v==='number'?'n':'s',z:typeof v==='number'?(c===4?'0%':'#,##0'):undefined,s:{fill:{patternType:'solid',fgColor:{rgb:YELLOW}},font:{bold:true,color:{rgb:NAVY},sz:10,name:'Calibri'},alignment:{horizontal:c===0?'left':'right',vertical:'center'},border:allB()}}; });
+  rn++;
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rn-1,c:headers.length-1}});
+  ws['!cols']=[{wch:20},{wch:12},{wch:12},{wch:12},{wch:7},{wch:11},{wch:11},{wch:11},{wch:11}];
+  ws['!rows']=[]; for(let i=0;i<rn;i++) ws['!rows'].push({hpt:i===0?22:18});
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2'};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Management');
+  XLSX.writeFile(wb,`Forest_Management_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportGerenciaPDF(){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('The PDF generator is still loading, try again in a moment.'); return; }
+  if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
+  const {rows, tot} = gerenciaRows();
+  const {cobS, cobM} = gerCobrado();
+  const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const NAVY=[27,32,61];
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+  doc.text('Forest — Management · AR summary', 40, 42);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('Generated: '+new Date().toLocaleString('en-US'), W-40, 42, {align:'right'});
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
+  const pctTot = tot.ab?Math.round(tot.ve/tot.ab*100):0;
+  doc.text(`Open AR: ${money(tot.ab)}    ·    Overdue: ${money(tot.ve)} (${pctTot}%)    ·    Collected this week: ${money(cobS)}    ·    this month: ${money(cobM)}`, 40, 64);
+
+  const body = rows.map(r=>[ r.c, money(r.ab), money(r.co), money(r.ve), pct(r)+'%', money(r.b1), money(r.b2), money(r.b3), money(r.b4) ]);
+  doc.autoTable({
+    startY: 80,
+    head: [['Sales rep','Open','Current','Overdue','%O','1-30','31-60','61-90','90+']],
+    body,
+    foot: [['TOTAL', money(tot.ab), money(tot.co), money(tot.ve), pctTot+'%', money(tot.b1), money(tot.b2), money(tot.b3), money(tot.b4)]],
+    styles:{fontSize:9, cellPadding:5, halign:'right', lineColor:[221,217,207], lineWidth:.5},
+    headStyles:{fillColor:NAVY, textColor:[231,226,68], halign:'right', fontStyle:'bold'},
+    footStyles:{fillColor:[231,226,68], textColor:NAVY, fontStyle:'bold', halign:'right'},
+    alternateRowStyles:{fillColor:[245,244,238]},
+    columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}},
+    margin:{left:40, right:40},
+    didParseCell:(data)=>{
+      // resalta en rojo el %O alto (>=60%) en el cuerpo
+      if(data.section==='body' && data.column.index===4){
+        const r=rows[data.row.index]; if(r && pct(r)>=60){ data.cell.styles.textColor=[168,53,28]; data.cell.styles.fontStyle='bold'; }
+      }
+    },
+    didDrawPage:(d)=>{
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+      doc.text('Forest Reservas — Management', 40, H-18);
+      doc.text('Page '+d.pageNumber, W-40, H-18, {align:'right'});
+    }
+  });
+  doc.save(`Forest_Management_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
 
