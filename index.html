@@ -283,6 +283,8 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 /* ══ SEGUIMIENTO: checkbox, estados, panel, barra de lote ══ */
 #viewCartera,#viewReservas{position:relative}
 .c-sel{text-align:center;cursor:default}
+/* Reservas: celdas de una sola línea (recorta con … en vez de crecer/expandir) */
+#mainTable td,#mainTable th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tbody tr{cursor:pointer}
 .cb{display:inline-block;width:16px;height:16px;border:1.8px solid var(--border2);border-radius:4px;vertical-align:middle;cursor:pointer;position:relative;background:#fff;transition:all .1s}
 .cb:hover{border-color:var(--fc-navy)}
@@ -516,6 +518,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span class="pill fsr"  id="pF" onclick="togglePill(this,'estado','FACTURADO SIN ROTAR')">✓ Fact. Sin Rotar</span>
   <div class="fsep"></div>
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
+  <span class="pill off" id="pDetalle" onclick="toggleVistaRes()">Ver detalle</span>
   <span class="res-count" id="resCount">—</span>
   <button class="btn-excel" onclick="exportExcel()"><i data-lucide="download"></i> Excel</button>
 </div>
@@ -806,7 +809,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 // ═══════════════════════════════════════════════════
 const API_URL        = 'https://script.google.com/macros/s/AKfycbykzbWyxPyLYlxbbmQ-zzNjo2lSN3pcSbas2SRAUov9k75A68e2ovaSOs3RViFSXR3TBg/exec';
 const LAST_LOAD_KEY  = 'forest_last_load_v3';
-const COL_WIDTHS_KEY = 'forest_col_widths_v3';
+const COL_WIDTHS_KEY = 'forest_col_widths_v4';
 
 // ═══════════════════════════════════════════════════
 // COLUMNAS
@@ -814,8 +817,8 @@ const COL_WIDTHS_KEY = 'forest_col_widths_v3';
 const COLS = [
   { key:'_sel',         label:'',                 w:34,  cls:'c-sel', nosort:true, sel:true },
   { key:'bodega',       label:'Bodega',           w:75,  cls:'c-bodega' },
-  { key:'cliente',      label:'Cliente',           w:170, cls:'c-cliente' },
-  { key:'cafe',         label:'Café / Referencia', w:210, cls:'' },
+  { key:'cliente',      label:'Cliente',           w:150, cls:'c-cliente' },
+  { key:'cafe',         label:'Café / Referencia', w:155, cls:'' },
   { key:'ico',          label:'ICO',               w:105, cls:'c-mono' },
   { key:'cantidad',     label:'Bags',              w:60,  cls:'c-num',    align:'right' },
   { key:'tipo',         label:'Tipo',              w:90,  cls:'',         badge:true },
@@ -835,7 +838,7 @@ const COLS = [
   { key:'rAccion',      label:'Acción',            w:130, resAccion:true },
   { key:'rEstado',      label:'Seguimiento',       w:130, resEstado:true },
   { key:'rSalida',      label:'Salida / compromiso',w:150, resSalida:true },
-  { key:'rNota',        label:'Nota',              w:200, resNota:true },
+  { key:'rNota',        label:'Nota',              w:160, resNota:true },
 ];
 
 let colWidths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'null');
@@ -847,6 +850,24 @@ const RES_EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Programado'
 let resSegData={}, resSelKeys=new Set(), resSelClient=null, resPanelTargets=[];
 // Llave estable por reserva: cliente + lote (ICO) + contrato (SPOT si no hay)
 const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contrato||'').trim())||'SPOT'}`;
+
+// Vista compacta: oculta las columnas de detalle/finanzas para dejar visibles
+// los compromisos sin tanto scroll. Se alternan con el botón "Ver detalle".
+const DETAIL_COLS = new Set(['tipo','estado','contrato','factura','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
+COLS.forEach((c,i)=>{ c._idx=i; if(DETAIL_COLS.has(c.key)) c.detail=true; });
+let resVista = localStorage.getItem('forest_res_vista') || 'compacto';   // 'compacto' | 'completo'
+// Columnas visibles según la vista: en compacto se ocultan las de detalle/finanzas
+function visCols(){ return resVista==='compacto' ? COLS.filter(c=>!c.detail) : COLS; }
+function toggleVistaRes(){
+  resVista = resVista==='compacto' ? 'completo' : 'compacto';
+  localStorage.setItem('forest_res_vista', resVista);
+  aplicarVistaRes();
+}
+function aplicarVistaRes(){
+  const p=$('pDetalle'); if(p){ const on=resVista==='completo'; p.classList.toggle('off',!on); p.textContent = on?'✓ Detalle':'Ver detalle'; }
+  buildThead();                              // reconstruye encabezados/colgroup solo con las visibles
+  if(typeof DATA!=='undefined' && DATA && DATA.length) aplicarFiltros();
+}
 
 // ═══════════════════════════════════════════════════
 // STATE
@@ -1075,8 +1096,9 @@ function renderFilas(rows, fromIdx){
     const feeAplica = r.fee_en===null || r.fee_en<=0;
 
     let tds = '';
-    for(let ci=0;ci<COLS.length;ci++){
-      const col = COLS[ci];
+    const vcols = visCols();
+    for(let ci=0;ci<vcols.length;ci++){
+      const col = vcols[ci];
       let inner = '';
       let extra = '';
 
@@ -1276,11 +1298,15 @@ let rowAlt = [];
 // THEAD + RESIZE + COLGROUP
 // ═══════════════════════════════════════════════════
 function buildThead(){
-  // Colgroup para table-layout:fixed — una sola definición de anchos
-  DOM.colgroup.innerHTML = colWidths.map(w=>`<col style="width:${w}px">`).join('');
+  const cols = visCols();
+  // Colgroup para table-layout:fixed — solo columnas visibles según la vista
+  DOM.colgroup.innerHTML = cols.map(c=>`<col style="width:${colWidths[c._idx]}px">`).join('');
+  // Ancho explícito = suma de columnas visibles → table-layout:fixed respeta los anchos
+  const total = cols.reduce((s,c)=>s+colWidths[c._idx],0);
+  const mt = document.getElementById('mainTable'); if(mt) mt.style.width = total+'px';
 
   const tr=document.createElement('tr');
-  COLS.forEach((col,ci)=>{
+  cols.forEach((col,vi)=>{
     const th=document.createElement('th');
     if(col.secFee) th.classList.add('sec-fee');
     if(sc===col.key) th.classList.add(sd===1?'asc':'desc');
@@ -1293,7 +1319,7 @@ function buildThead(){
 
     const handle=document.createElement('div');
     handle.className='resize-handle';
-    handle.addEventListener('mousedown',e=>startResize(e,ci));
+    handle.addEventListener('mousedown',e=>startResize(e,col._idx,vi));
     th.appendChild(handle);
     tr.appendChild(th);
   });
@@ -1309,14 +1335,15 @@ function sortBy(col,thEl){
   aplicarFiltros();
 }
 
-function startResize(e,colIdx){
+function startResize(e,colIdx,visPos){
   e.preventDefault(); e.stopPropagation();
   const startX=e.clientX, startW=colWidths[colIdx];
   const handle=e.target; handle.classList.add('dragging');
 
   // Actualizar solo el <col> y el header th — no tocar tbody en cada mousemove
-  const col = DOM.colgroup.children[colIdx];
-  const th  = DOM.thead.rows[0].cells[colIdx];
+  // colIdx = índice original (en colWidths) · visPos = posición entre las columnas visibles
+  const col = DOM.colgroup.children[visPos];
+  const th  = DOM.thead.rows[0].cells[visPos];
 
   function onMove(ev){
     const newW=Math.max(40, startW+(ev.clientX-startX));
@@ -2454,6 +2481,7 @@ function exportHistorial(){
 // ═══════════════════════════════════════════════════
 buildThead();
 buildTheadCart();
+aplicarVistaRes();
 if(window.lucide) lucide.createIcons();
 cargarDatos(false);
 </script>
