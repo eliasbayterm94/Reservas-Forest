@@ -285,6 +285,11 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .c-sel{text-align:center;cursor:default}
 /* Reservas: celdas de una sola línea (recorta con … en vez de crecer/expandir) */
 #mainTable td,#mainTable th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Botón de vista (Ver/Ocultar detalle) — visible en PC y móvil */
+.btn-vista{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border2);border-radius:8px;background:#fff;color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-vista:hover{border-color:var(--fc-navy)}
+.btn-vista.on{background:var(--fc-navy);color:#fff;border-color:var(--fc-navy)}
+.btn-vista i{width:15px;height:15px}
 tbody tr{cursor:pointer}
 .cb{display:inline-block;width:16px;height:16px;border:1.8px solid var(--border2);border-radius:4px;vertical-align:middle;cursor:pointer;position:relative;background:#fff;transition:all .1s}
 .cb:hover{border-color:var(--fc-navy)}
@@ -499,7 +504,6 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div class="fi"><span class="fi-icon"><i data-lucide="clipboard-check"></i></span>
     <select id="fResSeg" onchange="onFilter()">
       <option value="">Seguimiento</option>
-      <option value="act:rotar">Por rotar (prioridad)</option>
       <optgroup label="Clasificación">
         <option value="est:Sin gestión">Sin gestión</option>
         <option value="est:Contactado">Contactado</option>
@@ -511,6 +515,21 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </optgroup>
     </select>
   </div>
+  <div class="fi"><span class="fi-icon"><i data-lucide="target"></i></span>
+    <select id="fAccion" onchange="onFilter()">
+      <option value="">Acción</option>
+      <option value="Por rotar">Por rotar (prioridad)</option>
+      <optgroup label="Específica">
+        <option value="Sacar urgente">Sacar urgente</option>
+        <option value="Agendar salida">Agendar salida</option>
+        <option value="Contactar">Contactar</option>
+        <option value="Salida programada">Salida programada</option>
+        <option value="Al día">Al día</option>
+        <option value="Completado">Completado</option>
+        <option value="Cancelado">Cancelado</option>
+      </optgroup>
+    </select>
+  </div>
   <div class="fsep"></div>
   <span class="pill spot" id="pS" onclick="togglePill(this,'tipo','SPOT')">✓ Spot</span>
   <span class="pill ctr"  id="pC" onclick="togglePill(this,'tipo','CONTRACT')">✓ Contrato</span>
@@ -518,8 +537,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span class="pill fsr"  id="pF" onclick="togglePill(this,'estado','FACTURADO SIN ROTAR')">✓ Fact. Sin Rotar</span>
   <div class="fsep"></div>
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
-  <span class="pill off" id="pDetalle" onclick="toggleVistaRes()">Ver detalle</span>
   <span class="res-count" id="resCount">—</span>
+  <button class="btn-vista" id="btnDetalle" onclick="toggleVistaRes()" title="Mostrar u ocultar columnas de detalle (contrato, fees, ETA…)"></button>
   <button class="btn-excel" onclick="exportExcel()"><i data-lucide="download"></i> Excel</button>
 </div>
 
@@ -809,36 +828,36 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 // ═══════════════════════════════════════════════════
 const API_URL        = 'https://script.google.com/macros/s/AKfycbykzbWyxPyLYlxbbmQ-zzNjo2lSN3pcSbas2SRAUov9k75A68e2ovaSOs3RViFSXR3TBg/exec';
 const LAST_LOAD_KEY  = 'forest_last_load_v3';
-const COL_WIDTHS_KEY = 'forest_col_widths_v4';
+const COL_WIDTHS_KEY = 'forest_col_widths_v5';
 
 // ═══════════════════════════════════════════════════
 // COLUMNAS
 // ═══════════════════════════════════════════════════
 const COLS = [
   { key:'_sel',         label:'',                 w:34,  cls:'c-sel', nosort:true, sel:true },
-  { key:'bodega',       label:'Bodega',           w:75,  cls:'c-bodega' },
-  { key:'cliente',      label:'Cliente',           w:150, cls:'c-cliente' },
-  { key:'cafe',         label:'Café / Referencia', w:155, cls:'' },
-  { key:'ico',          label:'ICO',               w:105, cls:'c-mono' },
-  { key:'cantidad',     label:'Bags',              w:60,  cls:'c-num',    align:'right' },
+  { key:'bodega',       label:'Bodega',           w:60,  cls:'c-bodega' },
+  { key:'cliente',      label:'Cliente',           w:135, cls:'c-cliente' },
+  { key:'cafe',         label:'Café / Referencia', w:140, cls:'' },
+  { key:'ico',          label:'ICO',               w:85,  cls:'c-mono' },
+  { key:'cantidad',     label:'Bags',              w:52,  cls:'c-num',    align:'right' },
+  { key:'estado',       label:'Estado',            w:115, cls:'',         badge:true },
+  { key:'contrato',     label:'Contrato',          w:125, cls:'c-mono' },
   { key:'tipo',         label:'Tipo',              w:90,  cls:'',         badge:true },
-  { key:'estado',       label:'Estado',            w:145, cls:'',         badge:true },
-  { key:'contrato',     label:'Contrato',          w:155, cls:'c-mono' },
   { key:'factura',      label:'Factura',           w:90,  cls:'',         factura:true },
   { key:'serie',        label:'Categoría',         w:120, cls:'c-mono' },
   { key:'pallet_price', label:'Pallet Price',      w:100, cls:'c-num',    align:'right', precio:true },
   { key:'eta',          label:'ETA Bodega',        w:100, cls:'c-mono' },
-  { key:'container',    label:'Contenedor',        w:96,  cls:'',         containerBadge:true },
+  { key:'container',    label:'Contenedor',        w:85,  cls:'',         containerBadge:true },
   { key:'dias',         label:'Vejez',             w:85,  cls:'',         diasBadge:true },
-  { key:'dias_reserva', label:'Días Reserv.',      w:95,  cls:'',         diasBadge:true },
+  { key:'dias_reserva', label:'Días Reserv.',      w:85,  cls:'',         diasBadge:true },
   { key:'warehouse_fee',label:'Storage Fee',       w:110, cls:'',         feecell:true, secFee:true },
   { key:'finance_fee',  label:'Finance Fee',       w:110, cls:'',         feecell:true, secFee:true },
   { key:'fee_en',       label:'Fee en',            w:100, cls:'',         feeBadge:true, secFee:true },
-  { key:'comercial',    label:'Comercial',         w:110, cls:'c-muted' },
-  { key:'rAccion',      label:'Acción',            w:130, resAccion:true },
-  { key:'rEstado',      label:'Seguimiento',       w:130, resEstado:true },
-  { key:'rSalida',      label:'Salida / compromiso',w:150, resSalida:true },
-  { key:'rNota',        label:'Nota',              w:160, resNota:true },
+  { key:'comercial',    label:'Comercial',         w:95,  cls:'c-muted' },
+  { key:'rAccion',      label:'Acción',            w:118, resAccion:true },
+  { key:'rEstado',      label:'Seguimiento',       w:118, resEstado:true },
+  { key:'rSalida',      label:'Salida / compromiso',w:130, resSalida:true },
+  { key:'rNota',        label:'Nota',              w:145, resNota:true },
 ];
 
 let colWidths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'null');
@@ -853,7 +872,7 @@ const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contr
 
 // Vista compacta: oculta las columnas de detalle/finanzas para dejar visibles
 // los compromisos sin tanto scroll. Se alternan con el botón "Ver detalle".
-const DETAIL_COLS = new Set(['tipo','estado','contrato','factura','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
+const DETAIL_COLS = new Set(['tipo','factura','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
 COLS.forEach((c,i)=>{ c._idx=i; if(DETAIL_COLS.has(c.key)) c.detail=true; });
 let resVista = localStorage.getItem('forest_res_vista') || 'compacto';   // 'compacto' | 'completo'
 // Columnas visibles según la vista: en compacto se ocultan las de detalle/finanzas
@@ -864,7 +883,13 @@ function toggleVistaRes(){
   aplicarVistaRes();
 }
 function aplicarVistaRes(){
-  const p=$('pDetalle'); if(p){ const on=resVista==='completo'; p.classList.toggle('off',!on); p.textContent = on?'✓ Detalle':'Ver detalle'; }
+  const b=$('btnDetalle');
+  if(b){
+    const on=resVista==='completo';
+    b.classList.toggle('on', on);
+    b.innerHTML = on ? '<i data-lucide="eye-off"></i> Ocultar detalle' : '<i data-lucide="eye"></i> Ver detalle';
+    if(window.lucide) lucide.createIcons();
+  }
   buildThead();                              // reconstruye encabezados/colgroup solo con las visibles
   if(typeof DATA!=='undefined' && DATA && DATA.length) aplicarFiltros();
 }
@@ -885,7 +910,7 @@ const DOM = {};
 ['sRows','sBags','sClientes','resCount','fBags','fClientes','fWH','footerTs','brandSub',
  'statusPill','statusText','btnRefresh','refreshIcon',
  'pgCurrent','pgTotal','pgFrom','pgTo','pgAll','pgFirst','pgPrev','pgNext','pgLast','pgNums',
- 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer','fResSeg',
+ 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer','fResSeg','fAccion',
  'thead','tbody','tfoot','colgroup',
  'ovLoading','ovError','ovEmpty','ovErrorMsg','tw'
 ].forEach(id=>DOM[id]=$( id));
@@ -1441,6 +1466,7 @@ function aplicarFiltros(){
   const fd = DOM.fDias.value;
   const fcont = DOM.fContainer.value;
   const frs = DOM.fResSeg.value;
+  const facc = DOM.fAccion.value;
   const tipoSet   = af.tipo;
   const estadoSet = af.estado;
 
@@ -1450,9 +1476,10 @@ function aplicarFiltros(){
     if(fm && r.comercial !== fm) return false;
     if(fs && r.serie     !== fs) return false;
     if(fcont && r.container !== fcont) return false;
-    if(frs){
-      if(frs==='act:rotar'){ if(!(r.rAccion && r.rAccion.s>=70)) return false; }        // urgente o agendar
-      else if(frs.slice(0,4)==='est:'){ if((r.rEstado||'Sin gestión')!==frs.slice(4)) return false; }
+    if(frs && frs.slice(0,4)==='est:'){ if((r.rEstado||'Sin gestión')!==frs.slice(4)) return false; }
+    if(facc){
+      if(facc==='Por rotar'){ if(!(r.rAccion && r.rAccion.s>=70)) return false; }        // urgente o agendar
+      else if(!(r.rAccion && r.rAccion.l===facc)) return false;
     }
     if(fc && !(r.contrato||'').toLowerCase().includes(fc)) return false;
     if(ff && !(r.factura||'').toLowerCase().includes(ff))  return false;
