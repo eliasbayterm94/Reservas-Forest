@@ -583,13 +583,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <select class="pn-inp" id="rpEstado"></select></div>
     <div class="pn-fld"><label>Fecha de salida esperada</label>
       <input type="date" class="pn-inp" id="rpFecha"></div>
-    <div class="pn-row">
-      <div class="pn-fld"><label>Unidades a sacar</label>
-        <input type="number" min="0" class="pn-inp" id="rpSacar" placeholder="ej. 10"></div>
-      <div class="pn-fld"><label>Unidades ya sacadas</label>
-        <input type="number" min="0" class="pn-inp" id="rpSacadas" placeholder="ej. 4"></div>
-    </div>
-    <label class="pn-check"><input type="checkbox" id="rpTotal" onchange="salidaTotalRes()"> Salida total (todas las unidades)</label>
+    <div class="pn-fld"><label>Unidades a sacar <span id="rpMax" style="color:var(--text3);font-weight:400"></span></label>
+      <input type="number" min="0" class="pn-inp" id="rpSacar" placeholder="ej. 10" oninput="clampSacar()">
+      <label class="pn-check"><input type="checkbox" id="rpTotal" onchange="salidaTotalRes()"> Salida total (todas las unidades)</label></div>
     <div class="pn-fld"><label>Nota / compromiso del cliente</label>
       <textarea class="pn-inp" id="rpNota" placeholder="ej. Saca 10 el viernes; el resto en agosto."></textarea></div>
   </div>
@@ -1120,8 +1116,8 @@ function renderFilas(rows, fromIdx){
       } else if(col.resEstado){
         inner = r.rEstado ? `<span class="est ${RES_EST_CLASS[r.rEstado]||'e-sin'}">${esc(r.rEstado)}</span>` : '<span class="est e-sin">Sin gestión</span>';
       } else if(col.resSalida){
-        if(r.rCompromiso || r.rSacar || r.rSacadas){
-          let u=''; if(r.rSacar) u='sacar '+esc(String(r.rSacar)); if(r.rSacadas) u+=(u?' · ':'')+'sacadas '+esc(String(r.rSacadas));
+        if(r.rCompromiso || r.rSacar){
+          const u = r.rSacar ? 'sacar '+esc(String(r.rSacar))+' und' : '';
           inner = `<span class="comp2">${r.rCompromiso?esc(r.rCompromiso):''}${u?`<small>${u}</small>`:''}</span>`;
         } else inner='<span class="mut2">—</span>';
       } else if(col.resNota){
@@ -1157,7 +1153,6 @@ function mergeResSeg(){
     r.rEstado     = s ? (s.estado||'') : '';
     r.rCompromiso = s ? (s.fechaCompromiso||'') : '';
     r.rSacar      = s ? (s.unidSacar||'') : '';
-    r.rSacadas    = s ? (s.unidSacadas||'') : '';
     r.rNota       = s ? (s.nota||'') : '';
     const dr = r.dias_reserva;                       // días reservado (en bodega)
     const feeAplica = (r.fee_en!=null && r.fee_en<=0) || r.warehouse_fee>0 || r.finance_fee>0;
@@ -1223,13 +1218,20 @@ function abrirResPanel(){
   fillSelect($('rpEstado'), RES_EST_LIST, pre.estado||'Sin gestión');
   $('rpFecha').value   = pre.fechaCompromiso || '';
   $('rpSacar').value   = pre.unidSacar || '';
-  $('rpSacadas').value = pre.unidSacadas || '';
+  $('rpSacar').max     = bags;                              // tope = lo que hay en la reserva
+  $('rpMax').textContent = `(disponible: ${bags})`;
   $('rpNota').value    = pre.nota || '';
   $('rpTotal').checked = false; $('rpSacar').readOnly=false; $('rpSacar').classList.remove('locked');
   $('resPanel').dataset.bags = bags;
+  clampSacar();
   $('resPanel').classList.remove('hidden'); $('resBackdrop').classList.remove('hidden');
 }
 function cerrarResPanel(){ $('resPanel').classList.add('hidden'); $('resBackdrop').classList.add('hidden'); }
+function clampSacar(){                                       // no permitir sacar más de lo disponible
+  const inp=$('rpSacar'), bags=Number($('resPanel').dataset.bags||0);
+  if(inp.value!=='' && Number(inp.value)>bags) inp.value=bags;
+  if(inp.value!=='' && Number(inp.value)<0) inp.value=0;
+}
 function salidaTotalRes(){
   const inp=$('rpSacar');
   if($('rpTotal').checked){ inp.value=$('resPanel').dataset.bags||''; inp.readOnly=true; inp.classList.add('locked'); }
@@ -1239,20 +1241,26 @@ function salidaTotalRes(){
 async function guardarResGestion(){
   if(!resPanelTargets.length) return;
   if(!SEG_API_URL){ alert('Falta configurar el backend de seguimiento.'); return; }
+  const bags=Number($('resPanel').dataset.bags||0);
+  const sacar=$('rpSacar').value;
+  if(sacar!=='' && Number(sacar)>bags){
+    alert(`No puedes sacar más de ${bags} unidades — es lo que hay en ${resPanelTargets.length>1?'estas reservas':'esta reserva'}.`);
+    return;
+  }
   const keys=[...new Set(resPanelTargets.map(r=>r._rkey))].map(k=>{
     const r=resPanelTargets.find(x=>x._rkey===k);
     return { key:k, cliente:r.cliente||'', ico:r.ico||'', contrato:r.contrato||'', comercial:r.comercial||'' };
   });
   const payload={ tipo:'reserva', keys,
     estado:$('rpEstado').value, fechaCompromiso:$('rpFecha').value,
-    unidSacar:$('rpSacar').value, unidSacadas:$('rpSacadas').value,
+    unidSacar:sacar, unidSacadas:'',
     nota:$('rpNota').value, usuario:(DOM.fComercial&&DOM.fComercial.value)||'' };
   const btn=$('rpSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
   try{
     const resp=await fetch(SEG_API_URL,{method:'POST', body:JSON.stringify(payload)});
     const j=await resp.json();
     if(!j||!j.ok) throw new Error((j&&j.error)||'Error');
-    keys.forEach(k=>{ resSegData[k.key]={ key:k.key, estado:payload.estado, fechaCompromiso:payload.fechaCompromiso, unidSacar:payload.unidSacar, unidSacadas:payload.unidSacadas, nota:payload.nota }; });
+    keys.forEach(k=>{ resSegData[k.key]={ key:k.key, estado:payload.estado, fechaCompromiso:payload.fechaCompromiso, unidSacar:payload.unidSacar, nota:payload.nota }; });
     mergeResSeg(); cerrarResPanel(); limpiarResSel(); aplicarFiltros();
   }catch(err){ alert('No se pudo guardar: '+err.message); }
   finally{ btn.disabled=false; btn.textContent=old; }
@@ -1559,7 +1567,7 @@ function exportExcel(){
         case '_sel':         setCell(c,'',base(ev)); break;
         case 'rAccion':      setCell(c, r.rAccion?r.rAccion.l:'', base(ev,'left')); break;
         case 'rEstado':      setCell(c, r.rEstado||'', base(ev,'left')); break;
-        case 'rSalida':    { let u=''; if(r.rSacar)u='sacar '+r.rSacar; if(r.rSacadas)u+=(u?' · ':'')+'sacadas '+r.rSacadas; setCell(c, [r.rCompromiso, u].filter(Boolean).join(' · ')||'', mono(ev,TEXT2,'center')); break; }
+        case 'rSalida':    { const u=r.rSacar?('sacar '+r.rSacar+' und'):''; setCell(c, [r.rCompromiso, u].filter(Boolean).join(' · ')||'', mono(ev,TEXT2,'center')); break; }
         case 'rNota':        setCell(c, r.rNota||'', base(ev,'left')); break;
         default:             setCell(c, r[col.key]==null?'':r[col.key], base(ev));
       }
