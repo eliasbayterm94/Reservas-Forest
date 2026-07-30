@@ -281,7 +281,7 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .pill{display:inline-flex;align-items:center;gap:5px}
 
 /* ══ SEGUIMIENTO: checkbox, estados, panel, barra de lote ══ */
-#viewCartera{position:relative}
+#viewCartera,#viewReservas{position:relative}
 .c-sel{text-align:center;cursor:default}
 tbody tr{cursor:pointer}
 .cb{display:inline-block;width:16px;height:16px;border:1.8px solid var(--border2);border-radius:4px;vertical-align:middle;cursor:pointer;position:relative;background:#fff;transition:all .1s}
@@ -301,6 +301,10 @@ tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .est.e-esc {background:#efe0f0;color:#7a3d84}
 .est.e-plan{background:#e7ecfb;color:#3a4a8a}
 .est.e-jur {background:#6e1b10;color:#fff}
+.est.e-done{background:#cfe8cf;color:#2c5720}
+.est.e-cancel{background:#efe1df;color:#8a5a52}
+tbody tr.rfl-urg  td:nth-child(2){box-shadow:inset 3px 0 0 #a8351c}
+tbody tr.rfl-warn td:nth-child(2){box-shadow:inset 3px 0 0 #9c5e15}
 .acc{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
 .acc.a-urg {background:#f7cdc6;color:#8a2414}
 .acc.a-pron{background:#f6ead6;color:#9c5e15}
@@ -490,6 +494,21 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <option value="On float">On float · en tránsito</option>
     </select>
   </div>
+  <div class="fi"><span class="fi-icon"><i data-lucide="clipboard-check"></i></span>
+    <select id="fResSeg" onchange="onFilter()">
+      <option value="">Seguimiento</option>
+      <option value="act:rotar">Por rotar (prioridad)</option>
+      <optgroup label="Clasificación">
+        <option value="est:Sin gestión">Sin gestión</option>
+        <option value="est:Contactado">Contactado</option>
+        <option value="est:Programado">Programado</option>
+        <option value="est:Sacado parcial">Sacado parcial</option>
+        <option value="est:Sacado total">Sacado total</option>
+        <option value="est:En espera">En espera</option>
+        <option value="est:Cancelado">Cancelado</option>
+      </optgroup>
+    </select>
+  </div>
   <div class="fsep"></div>
   <span class="pill spot" id="pS" onclick="togglePill(this,'tipo','SPOT')">✓ Spot</span>
   <span class="pill ctr"  id="pC" onclick="togglePill(this,'tipo','CONTRACT')">✓ Contrato</span>
@@ -499,6 +518,16 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
   <span class="res-count" id="resCount">—</span>
   <button class="btn-excel" onclick="exportExcel()"><i data-lucide="download"></i> Excel</button>
+</div>
+
+<!-- BARRA DE SEGUIMIENTO EN LOTE (aparece al seleccionar reservas) -->
+<div id="resBulkBar" class="bulkbar hidden">
+  <span class="bulk-cnt" id="resBulkCnt">0</span>
+  <span class="bulk-txt" id="resBulkTxt"></span>
+  <div class="bulk-act">
+    <button class="bbtn y" onclick="gestionResSel()">Aplicar seguimiento</button>
+    <button class="bbtn g" onclick="limpiarResSel()">Limpiar</button>
+  </div>
 </div>
 
 <!-- TABLE -->
@@ -538,6 +567,36 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span><strong id="fClientes">—</strong> clientes</span>
   <span><strong id="fWH">—</strong> en storage fees</span>
   <span style="margin-left:auto;color:var(--text3)" id="footerTs">—</span>
+</div>
+
+<!-- PANEL DE SEGUIMIENTO DE RESERVAS (slide-over) -->
+<div id="resBackdrop" class="pn-backdrop hidden" onclick="cerrarResPanel()"></div>
+<div id="resPanel" class="pn hidden">
+  <div class="pn-head">
+    <div class="pn-ey">Seguimiento de reserva · rotación</div>
+    <div class="pn-t" id="rpTitle">—</div>
+    <div class="pn-sub" id="rpSub">—</div>
+  </div>
+  <div class="pn-body">
+    <div class="pn-applies" id="rpApplies">—</div>
+    <div class="pn-fld"><label>Estado / acción</label>
+      <select class="pn-inp" id="rpEstado"></select></div>
+    <div class="pn-fld"><label>Fecha de salida esperada</label>
+      <input type="date" class="pn-inp" id="rpFecha"></div>
+    <div class="pn-row">
+      <div class="pn-fld"><label>Unidades a sacar</label>
+        <input type="number" min="0" class="pn-inp" id="rpSacar" placeholder="ej. 10"></div>
+      <div class="pn-fld"><label>Unidades ya sacadas</label>
+        <input type="number" min="0" class="pn-inp" id="rpSacadas" placeholder="ej. 4"></div>
+    </div>
+    <label class="pn-check"><input type="checkbox" id="rpTotal" onchange="salidaTotalRes()"> Salida total (todas las unidades)</label>
+    <div class="pn-fld"><label>Nota / compromiso del cliente</label>
+      <textarea class="pn-inp" id="rpNota" placeholder="ej. Saca 10 el viernes; el resto en agosto."></textarea></div>
+  </div>
+  <div class="pn-foot">
+    <button class="pn-save" id="rpSave" onclick="guardarResGestion()">Guardar</button>
+    <button class="pn-cancel" onclick="cerrarResPanel()">Cancelar</button>
+  </div>
 </div>
 </div><!-- /viewReservas -->
 
@@ -757,6 +816,7 @@ const COL_WIDTHS_KEY = 'forest_col_widths_v3';
 // COLUMNAS
 // ═══════════════════════════════════════════════════
 const COLS = [
+  { key:'_sel',         label:'',                 w:34,  cls:'c-sel', nosort:true, sel:true },
   { key:'bodega',       label:'Bodega',           w:75,  cls:'c-bodega' },
   { key:'cliente',      label:'Cliente',           w:170, cls:'c-cliente' },
   { key:'cafe',         label:'Café / Referencia', w:210, cls:'' },
@@ -776,10 +836,21 @@ const COLS = [
   { key:'finance_fee',  label:'Finance Fee',       w:110, cls:'',         feecell:true, secFee:true },
   { key:'fee_en',       label:'Fee en',            w:100, cls:'',         feeBadge:true, secFee:true },
   { key:'comercial',    label:'Comercial',         w:110, cls:'c-muted' },
+  { key:'rAccion',      label:'Acción',            w:130, resAccion:true },
+  { key:'rEstado',      label:'Seguimiento',       w:130, resEstado:true },
+  { key:'rSalida',      label:'Salida / compromiso',w:150, resSalida:true },
+  { key:'rNota',        label:'Nota',              w:200, resNota:true },
 ];
 
 let colWidths = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'null');
 if(!Array.isArray(colWidths) || colWidths.length!==COLS.length) colWidths = COLS.map(c=>c.w);   // reset si cambió el nº de columnas
+
+// ── Seguimiento de RESERVAS (enfocado en rotación sana) ──
+const RES_EST_LIST  = ['Sin gestión','Contactado','Programado','Sacado parcial','Sacado total','En espera','Cancelado'];
+const RES_EST_CLASS = {'Sin gestión':'e-sin','Contactado':'e-cont','Programado':'e-comp','Sacado parcial':'e-parc','Sacado total':'e-done','En espera':'e-disp','Cancelado':'e-cancel'};
+let resSegData={}, resSelKeys=new Set(), resSelClient=null, resPanelTargets=[];
+// Llave estable por reserva: cliente + lote (ICO) + contrato (SPOT si no hay)
+const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contrato||'').trim())||'SPOT'}`;
 
 // ═══════════════════════════════════════════════════
 // STATE
@@ -797,7 +868,7 @@ const DOM = {};
 ['sRows','sBags','sClientes','resCount','fBags','fClientes','fWH','footerTs','brandSub',
  'statusPill','statusText','btnRefresh','refreshIcon',
  'pgCurrent','pgTotal','pgFrom','pgTo','pgAll','pgFirst','pgPrev','pgNext','pgLast','pgNums',
- 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer',
+ 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer','fResSeg',
  'thead','tbody','tfoot','colgroup',
  'ovLoading','ovError','ovEmpty','ovErrorMsg','tw'
 ].forEach(id=>DOM[id]=$( id));
@@ -832,11 +903,14 @@ async function cargarDatos(forzar=false){
       r.pallet_price = Number(r.pallet_price)||0;
       r.fee_en       = r.fee_en!=null ? Number(r.fee_en) : null;
       r.container    = containerStatus(r.eta);   // Spot / On float, derivado de la ETA
+      r._rkey        = resKey(r);                 // llave para el seguimiento de reservas
     });
+    mergeResSeg();   // adjunta seguimiento + acción de rotación (aunque aún no haya datos)
 
     localStorage.setItem(LAST_LOAD_KEY, new Date().toISOString());
     actualizarFiltrosDinamicos();
     aplicarFiltros();
+    cargarResSeg();   // trae el seguimiento guardado y re-mergea
     const ts = json.updated || new Date().toLocaleString('es');
     setStatus('ok', ts);
     DOM.footerTs.textContent = `Actualizado: ${ts}`;
@@ -1038,6 +1112,20 @@ function renderFilas(rows, fromIdx){
         }
       } else if(col.key==='eta'){
         inner = r.eta ? esc(r.eta.slice(0,10)) : '—';
+      } else if(col.sel){
+        inner = `<span class="cb${resSelKeys.has(r._rkey)?' on':''}" onclick="event.stopPropagation();toggleResSel('${escAttr(r._rkey)}','${escAttr(r.cliente)}')"></span>`;
+        extra=' style="text-align:center"';
+      } else if(col.resAccion){
+        inner = r.rAccion ? `<span class="acc ${r.rAccion.c}">${esc(r.rAccion.l)}</span>` : '';
+      } else if(col.resEstado){
+        inner = r.rEstado ? `<span class="est ${RES_EST_CLASS[r.rEstado]||'e-sin'}">${esc(r.rEstado)}</span>` : '<span class="est e-sin">Sin gestión</span>';
+      } else if(col.resSalida){
+        if(r.rCompromiso || r.rSacar || r.rSacadas){
+          let u=''; if(r.rSacar) u='sacar '+esc(String(r.rSacar)); if(r.rSacadas) u+=(u?' · ':'')+'sacadas '+esc(String(r.rSacadas));
+          inner = `<span class="comp2">${r.rCompromiso?esc(r.rCompromiso):''}${u?`<small>${u}</small>`:''}</span>`;
+        } else inner='<span class="mut2">—</span>';
+      } else if(col.resNota){
+        inner = r.rNota ? `<span class="accion" title="${escAttr(r.rNota)}">${esc(r.rNota)}</span>` : '<span class="mut2">—</span>';
       } else {
         const val=r[col.key]||'';
         inner=esc(val)||'—';
@@ -1048,12 +1136,126 @@ function renderFilas(rows, fromIdx){
       tds += `<td${cls}${align}${extra}>${inner}</td>`;
     }
 
-    const trClass = (alt?'alt':'') + (hasFee?' has-fee':'');
-    parts.push(`<tr${trClass?' class="'+trClass+'"':''}>${tds}</tr>`);
+    const selCls = resSelKeys.has(r._rkey) ? ' rowsel' : '';
+    const flagCls = r.rFlag ? ' rfl-'+r.rFlag : '';
+    const trClass = (alt?'alt':'') + (hasFee?' has-fee':'') + selCls + flagCls;
+    parts.push(`<tr${trClass?' class="'+trClass.trim()+'"':''} onclick="gestionResUno('${escAttr(r._rkey)}')">${tds}</tr>`);
   }
 
   // Una sola escritura al DOM (innerHTML masivo vs appendChild por fila)
   DOM.tbody.innerHTML = parts.join('');
+  renderResBulk();
+}
+
+// ═══════════ SEGUIMIENTO DE RESERVAS (rotación sana) ═══════════
+// Adjunta a cada reserva su seguimiento (resSegData) y calcula la acción
+// sugerida priorizando la ROTACIÓN: lo más viejo / con fee corriendo va primero.
+function mergeResSeg(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(const r of DATA){
+    const s = resSegData[r._rkey];
+    r.rEstado     = s ? (s.estado||'') : '';
+    r.rCompromiso = s ? (s.fechaCompromiso||'') : '';
+    r.rSacar      = s ? (s.unidSacar||'') : '';
+    r.rSacadas    = s ? (s.unidSacadas||'') : '';
+    r.rNota       = s ? (s.nota||'') : '';
+    const dr = r.dias_reserva;                       // días reservado (en bodega)
+    const feeAplica = (r.fee_en!=null && r.fee_en<=0) || r.warehouse_fee>0 || r.finance_fee>0;
+    const compFut = r.rCompromiso && new Date(r.rCompromiso) >= today;
+    let ac;
+    if(r.rEstado==='Cancelado')                  ac={l:'Cancelado',         c:'a-esp',  s:10};
+    else if(r.rEstado==='Sacado total')          ac={l:'Completado',        c:'a-ok',   s:5};
+    else if(compFut)                             ac={l:'Salida programada', c:'a-esp2', s:30};
+    else if(feeAplica || (isFinite(dr)&&dr>180)) ac={l:'Sacar urgente',     c:'a-urg',  s:90};
+    else if(isFinite(dr) && dr>90)               ac={l:'Agendar salida',    c:'a-pron', s:70};
+    else if(isFinite(dr) && dr>30)               ac={l:'Contactar',         c:'a-cont', s:50};
+    else                                         ac={l:'Al día',            c:'a-ok',   s:20};
+    r.rAccion = ac;
+    r.rFlag = ac.s>=90 ? 'urg' : (ac.s>=70 ? 'warn' : '');
+  }
+}
+
+async function cargarResSeg(){
+  if(!SEG_API_URL) return;
+  try{
+    const resp = await fetch(SEG_API_URL);
+    const j = await resp.json();
+    if(j && j.ok){
+      resSegData={}; (j.reservas||[]).forEach(row=>{ resSegData[String(row.key)]=row; });
+      if(DATA.length){ mergeResSeg(); aplicarFiltros(); }
+    }
+  }catch(err){ console.warn('Seguimiento de reservas no disponible:', err); }
+}
+
+// ── Selección múltiple (un solo cliente a la vez) ──
+function toggleResSel(key, cliente){
+  if(resSelKeys.has(key)){ resSelKeys.delete(key); if(!resSelKeys.size) resSelClient=null; }
+  else{
+    if(resSelClient && resSelClient!==cliente) resSelKeys.clear();
+    resSelClient=cliente; resSelKeys.add(key);
+  }
+  aplicarFiltros();
+}
+function limpiarResSel(){ resSelKeys.clear(); resSelClient=null; aplicarFiltros(); }
+function renderResBulk(){
+  const bar=$('resBulkBar'); if(!bar) return;
+  if(!resSelKeys.size){ bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  let bags=0; for(const r of DATA){ if(resSelKeys.has(r._rkey)) bags+=r.cantidad||0; }
+  $('resBulkCnt').textContent=resSelKeys.size;
+  $('resBulkTxt').innerHTML=`reserva${resSelKeys.size!==1?'s':''} · <b>${esc(resSelClient)}</b> · ${bags} bags`;
+}
+
+// ── Abrir panel: en lote (selección) o una sola reserva ──
+function gestionResSel(){ if(!resSelKeys.size) return; resPanelTargets=DATA.filter(r=>resSelKeys.has(r._rkey)); abrirResPanel(); }
+function gestionResUno(key){ resPanelTargets=DATA.filter(r=>r._rkey===key); abrirResPanel(); }
+function abrirResPanel(){
+  if(!resPanelTargets.length) return;
+  const base=resPanelTargets[0];
+  const keys=[...new Set(resPanelTargets.map(r=>r._rkey))];
+  const bags=resPanelTargets.reduce((a,r)=>a+(r.cantidad||0),0);
+  $('rpTitle').textContent = keys.length>1 ? `${keys.length} reservas` : `${base.cliente}`;
+  $('rpSub').textContent   = `${base.cafe||''} · ${base.ico||''} · ${bags} bags`;
+  $('rpApplies').textContent = keys.length>1
+    ? `Se aplicará a ${keys.length} reservas de ${resSelClient||base.cliente}`
+    : `${base.cliente} · ${base.ico||''}${base.contrato?(' · '+base.contrato):''}`;
+  const pre = keys.length===1 ? (resSegData[base._rkey]||{}) : {};
+  fillSelect($('rpEstado'), RES_EST_LIST, pre.estado||'Sin gestión');
+  $('rpFecha').value   = pre.fechaCompromiso || '';
+  $('rpSacar').value   = pre.unidSacar || '';
+  $('rpSacadas').value = pre.unidSacadas || '';
+  $('rpNota').value    = pre.nota || '';
+  $('rpTotal').checked = false; $('rpSacar').readOnly=false; $('rpSacar').classList.remove('locked');
+  $('resPanel').dataset.bags = bags;
+  $('resPanel').classList.remove('hidden'); $('resBackdrop').classList.remove('hidden');
+}
+function cerrarResPanel(){ $('resPanel').classList.add('hidden'); $('resBackdrop').classList.add('hidden'); }
+function salidaTotalRes(){
+  const inp=$('rpSacar');
+  if($('rpTotal').checked){ inp.value=$('resPanel').dataset.bags||''; inp.readOnly=true; inp.classList.add('locked'); }
+  else { inp.readOnly=false; inp.classList.remove('locked'); }
+}
+
+async function guardarResGestion(){
+  if(!resPanelTargets.length) return;
+  if(!SEG_API_URL){ alert('Falta configurar el backend de seguimiento.'); return; }
+  const keys=[...new Set(resPanelTargets.map(r=>r._rkey))].map(k=>{
+    const r=resPanelTargets.find(x=>x._rkey===k);
+    return { key:k, cliente:r.cliente||'', ico:r.ico||'', contrato:r.contrato||'', comercial:r.comercial||'' };
+  });
+  const payload={ tipo:'reserva', keys,
+    estado:$('rpEstado').value, fechaCompromiso:$('rpFecha').value,
+    unidSacar:$('rpSacar').value, unidSacadas:$('rpSacadas').value,
+    nota:$('rpNota').value, usuario:(DOM.fComercial&&DOM.fComercial.value)||'' };
+  const btn=$('rpSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    const resp=await fetch(SEG_API_URL,{method:'POST', body:JSON.stringify(payload)});
+    const j=await resp.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||'Error');
+    keys.forEach(k=>{ resSegData[k.key]={ key:k.key, estado:payload.estado, fechaCompromiso:payload.fechaCompromiso, unidSacar:payload.unidSacar, unidSacadas:payload.unidSacadas, nota:payload.nota }; });
+    mergeResSeg(); cerrarResPanel(); limpiarResSel(); aplicarFiltros();
+  }catch(err){ alert('No se pudo guardar: '+err.message); }
+  finally{ btn.disabled=false; btn.textContent=old; }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1203,6 +1405,7 @@ function aplicarFiltros(){
   const fs = DOM.fSerie.value;
   const fd = DOM.fDias.value;
   const fcont = DOM.fContainer.value;
+  const frs = DOM.fResSeg.value;
   const tipoSet   = af.tipo;
   const estadoSet = af.estado;
 
@@ -1212,6 +1415,10 @@ function aplicarFiltros(){
     if(fm && r.comercial !== fm) return false;
     if(fs && r.serie     !== fs) return false;
     if(fcont && r.container !== fcont) return false;
+    if(frs){
+      if(frs==='act:rotar'){ if(!(r.rAccion && r.rAccion.s>=70)) return false; }        // urgente o agendar
+      else if(frs.slice(0,4)==='est:'){ if((r.rEstado||'Sin gestión')!==frs.slice(4)) return false; }
+    }
     if(fc && !(r.contrato||'').toLowerCase().includes(fc)) return false;
     if(ff && !(r.factura||'').toLowerCase().includes(ff))  return false;
     if(fd){
@@ -1349,6 +1556,11 @@ function exportExcel(){
         case 'finance_fee':  setCell(c,r.finance_fee>0?r.finance_fee:0,r.finance_fee>0?feeS(ev):base(ev)); break;
         case 'fee_en':     { const fv=r.fee_en; setCell(c, fv==null?'Sin fecha':(fv<=0?'Aplica ya':`en ${fv}d`), base(ev)); break; }
         case 'comercial':    setCell(c,r.comercial||'—',base(ev)); break;
+        case '_sel':         setCell(c,'',base(ev)); break;
+        case 'rAccion':      setCell(c, r.rAccion?r.rAccion.l:'', base(ev,'left')); break;
+        case 'rEstado':      setCell(c, r.rEstado||'', base(ev,'left')); break;
+        case 'rSalida':    { let u=''; if(r.rSacar)u='sacar '+r.rSacar; if(r.rSacadas)u+=(u?' · ':'')+'sacadas '+r.rSacadas; setCell(c, [r.rCompromiso, u].filter(Boolean).join(' · ')||'', mono(ev,TEXT2,'center')); break; }
+        case 'rNota':        setCell(c, r.rNota||'', base(ev,'left')); break;
         default:             setCell(c, r[col.key]==null?'':r[col.key], base(ev));
       }
     });
