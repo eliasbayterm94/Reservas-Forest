@@ -186,6 +186,7 @@ td:last-child{border-right:none}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
 #gerCarteraWrap,#gerRotacionWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+.ger-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:12.5px;color:var(--text);cursor:pointer;max-width:220px}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
 .dias-badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
@@ -544,7 +545,6 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
   <span class="res-count" id="resCount">—</span>
   <button class="btn-vista" id="btnDetalle" onclick="toggleVistaRes()" title="Mostrar u ocultar columnas de detalle (contrato, fees, ETA…)"></button>
-  <button class="btn-excel" onclick="exportReservasPDF()" style="background:#a8351c;color:#fff" title="PDF por comercial: cafés reservados por cliente, de mayor a menor"><i data-lucide="file-text"></i> PDF</button>
   <button class="btn-excel" onclick="exportExcel()"><i data-lucide="download"></i> Excel</button>
 </div>
 
@@ -844,8 +844,11 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </div>
       <div class="ger-toolbar">
         <span class="res-count">Rotación por comercial (bags reservados)</span>
-        <button class="btn-excel" onclick="exportRotacionPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn-excel" onclick="exportRotacionExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
+        <select id="rotRepSel" class="ger-sel" style="margin-left:auto" title="Comercial para el PDF de detalle">
+          <option value="">Todos los comerciales</option>
+        </select>
+        <button class="btn-excel" onclick="exportReservasPDF()" style="background:#a8351c;color:#fff" title="PDF por comercial: cafés reservados por cliente, de mayor a menor"><i data-lucide="file-text"></i> PDF por comercial</button>
+        <button class="btn-excel" onclick="exportRotacionExcel()" style="margin-left:8px" title="Excel del resumen de rotación"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twRot">
         <table id="rotTable">
@@ -1685,20 +1688,22 @@ function exportExcel(){
 // Respeta los filtros activos (si eliges un comercial, sale solo ese).
 function exportReservasPDF(){
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo.'); return; }
-  if(!filtered.length){ alert('No hay reservas para exportar con los filtros actuales.'); return; }
+  const rep = ($('rotRepSel') && $('rotRepSel').value) || '';           // comercial elegido en Gerencia
+  const src = rep ? DATA.filter(r=>r.comercial===rep) : DATA;           // toda la reserva (no los filtros de Reservas)
+  if(!src.length){ alert('No hay reservas para exportar.'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const NAVY=[27,32,61];
 
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
-  doc.text('Forest — Reservas por comercial', 40, 42);
+  doc.text(rep ? `Forest — Reservas · ${rep}` : 'Forest — Reservas por comercial', 40, 42);
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
   doc.text('Generado: '+new Date().toLocaleString('es'), W-40, 42, {align:'right'});
 
   // Agrupar por comercial (ordenados por total de bags desc)
   const byRep={};
-  filtered.forEach(r=>{ const c=r.comercial||'Sin asignar'; (byRep[c]=byRep[c]||[]).push(r); });
+  src.forEach(r=>{ const c=r.comercial||'Sin asignar'; (byRep[c]=byRep[c]||[]).push(r); });
   const bagsOf = arr => arr.reduce((s,r)=>s+(r.cantidad||0),0);
   const reps = Object.keys(byRep).sort((a,b)=> bagsOf(byRep[b])-bagsOf(byRep[a]));
 
@@ -1738,7 +1743,7 @@ function exportReservasPDF(){
     y = doc.lastAutoTable.finalY + 20;
   });
 
-  const tag = (DOM.fComercial && DOM.fComercial.value) ? DOM.fComercial.value.replace(/\s+/g,'_')+'_' : '';
+  const tag = rep ? rep.replace(/\s+/g,'_')+'_' : '';
   doc.save(`Forest_Reservas_${tag}${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
@@ -2600,6 +2605,9 @@ function rotacionRows(){
 const num0 = n => Math.round(Number(n)||0).toLocaleString('en-US');
 function renderRotacion(){
   if(!DATA.length){ $('tbodyRot').innerHTML=''; return; }
+  // Selector de comercial para el PDF de detalle (conserva la selección)
+  const reps=[...new Set(DATA.map(r=>r.comercial).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'));
+  const rsel=$('rotRepSel'); if(rsel){ const pv=rsel.value; rsel.innerHTML='<option value="">Todos los comerciales</option>'+reps.map(c=>`<option${c===pv?' selected':''}>${esc(c)}</option>`).join(''); }
   const {rows,tot}=rotacionRows();
   const rowHtml=(r,isTot)=>{ const hot=r.bags && (r.b4/r.bags)>=0.3;   // resalta si mucho está +180d
     return `<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
