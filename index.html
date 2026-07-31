@@ -182,6 +182,10 @@ td:last-child{border-right:none}
 .badge.landed{background:#e7f0e0;color:#3d6224}
 .ger-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .ger-toolbar .res-count{font-weight:600;color:var(--text2)}
+.ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
+.ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
+#gerCarteraWrap,#gerRotacionWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
 .dias-badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
@@ -340,8 +344,9 @@ tbody tr.rfl-warn td:nth-child(2){box-shadow:inset 3px 0 0 #9c5e15}
 .gerlock-err{color:var(--warn);font-size:12px;font-weight:600;margin-top:10px;min-height:16px}
 .gercontent{flex:1;display:flex;flex-direction:column;min-height:0}
 .gercontent.hidden{display:none}
-#gerTable{table-layout:auto}
-#gerTable th{padding:0 14px;height:38px}
+#gerTable,#rotTable{table-layout:auto}
+#gerTable th,#rotTable th{padding:0 14px;height:38px}
+#rotTable td{padding:0 14px;height:34px}
 #gerTable td{padding:0 14px}
 #gerTable .c-num{font-family:'DM Mono',monospace;font-size:12.5px;text-align:right}
 tbody#tbodyGer tr.ger-tot td{background:var(--surface3);font-weight:700;border-top:2px solid var(--border2);color:var(--fc-navy)}
@@ -793,31 +798,69 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </div>
   </div>
   <div id="gerContent" class="gercontent hidden">
-    <div class="resumen" id="gerKpis">
-      <div class="rcard b0"><div class="rc-l">Open AR</div><div class="rc-n" id="gAb">—</div><div class="rc-s">USD</div></div>
-      <div class="rcard b90"><div class="rc-l">Overdue</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
-      <div class="rcard g"><div class="rc-l">Collected this week</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">collected</div></div>
-      <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">collected</div></div>
+    <div class="ger-subtabs">
+      <button class="ger-subtab active" id="gsCartera" onclick="gerSub('cartera')">Cartera</button>
+      <button class="ger-subtab" id="gsRotacion" onclick="gerSub('rotacion')">Rotación</button>
     </div>
-    <div class="ger-toolbar">
-      <span class="res-count">AR by sales rep</span>
-      <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
-      <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
+
+    <!-- ─ Sub-vista: CARTERA ─ -->
+    <div id="gerCarteraWrap">
+      <div class="resumen" id="gerKpis">
+        <div class="rcard b0"><div class="rc-l">Open AR</div><div class="rc-n" id="gAb">—</div><div class="rc-s">USD</div></div>
+        <div class="rcard b90"><div class="rc-l">Overdue</div><div class="rc-n" id="gVe">—</div><div class="rc-s" id="gVeP">—</div></div>
+        <div class="rcard g"><div class="rc-l">Collected this week</div><div class="rc-n" id="gCobS">—</div><div class="rc-s">collected</div></div>
+        <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">collected</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Cartera por comercial (USD)</span>
+        <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
+      </div>
+      <div class="table-wrap" id="twGer">
+        <table id="gerTable">
+          <thead><tr>
+            <th>Sales rep</th><th style="text-align:right">Open</th><th style="text-align:right">Current</th>
+            <th style="text-align:right">Overdue</th><th style="text-align:right">%O</th>
+            <th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
+            <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
+          </tr></thead>
+          <tbody id="tbodyGer"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>Resumen por comercial · misma info que llega a gerencia por Slack</span>
+        <span style="margin-left:auto;color:var(--text3)" id="gTs">—</span>
+      </div>
     </div>
-    <div class="table-wrap" id="twGer">
-      <table id="gerTable">
-        <thead><tr>
-          <th>Sales rep</th><th style="text-align:right">Open</th><th style="text-align:right">Current</th>
-          <th style="text-align:right">Overdue</th><th style="text-align:right">%O</th>
-          <th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
-          <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
-        </tr></thead>
-        <tbody id="tbodyGer"></tbody>
-      </table>
-    </div>
-    <div class="footer">
-      <span>Summary by sales rep · same info sent to management via Slack</span>
-      <span style="margin-left:auto;color:var(--text3)" id="gTs">—</span>
+
+    <!-- ─ Sub-vista: ROTACIÓN (inventario reservado) ─ -->
+    <div id="gerRotacionWrap" class="hidden">
+      <div class="resumen" id="rotKpis">
+        <div class="rcard b0"><div class="rc-l">Bags reservados</div><div class="rc-n" id="rBags">—</div><div class="rc-s">total</div></div>
+        <div class="rcard b90"><div class="rc-l">Estancados +180d</div><div class="rc-n" id="rStuck">—</div><div class="rc-s" id="rStuckP">—</div></div>
+        <div class="rcard b60"><div class="rc-l">Con storage fee</div><div class="rc-n" id="rFee">—</div><div class="rc-s">bags</div></div>
+        <div class="rcard b90"><div class="rc-l">Por sacar (urgente)</div><div class="rc-n" id="rPull">—</div><div class="rc-s">bags</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Rotación por comercial (bags reservados)</span>
+        <button class="btn-excel" onclick="exportRotacionPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel" onclick="exportRotacionExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
+      </div>
+      <div class="table-wrap" id="twRot">
+        <table id="rotTable">
+          <thead><tr>
+            <th>Comercial</th><th style="text-align:right">Bags</th>
+            <th style="text-align:right">0–30d</th><th style="text-align:right">31–90d</th>
+            <th style="text-align:right">91–180d</th><th style="text-align:right">180+d</th>
+            <th style="text-align:right">Con fee</th><th style="text-align:right">Por sacar</th>
+          </tr></thead>
+          <tbody id="tbodyRot"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>Rotación sana: prioriza sacar lo más viejo y lo que ya paga storage fee</span>
+        <span style="margin-left:auto;color:var(--text3)" id="rTs">—</span>
+      </div>
     </div>
   </div>
 </div><!-- /viewGerencia -->
@@ -2333,9 +2376,18 @@ function gerUnlock(){
   if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarGerencia(); }
   else { $('gerErr').textContent='Incorrect code'; $('gerCode').select(); }
 }
+let gerSubActive = 'cartera';
 function mostrarGerencia(){
   $('gerLock').classList.add('hidden'); $('gerContent').classList.remove('hidden');
-  renderGerencia();
+  gerSub(gerSubActive);
+}
+function gerSub(which){
+  gerSubActive = which;
+  $('gsCartera').classList.toggle('active', which==='cartera');
+  $('gsRotacion').classList.toggle('active', which==='rotacion');
+  $('gerCarteraWrap').style.display  = which==='cartera'  ? '' : 'none';
+  $('gerRotacionWrap').style.display = which==='rotacion' ? '' : 'none';
+  which==='rotacion' ? renderRotacion() : renderGerencia();
 }
 // Agrega la cartera por comercial (mismo cálculo para pantalla y exports)
 function gerenciaRows(){
@@ -2452,6 +2504,97 @@ function exportGerenciaPDF(){
     }
   });
   doc.save(`Forest_Management_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ── Gerencia · ROTACIÓN (inventario reservado por comercial) ──
+function rotacionRows(){
+  const rep={};
+  DATA.forEach(o=>{
+    const c=o.comercial||'Sin asignar';
+    const g=rep[c]=rep[c]||{bags:0,b1:0,b2:0,b3:0,b4:0,fee:0,pull:0};
+    const q=o.cantidad||0; g.bags+=q;
+    const dr=o.dias_reserva;
+    if(isFinite(dr)){ if(dr<=30)g.b1+=q; else if(dr<=90)g.b2+=q; else if(dr<=180)g.b3+=q; else g.b4+=q; }
+    const feeAplica=(o.fee_en!=null&&o.fee_en<=0)||o.warehouse_fee>0||o.finance_fee>0;
+    if(feeAplica) g.fee+=q;
+    if(o.rAccion && o.rAccion.s>=90) g.pull+=q;   // "Sacar urgente"
+  });
+  const rows=Object.keys(rep).map(c=>Object.assign({c},rep[c])).sort((a,b)=>b.b4-a.b4);   // más estancado primero
+  const tot=rows.reduce((t,r)=>{['bags','b1','b2','b3','b4','fee','pull'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{c:'TOTAL'});
+  return {rows,tot};
+}
+const num0 = n => Math.round(Number(n)||0).toLocaleString('en-US');
+function renderRotacion(){
+  if(!DATA.length){ $('tbodyRot').innerHTML=''; return; }
+  const {rows,tot}=rotacionRows();
+  const rowHtml=(r,isTot)=>{ const hot=r.bags && (r.b4/r.bags)>=0.3;   // resalta si mucho está +180d
+    return `<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
+      +`<td class="c-num">${num0(r.bags)}</td>`
+      +`<td class="c-num" style="color:var(--text3)">${num0(r.b1)}</td>`
+      +`<td class="c-num">${num0(r.b2)}</td>`
+      +`<td class="c-num">${num0(r.b3)}</td>`
+      +`<td class="c-num"${(r.b4>0)?' style="color:var(--warn);font-weight:700"':''}>${num0(r.b4)}</td>`
+      +`<td class="c-num"${(r.fee>0)?' style="color:var(--warn)"':''}>${num0(r.fee)}</td>`
+      +`<td class="c-num"${(r.pull>0)?' style="color:#a8351c;font-weight:700"':''}>${num0(r.pull)}</td></tr>`;
+  };
+  $('tbodyRot').innerHTML = rows.map(r=>rowHtml(r,false)).join('') + rowHtml(tot,true);
+  $('rBags').textContent = num0(tot.bags);
+  $('rStuck').textContent = num0(tot.b4);
+  $('rStuckP').textContent = (tot.bags?Math.round(tot.b4/tot.bags*100):0)+'% del total';
+  $('rFee').textContent = num0(tot.fee);
+  $('rPull').textContent = num0(tot.pull);
+  $('rTs').textContent='Actualizado: '+new Date().toLocaleString('es');
+}
+function exportRotacionExcel(){
+  if(!DATA.length){ alert('Los datos aún están cargando, intenta en un momento.'); return; }
+  const {rows,tot}=rotacionRows();
+  const R=r=>[r.c,Math.round(r.bags),Math.round(r.b1),Math.round(r.b2),Math.round(r.b3),Math.round(r.b4),Math.round(r.fee),Math.round(r.pull)];
+  const NAVY='1B203D',YELLOW='E7E244',WHITE='FFFFFF',BORDER='DDD9CF',ALT='F5F4EE',INK='1A1710';
+  const thin=()=>({style:'thin',color:{rgb:BORDER}}); const allB=()=>({top:thin(),bottom:thin(),left:thin(),right:thin()});
+  const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:NAVY}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB()}});
+  const cell=(v,ev,al)=>{const o={v,t:typeof v==='number'?'n':'s',s:{fill:{patternType:'solid',fgColor:{rgb:ev?ALT:WHITE}},font:{sz:10,name:'Calibri',color:{rgb:INK}},alignment:{horizontal:al||'right',vertical:'center'},border:allB()}}; if(typeof v==='number')o.z='#,##0'; return o;};
+  const headers=['Comercial','Bags','0-30d','31-90d','91-180d','180+d','Con fee','Por sacar'];
+  const ws={}; headers.forEach((h,c)=>ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
+  let rn=1;
+  rows.forEach((r,i)=>{ R(r).forEach((v,c)=> ws[XLSX.utils.encode_cell({r:rn,c})]=cell(v,i%2===1,c===0?'left':'right')); rn++; });
+  R(Object.assign({c:'TOTAL'},tot)).forEach((v,c)=>{ ws[XLSX.utils.encode_cell({r:rn,c})]={v,t:typeof v==='number'?'n':'s',z:typeof v==='number'?'#,##0':undefined,s:{fill:{patternType:'solid',fgColor:{rgb:YELLOW}},font:{bold:true,color:{rgb:NAVY},sz:10,name:'Calibri'},alignment:{horizontal:c===0?'left':'right',vertical:'center'},border:allB()}}; });
+  rn++;
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rn-1,c:headers.length-1}});
+  ws['!cols']=[{wch:20},{wch:10},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10}];
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2'};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion');
+  XLSX.writeFile(wb,`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportRotacionPDF(){
+  if(!window.jspdf||!window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando.'); return; }
+  if(!DATA.length){ alert('Los datos aún están cargando.'); return; }
+  const {rows,tot}=rotacionRows();
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(); const NAVY=[27,32,61];
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+  doc.text('Forest — Rotación de inventario por comercial', 40, 42);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('Generado: '+new Date().toLocaleString('es'), W-40, 42, {align:'right'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
+  doc.text(`Bags reservados: ${num0(tot.bags)}    ·    +180 días: ${num0(tot.b4)} (${tot.bags?Math.round(tot.b4/tot.bags*100):0}%)    ·    Con fee: ${num0(tot.fee)}    ·    Por sacar: ${num0(tot.pull)}`, 40, 64);
+  const body=rows.map(r=>[r.c,num0(r.bags),num0(r.b1),num0(r.b2),num0(r.b3),num0(r.b4),num0(r.fee),num0(r.pull)]);
+  doc.autoTable({ startY:80,
+    head:[['Comercial','Bags','0-30d','31-90d','91-180d','180+d','Con fee','Por sacar']],
+    body,
+    foot:[['TOTAL',num0(tot.bags),num0(tot.b1),num0(tot.b2),num0(tot.b3),num0(tot.b4),num0(tot.fee),num0(tot.pull)]],
+    styles:{fontSize:9,cellPadding:5,halign:'right',lineColor:[221,217,207],lineWidth:.5},
+    headStyles:{fillColor:NAVY,textColor:[231,226,68],halign:'right',fontStyle:'bold'},
+    footStyles:{fillColor:[231,226,68],textColor:NAVY,fontStyle:'bold',halign:'right'},
+    alternateRowStyles:{fillColor:[245,244,238]},
+    columnStyles:{0:{halign:'left',fontStyle:'bold',textColor:NAVY}},
+    margin:{left:40,right:40},
+    didParseCell:(d)=>{ if(d.section==='body'){ const r=rows[d.row.index]; if(!r)return;
+      if(d.column.index===5 && r.b4>0){ d.cell.styles.textColor=[192,56,0]; d.cell.styles.fontStyle='bold'; }
+      if(d.column.index===7 && r.pull>0){ d.cell.styles.textColor=[168,53,28]; d.cell.styles.fontStyle='bold'; } } },
+    didDrawPage:(d)=>{ doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+      doc.text('Forest Reservas — Rotación', 40, H-18); doc.text('Página '+d.pageNumber, W-40, H-18, {align:'right'}); }
+  });
+  doc.save(`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
 
