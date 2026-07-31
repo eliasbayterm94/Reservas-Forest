@@ -544,6 +544,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
   <span class="res-count" id="resCount">—</span>
   <button class="btn-vista" id="btnDetalle" onclick="toggleVistaRes()" title="Mostrar u ocultar columnas de detalle (contrato, fees, ETA…)"></button>
+  <button class="btn-excel" onclick="exportReservasPDF()" style="background:#a8351c;color:#fff" title="PDF por comercial: cafés reservados por cliente, de mayor a menor"><i data-lucide="file-text"></i> PDF</button>
   <button class="btn-excel" onclick="exportExcel()"><i data-lucide="download"></i> Excel</button>
 </div>
 
@@ -988,6 +989,7 @@ async function cargarDatos(forzar=false){
       r.pallet_price = Number(r.pallet_price)||0;
       r.fee_en       = r.fee_en!=null ? Number(r.fee_en) : null;
       r.container    = containerStatus(r.eta);   // Spot / On float, derivado de la ETA
+      r.comercial    = normComercial(r.comercial);// unifica variantes (ej. los 3 "Sebastian")
       r._rkey        = resKey(r);                 // llave para el seguimiento de reservas
     });
     mergeResSeg();   // adjunta seguimiento + acción de rotación (aunque aún no haya datos)
@@ -1679,6 +1681,67 @@ function exportExcel(){
   XLSX.writeFile(wb,`Forest_Reservas_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// PDF por comercial: cafés reservados agrupados por cliente, de mayor a menor (bags).
+// Respeta los filtros activos (si eliges un comercial, sale solo ese).
+function exportReservasPDF(){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo.'); return; }
+  if(!filtered.length){ alert('No hay reservas para exportar con los filtros actuales.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const NAVY=[27,32,61];
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+  doc.text('Forest — Reservas por comercial', 40, 42);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text('Generado: '+new Date().toLocaleString('es'), W-40, 42, {align:'right'});
+
+  // Agrupar por comercial (ordenados por total de bags desc)
+  const byRep={};
+  filtered.forEach(r=>{ const c=r.comercial||'Sin asignar'; (byRep[c]=byRep[c]||[]).push(r); });
+  const bagsOf = arr => arr.reduce((s,r)=>s+(r.cantidad||0),0);
+  const reps = Object.keys(byRep).sort((a,b)=> bagsOf(byRep[b])-bagsOf(byRep[a]));
+
+  let y=62;
+  reps.forEach((rep,idx)=>{
+    const rows = byRep[rep].slice();
+    // orden: por total del cliente desc, luego bags desc, luego café
+    const cliTot={}; rows.forEach(r=>{ cliTot[r.cliente]=(cliTot[r.cliente]||0)+(r.cantidad||0); });
+    rows.sort((a,b)=> (cliTot[b.cliente]-cliTot[a.cliente]) || ((b.cantidad||0)-(a.cantidad||0)) || String(a.cafe||'').localeCompare(String(b.cafe||'')));
+    const totBags=bagsOf(rows);
+    const body = rows.map(r=>[
+      r.cliente||'', r.cafe||'', r.ico||'', fmtNum(r.cantidad||0),
+      isFinite(r.dias_reserva)?r.dias_reserva+'d':'tránsito',
+      r.container||'',
+      r.estado==='RESERVADO'?'Reservado':(r.estado==='FACTURADO SIN ROTAR'?'Fact. Sin Rotar':(r.estado||''))
+    ]);
+    if(y > H-90){ doc.addPage(); y=48; }
+    doc.autoTable({
+      startY: y,
+      head: [
+        [{content:`${rep}   ·   ${fmtNum(totBags)} bags   ·   ${rows.length} lote${rows.length!==1?'s':''}`, colSpan:7,
+          styles:{halign:'left', fillColor:NAVY, textColor:[231,226,68], fontStyle:'bold', fontSize:11}}],
+        ['Cliente','Café / Referencia','ICO','Bags','Días res.','Contenedor','Estado']
+      ],
+      body,
+      styles:{fontSize:8, cellPadding:4, lineColor:[221,217,207], lineWidth:.5, overflow:'linebreak'},
+      headStyles:{fillColor:[240,238,230], textColor:NAVY, fontStyle:'bold', fontSize:8},
+      columnStyles:{0:{cellWidth:150}, 1:{cellWidth:160}, 3:{halign:'right'}, 4:{halign:'center'}, 5:{halign:'center'}, 6:{halign:'center'}},
+      alternateRowStyles:{fillColor:[248,246,240]},
+      margin:{left:40, right:40},
+      didDrawPage:(d)=>{
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+        doc.text('Forest Reservas — por comercial', 40, H-18);
+        doc.text('Página '+d.pageNumber, W-40, H-18, {align:'right'});
+      }
+    });
+    y = doc.lastAutoTable.finalY + 20;
+  });
+
+  const tag = (DOM.fComercial && DOM.fComercial.value) ? DOM.fComercial.value.replace(/\s+/g,'_')+'_' : '';
+  doc.save(`Forest_Reservas_${tag}${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
 // ═══════════════════════════════════════════════════
 // CARTERA — cuentas por cobrar (fuente: Google Sheet AR, vía CSV)
 // ═══════════════════════════════════════════════════
@@ -1728,6 +1791,17 @@ let cartData=[], cartFiltered=[], cartBase=[], cartLoaded=false, cartSc='days', 
 let activeTab='reservas', cartDebounce=null;
 
 const titleCase = s => String(s||'').trim().toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+
+// Normaliza nombres de comercial que son la misma persona (variantes/typos)
+const COMERCIAL_ALIAS = {
+  'sebastian':'Sebastian', 'sebastian c':'Sebastian', 'sebastian c.':'Sebastian',
+  'sebatian':'Sebastian', 'sebastian carrasquilla':'Sebastian'
+};
+function normComercial(n){
+  const s=String(n||'').trim();
+  if(!s) return 'Sin asignar';
+  return COMERCIAL_ALIAS[s.toLowerCase()] || s;
+}
 
 function fmtCur(val, cur){
   const n = Math.round(Number(val)||0).toLocaleString('en-US');
@@ -1815,7 +1889,7 @@ async function cargarCartera(forzar=false){
         region:    String(row[iReg]||'').trim(),
         factura:   String(row[iDoc]||'').trim(),
         cliente:   cliente,
-        comercial: (row[iRep]&&String(row[iRep]).trim()) ? titleCase(row[iRep]) : 'Unassigned',
+        comercial: (row[iRep]&&String(row[iRep]).trim()) ? normComercial(titleCase(row[iRep])) : 'Unassigned',
         due:       normalizeDate(row[iDue]),
         currency:  String(row[iCur]||'').trim().toUpperCase(),
         total:     cleanNum(row[iTotL]),
