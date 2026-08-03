@@ -198,6 +198,7 @@ td:last-child{border-right:none}
 .meta-form-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .meta-form-head .res-count{font-weight:600;color:var(--text2)}
 .meta-hint{font-size:12px;color:var(--text3)}
+.meta-draft{font-size:12px;font-weight:700;color:#8a6d00;background:#fff8e6;border:1px solid #efe3b0;border-radius:6px;padding:3px 9px}
 .meta-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
 .meta-grid label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:var(--text2)}
 .meta-grid input{padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;color:var(--text);font-family:'DM Mono',monospace}
@@ -902,7 +903,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </div>
       <div class="ger-toolbar">
         <span class="res-count">Compromisos por comercial y bracket (USD)</span>
-        <button class="btn-excel" onclick="exportCompromisosExcel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+        <button class="btn-excel" onclick="borradorMetaDesdeCompromisos()" style="margin-left:auto;background:#1B203D;color:#fff" title="Copia los totales por bracket a Metas de cobro como borrador para que gerencia los ajuste y guarde"><i data-lucide="target"></i> Pasar a Metas (borrador)</button>
+        <button class="btn-excel" onclick="exportCompromisosExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twComp">
         <table id="compTable">
@@ -948,6 +950,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
           <span class="res-count">Compromiso de recolección — semana del</span>
           <input type="date" id="metaWeek" class="ger-sel" onchange="cargarMetaSemana()" title="Lunes de la semana">
           <span class="meta-hint">La meta total es la suma de los brackets.</span>
+          <span id="metaDraftNote" class="meta-draft" style="display:none">● Borrador desde Compromisos — ajusta y pulsa Guardar meta</span>
         </div>
         <div class="meta-grid">
           <label>Current (por vencer)<span class="meta-real" id="mrCur">cobrado —</span><input type="number" id="miCur" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
@@ -2791,15 +2794,30 @@ function collectedByWeek(){
   return map;
 }
 let metaSelCob = {total:0};   // cobrado de la semana seleccionada (para el cálculo live)
+let metaDraft = null;         // borrador pendiente traído desde Compromisos
+// Lleva los totales por bracket de Compromisos a Metas como borrador (sin guardar).
+function borradorMetaDesdeCompromisos(){
+  if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
+  const {tot} = compromisosRows();
+  metaDraft = { current:Math.round(tot.current), b1:Math.round(tot.b1), b2:Math.round(tot.b2), b3:Math.round(tot.b3), b4:Math.round(tot.b4) };
+  $('metaWeek').value = mondayISO(new Date());   // borrador para la semana actual
+  gerSub('metas');
+}
 function renderMetas(){
   if(!$('metaWeek').value) $('metaWeek').value = mondayISO(new Date());
   cargarMetaSemana();
+  if(metaDraft){   // aplica el borrador traído de Compromisos por encima de lo guardado
+    $('miCur').value=metaDraft.current||''; $('miB1').value=metaDraft.b1||''; $('miB2').value=metaDraft.b2||'';
+    $('miB3').value=metaDraft.b3||''; $('miB4').value=metaDraft.b4||'';
+    $('metaDraftNote').style.display=''; metaDraft=null; metaLiveTotal();
+  } else { $('metaDraftNote').style.display='none'; }
   renderMetaHistory();
   if(window.lucide) lucide.createIcons();
   $('mTs').textContent='Updated: '+new Date().toLocaleString('en-US');
 }
 function cargarMetaSemana(){
   const wk=$('metaWeek').value; if(!wk) return;
+  { const dn=$('metaDraftNote'); if(dn) dn.style.display='none'; }   // cambiar de semana descarta el borrador
   const comp=compromisosData.find(c=>c.semana===wk)||{current:0,b1:0,b2:0,b3:0,b4:0,total:0,nota:''};
   $('miCur').value=comp.current||''; $('miB1').value=comp.b1||''; $('miB2').value=comp.b2||'';
   $('miB3').value=comp.b3||''; $('miB4').value=comp.b4||''; $('miNota').value=comp.nota||'';
@@ -2839,6 +2857,7 @@ async function guardarMeta(){
     const i=compromisosData.findIndex(c=>c.semana===wk);
     if(i>=0) compromisosData[i]=rec; else compromisosData.push(rec);
     renderMetaHistory();
+    { const dn=$('metaDraftNote'); if(dn) dn.style.display='none'; }   // ya guardado, no es borrador
     btn.innerHTML='✓ Guardado';
     setTimeout(()=>{ btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); }, 1400);
   }catch(err){ alert('No se pudo guardar: '+err.message); btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); }
