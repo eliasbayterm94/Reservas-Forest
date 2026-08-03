@@ -185,7 +185,12 @@ td:last-child{border-right:none}
 .ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
-#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+.sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.sit-inc{background:#fde5e0;color:#a8351c}
+.sit-hoy{background:#fff0d6;color:#b86000}
+.sit-sem{background:#fff8e6;color:#8a6d00}
+.sit-fut{background:var(--ok-bg,#e7f3e7);color:var(--ok-fg,#2c7a2c)}
 .ger-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:12.5px;color:var(--text);cursor:pointer;max-width:220px}
 
 /* Metas de cobro */
@@ -818,6 +823,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <div class="ger-subtabs">
       <button class="ger-subtab active" id="gsCartera" onclick="gerSub('cartera')">Cartera</button>
       <button class="ger-subtab" id="gsRotacion" onclick="gerSub('rotacion')">Rotación</button>
+      <button class="ger-subtab" id="gsCompromisos" onclick="gerSub('compromisos')">Compromisos</button>
       <button class="ger-subtab" id="gsMetas" onclick="gerSub('metas')">Metas de cobro</button>
       <button class="ger-subtab" id="gsPorVencer" onclick="gerSub('porvencer')">Por vencer (10d)</button>
     </div>
@@ -883,6 +889,48 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="footer">
         <span>Rotación sana: prioriza sacar lo más viejo y lo que ya paga storage fee</span>
         <span style="margin-left:auto;color:var(--text3)" id="rTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: COMPROMISOS (promesas de pago de los comerciales) ─ -->
+    <div id="gerCompromisosWrap" class="hidden">
+      <div class="resumen" id="compKpis">
+        <div class="rcard b0"><div class="rc-l">Comprometido</div><div class="rc-n" id="cpTot">—</div><div class="rc-s" id="cpCnt">— compromisos</div></div>
+        <div class="rcard b60"><div class="rc-l">Vence esta semana</div><div class="rc-n" id="cpWeek">—</div><div class="rc-s" id="cpWeekCnt">— por cobrar</div></div>
+        <div class="rcard b90"><div class="rc-l">Incumplido</div><div class="rc-n" id="cpInc">—</div><div class="rc-s" id="cpIncCnt">— vencidos sin pago</div></div>
+        <div class="rcard g"><div class="rc-l">Cumplimiento</div><div class="rc-n" id="cpPct">—</div><div class="rc-s">histórico</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Compromisos por comercial y bracket (USD)</span>
+        <button class="btn-excel" onclick="exportCompromisosExcel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+      </div>
+      <div class="table-wrap" id="twComp">
+        <table id="compTable">
+          <thead><tr>
+            <th>Comercial</th><th style="text-align:right">#</th><th style="text-align:right">Comprometido</th>
+            <th style="text-align:right">Current</th><th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
+            <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
+            <th style="text-align:right">Vence sem</th><th style="text-align:right">Incumplido</th><th style="text-align:right">%Cumpl</th>
+          </tr></thead>
+          <tbody id="tbodyComp"></tbody>
+        </table>
+      </div>
+      <div class="ger-toolbar" style="margin-top:16px">
+        <span class="res-count">Detalle de compromisos</span>
+        <select id="compRepSel" class="ger-sel" style="margin-left:auto" onchange="renderCompromisosDetalle()" title="Ver el detalle de un comercial"><option value="">Elige un comercial…</option></select>
+      </div>
+      <div class="table-wrap" id="twCompDet">
+        <table id="compDetTable">
+          <thead><tr>
+            <th>Cliente</th><th>Factura</th><th>Región</th><th style="text-align:center">Bracket</th>
+            <th>Compromiso</th><th style="text-align:right">Monto</th><th>Estado</th><th style="text-align:center">Situación</th>
+          </tr></thead>
+          <tbody id="tbodyCompDet"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>Compromiso = factura con fecha de promesa. Monto = prometido, o el saldo si no se especificó. %Cumpl sale del Historial (promesas pagadas a tiempo vs. rotas).</span>
+        <span style="margin-left:auto;color:var(--text3)" id="cpTs">—</span>
       </div>
     </div>
 
@@ -2194,7 +2242,7 @@ async function cargarSeguimiento(){
       compromisosData = j.compromisos || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
       if(activeTab==='historial') renderHistorial();
-      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); }
+      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); if(gerSubActive==='compromisos') renderCompromisos(); }
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -2561,13 +2609,16 @@ function gerSub(which){
   gerSubActive = which;
   $('gsCartera').classList.toggle('active', which==='cartera');
   $('gsRotacion').classList.toggle('active', which==='rotacion');
+  $('gsCompromisos').classList.toggle('active', which==='compromisos');
   $('gsMetas').classList.toggle('active', which==='metas');
   $('gsPorVencer').classList.toggle('active', which==='porvencer');
-  $('gerCarteraWrap').style.display   = which==='cartera'   ? '' : 'none';
-  $('gerRotacionWrap').style.display  = which==='rotacion'  ? '' : 'none';
-  $('gerMetasWrap').style.display     = which==='metas'     ? '' : 'none';
-  $('gerPorVencerWrap').style.display = which==='porvencer' ? '' : 'none';
+  $('gerCarteraWrap').style.display     = which==='cartera'     ? '' : 'none';
+  $('gerRotacionWrap').style.display    = which==='rotacion'    ? '' : 'none';
+  $('gerCompromisosWrap').style.display = which==='compromisos' ? '' : 'none';
+  $('gerMetasWrap').style.display       = which==='metas'       ? '' : 'none';
+  $('gerPorVencerWrap').style.display   = which==='porvencer'   ? '' : 'none';
   if(which==='rotacion') renderRotacion();
+  else if(which==='compromisos') renderCompromisos();
   else if(which==='metas') renderMetas();
   else if(which==='porvencer') renderPorVencer();
   else renderGerencia();
@@ -2620,6 +2671,101 @@ function renderGerencia(){
   const {cobS, cobM} = gerCobrado();
   $('gCobS').textContent=money(cobS); $('gCobM').textContent=money(cobM);
   $('gTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+
+// ═══════════════════════════════════════════════════
+// COMPROMISOS — promesas de pago de los comerciales por comercial y bracket
+// ═══════════════════════════════════════════════════
+function compAmount(r){ const m=Number(String(r.montoComp||'').replace(/[^0-9.\-]/g,''))||0; return m>0 ? m : (r.saldoUsd||0); }
+function compSituacion(r){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(r.compromiso); if(isNaN(d)) return {l:'—',c:'sit-fut',diff:9999};
+  d.setHours(0,0,0,0);
+  const diff=Math.round((d-today)/86400000);
+  if(diff<0)   return {l:'Incumplido', c:'sit-inc', diff};
+  if(diff===0) return {l:'Vence hoy',  c:'sit-hoy', diff};
+  if(diff<=7)  return {l:'Vence esta semana', c:'sit-sem', diff};
+  return {l:`En ${diff}d`, c:'sit-fut', diff};
+}
+function compromisosRows(){
+  const nuevo=()=>({n:0,tot:0,current:0,b1:0,b2:0,b3:0,b4:0,week:0,weekN:0,inc:0,incN:0});
+  const rep={};
+  const today=new Date(); today.setHours(0,0,0,0);
+  cartData.forEach(r=>{
+    if(!r.compromiso) return;                         // compromiso = factura con fecha de promesa
+    const c=r.comercial||'Unassigned'; const g=rep[c]=rep[c]||nuevo();
+    const amt=compAmount(r);
+    g.n++; g.tot+=amt;
+    const bk=bracketKey(r.days); if(bk) g[bk]+=amt;
+    const d=new Date(r.compromiso); d.setHours(0,0,0,0);
+    const diff=Math.round((d-today)/86400000);
+    if(diff<0){ g.inc+=amt; g.incN++; } else if(diff<=7){ g.week+=amt; g.weekN++; }
+  });
+  // % cumplimiento histórico desde las cerradas (promesas pagadas a tiempo vs. rotas)
+  const hist={}; let siT=0,noT=0;
+  cerradasData.forEach(r=>{ const c=normComercial(r.comercial||'Unassigned'); const h=hist[c]=hist[c]||{si:0,no:0};
+    if(r.cumplio==='SI'){ h.si++; siT++; } else if(r.cumplio==='NO'){ h.no++; noT++; } });
+  const rows=Object.keys(rep).map(c=>{ const g=rep[c]; const h=hist[c]||{si:0,no:0}; const t=h.si+h.no;
+    return Object.assign({c, pct: t?Math.round(h.si/t*100):null, si:h.si, no:h.no}, g); }).sort((a,b)=>b.tot-a.tot);
+  const T=nuevo(); rows.forEach(r=>['n','tot','current','b1','b2','b3','b4','week','weekN','inc','incN'].forEach(k=>T[k]+=r[k]));
+  const tot=Object.assign({c:'TOTAL', pct:(siT+noT)?Math.round(siT/(siT+noT)*100):null}, T);
+  return {rows, tot};
+}
+function renderCompromisos(){
+  if(!cartLoaded){ return; }
+  const {rows, tot}=compromisosRows();
+  const pctCell=p=> p==null ? '<span style="color:var(--text3)">—</span>'
+    : `<span style="color:${p>=70?'#2c7a2c':(p<50?'#a8351c':'#8a6d00')};font-weight:700">${p}%</span>`;
+  const rowHtml=(r,isTot)=>`<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
+    +`<td class="c-num">${r.n}</td><td class="c-num" style="font-weight:700">${money(r.tot)}</td>`
+    +`<td class="c-num">${r.current?money(r.current):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num">${r.b1?money(r.b1):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num">${r.b2?money(r.b2):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num">${r.b3?money(r.b3):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num">${r.b4?money(r.b4):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num">${r.week?money(r.week):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+    +`<td class="c-num"${r.inc>0?' style="color:#a8351c;font-weight:700"':' style="color:var(--text3)"'}>${r.inc?money(r.inc):'—'}</td>`
+    +`<td class="c-num">${pctCell(r.pct)}</td></tr>`;
+  $('tbodyComp').innerHTML = rows.length ? rows.map(r=>rowHtml(r,false)).join('')+rowHtml(tot,true)
+    : '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:22px">No hay compromisos registrados todavía. Los comerciales los crean al poner una fecha de compromiso en Cartera.</td></tr>';
+  $('cpTot').textContent=money(tot.tot); $('cpCnt').textContent=`${tot.n} compromiso${tot.n!==1?'s':''}`;
+  $('cpWeek').textContent=money(tot.week); $('cpWeekCnt').textContent=`${tot.weekN} por cobrar`;
+  $('cpInc').textContent=money(tot.inc); $('cpIncCnt').textContent=`${tot.incN} vencido${tot.incN!==1?'s':''} sin pago`;
+  $('cpPct').textContent = tot.pct==null ? '—' : tot.pct+'%';
+  // Selector de detalle (preservar selección)
+  const sel=$('compRepSel'); const cur=sel.value;
+  sel.innerHTML='<option value="">Elige un comercial…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)} (${r.n})</option>`).join('');
+  if(rows.some(r=>r.c===cur)) sel.value=cur;
+  renderCompromisosDetalle();
+  $('cpTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+  if(window.lucide) lucide.createIcons();
+}
+function renderCompromisosDetalle(){
+  const rep=$('compRepSel').value;
+  if(!rep){ $('tbodyCompDet').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px">Elige un comercial arriba para ver sus compromisos uno por uno.</td></tr>'; return; }
+  const BR={current:'Current',b1:'1–30',b2:'31–60',b3:'61–90',b4:'90+'};
+  const rows=cartData.filter(r=>r.compromiso && (r.comercial||'Unassigned')===rep)
+    .map(r=>({r, sit:compSituacion(r)})).sort((a,b)=>a.sit.diff-b.sit.diff);   // incumplidos primero
+  $('tbodyCompDet').innerHTML = rows.length ? rows.map(({r,sit})=>{
+    const d=new Date(r.compromiso+'T00:00:00'); const dt=isNaN(d)?r.compromiso:d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return `<tr><td class="c-cliente">${esc(r.cliente)}</td><td style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(r.factura)}</td>`
+      +`<td>${esc(r.region)}</td><td style="text-align:center">${BR[bracketKey(r.days)]||'—'}</td>`
+      +`<td>${dt}</td><td class="c-num">${money(compAmount(r))}</td>`
+      +`<td>${r.estado?`<span class="est ${EST_CLASS[r.estado]||'e-sin'}">${esc(r.estado)}</span>`:'—'}</td>`
+      +`<td style="text-align:center"><span class="sit ${sit.c}">${sit.l}</span></td></tr>`;
+  }).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px">Este comercial no tiene compromisos.</td></tr>';
+}
+function exportCompromisosExcel(){
+  if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
+  const {rows, tot}=compromisosRows();
+  const R=r=>[r.c, r.n, Math.round(r.tot), Math.round(r.current), Math.round(r.b1), Math.round(r.b2), Math.round(r.b3), Math.round(r.b4), Math.round(r.week), Math.round(r.inc), r.pct==null?'':r.pct/100];
+  const headers=['Comercial','#','Comprometido','Current','1-30','31-60','61-90','90+','Vence sem','Incumplido','%Cumpl'];
+  const aoa=[headers].concat(rows.map(R)).concat([R(tot)]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:18},{wch:5},{wch:13},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:8}];
+  for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:10})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0%'; } }
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Compromisos');
+  XLSX.writeFile(wb,`Forest_Compromisos_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
