@@ -185,8 +185,24 @@ td:last-child{border-right:none}
 .ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
-#gerCarteraWrap,#gerRotacionWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 .ger-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:12.5px;color:var(--text);cursor:pointer;max-width:220px}
+
+/* Metas de cobro */
+.meta-form{background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:0 0 18px}
+.meta-form-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.meta-form-head .res-count{font-weight:600;color:var(--text2)}
+.meta-hint{font-size:12px;color:var(--text3)}
+.meta-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
+.meta-grid label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:var(--text2)}
+.meta-grid input{padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;color:var(--text);font-family:'DM Mono',monospace}
+.meta-real{font-size:10.5px;font-weight:500;color:#2c7a2c}
+.meta-total{display:flex;flex-direction:column;gap:4px;justify-content:flex-end;font-size:11.5px;font-weight:700;color:var(--text2)}
+.meta-total b{font-size:18px;color:var(--fc-navy);font-family:'DM Mono',monospace}
+.meta-form-foot{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.meta-bar{display:inline-block;height:8px;border-radius:4px;background:#e6e3d8;overflow:hidden;vertical-align:middle;width:60px;margin-left:6px}
+.meta-bar>i{display:block;height:100%;background:#2c7a2c}
+@media(max-width:760px){.meta-grid{grid-template-columns:repeat(2,1fr)}.meta-total{grid-column:span 2}}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
 .dias-badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
@@ -676,6 +692,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </div>
     <div class="fsep"></div>
     <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Overdue only</span>
+    <span class="pill fsr off" id="cPorVencer" onclick="togglePorVencer(this)"><i data-lucide="clock"></i> Due soon (10d)</span>
     <span class="res-count" id="cResCount">—</span>
     <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
@@ -801,6 +818,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <div class="ger-subtabs">
       <button class="ger-subtab active" id="gsCartera" onclick="gerSub('cartera')">Cartera</button>
       <button class="ger-subtab" id="gsRotacion" onclick="gerSub('rotacion')">Rotación</button>
+      <button class="ger-subtab" id="gsMetas" onclick="gerSub('metas')">Metas de cobro</button>
+      <button class="ger-subtab" id="gsPorVencer" onclick="gerSub('porvencer')">Por vencer (10d)</button>
     </div>
 
     <!-- ─ Sub-vista: CARTERA ─ -->
@@ -864,6 +883,79 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="footer">
         <span>Rotación sana: prioriza sacar lo más viejo y lo que ya paga storage fee</span>
         <span style="margin-left:auto;color:var(--text3)" id="rTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: METAS DE COBRO (compromiso de gerencia por bracket) ─ -->
+    <div id="gerMetasWrap" class="hidden">
+      <div class="resumen" id="metaKpis">
+        <div class="rcard b0"><div class="rc-l">Meta de la semana</div><div class="rc-n" id="mMeta">—</div><div class="rc-s">USD comprometido</div></div>
+        <div class="rcard g"><div class="rc-l">Cobrado</div><div class="rc-n" id="mCob">—</div><div class="rc-s" id="mCobP">—</div></div>
+        <div class="rcard b60"><div class="rc-l">Falta</div><div class="rc-n" id="mFalta">—</div><div class="rc-s">para la meta</div></div>
+        <div class="rcard b90"><div class="rc-l">Cumplimiento</div><div class="rc-n" id="mPct">—</div><div class="rc-s" id="mWeekLbl">esta semana</div></div>
+      </div>
+
+      <div class="meta-form">
+        <div class="meta-form-head">
+          <span class="res-count">Compromiso de recolección — semana del</span>
+          <input type="date" id="metaWeek" class="ger-sel" onchange="cargarMetaSemana()" title="Lunes de la semana">
+          <span class="meta-hint">La meta total es la suma de los brackets.</span>
+        </div>
+        <div class="meta-grid">
+          <label>Current (por vencer)<span class="meta-real" id="mrCur">cobrado —</span><input type="number" id="miCur" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
+          <label>1–30 d<span class="meta-real" id="mrB1">cobrado —</span><input type="number" id="miB1" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
+          <label>31–60 d<span class="meta-real" id="mrB2">cobrado —</span><input type="number" id="miB2" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
+          <label>61–90 d<span class="meta-real" id="mrB3">cobrado —</span><input type="number" id="miB3" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
+          <label>90+ d<span class="meta-real" id="mrB4">cobrado —</span><input type="number" id="miB4" min="0" step="1000" placeholder="0" oninput="metaLiveTotal()"></label>
+          <div class="meta-total">Meta total<b id="miTotal">$0</b></div>
+        </div>
+        <div class="meta-form-foot">
+          <input type="text" id="miNota" class="ger-sel" placeholder="Nota (opcional)" style="flex:1;min-width:160px">
+          <button class="btn-excel" id="btnGuardarMeta" onclick="guardarMeta()" style="background:#1B203D;color:#fff"><i data-lucide="save"></i> Guardar meta</button>
+        </div>
+      </div>
+
+      <div class="ger-toolbar"><span class="res-count">Histórico — compromiso vs. cobrado (por semana)</span></div>
+      <div class="table-wrap" id="twMeta">
+        <table id="metaTable">
+          <thead><tr>
+            <th>Semana</th><th style="text-align:right">Meta</th><th style="text-align:right">Cobrado</th>
+            <th style="text-align:right">Cumpl.</th><th style="text-align:right">Current</th><th style="text-align:right">1–30</th>
+            <th style="text-align:right">31–60</th><th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
+          </tr></thead>
+          <tbody id="tbodyMeta"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>Cobrado por bracket se acumula desde que se activó el tracking (no retroactivo). Cada celda de bracket = cobrado vs meta.</span>
+        <span style="margin-left:auto;color:var(--text3)" id="mTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: POR VENCER (próximos 10 días) ─ -->
+    <div id="gerPorVencerWrap" class="hidden">
+      <div class="resumen" id="pvKpis">
+        <div class="rcard b0"><div class="rc-l">Por vencer (10d)</div><div class="rc-n" id="pvTot">—</div><div class="rc-s" id="pvCnt">— facturas</div></div>
+        <div class="rcard b60"><div class="rc-l">Vence en 0–3 d</div><div class="rc-n" id="pv3">—</div><div class="rc-s">USD</div></div>
+        <div class="rcard b90"><div class="rc-l">Vence hoy</div><div class="rc-n" id="pv0">—</div><div class="rc-s">USD</div></div>
+        <div class="rcard g"><div class="rc-l">Clientes</div><div class="rc-n" id="pvCli">—</div><div class="rc-s">distintos</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Facturas que vencen en los próximos 10 días</span>
+        <select id="pvRepSel" class="ger-sel" style="margin-left:auto" onchange="renderPorVencer()" title="Filtrar por comercial"><option value="">Todos los comerciales</option></select>
+      </div>
+      <div class="table-wrap" id="twPv">
+        <table id="pvTable">
+          <thead><tr>
+            <th>Vence</th><th style="text-align:center">En</th><th>Cliente</th><th>Comercial</th>
+            <th>Región</th><th>Factura</th><th style="text-align:right">Saldo USD</th>
+          </tr></thead>
+          <tbody id="tbodyPv"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>El equipo puede accionarlas desde Cartera con el filtro "Por vencer (10d)".</span>
+        <span style="margin-left:auto;color:var(--text3)" id="pvTs">—</span>
       </div>
     </div>
   </div>
@@ -1949,7 +2041,8 @@ function llenarClientes(){
 function onComercialChange(){ llenarClientes(); aplicarCartera(); }
 
 function onCartFilterDebounced(){ clearTimeout(cartDebounce); cartDebounce=setTimeout(aplicarCartera,120); }
-function toggleVencidos(el){ el._on=!el._on; el.classList.toggle('off',!el._on); aplicarCartera(); }
+function toggleVencidos(el){ el._on=!el._on; el.classList.toggle('off',!el._on); if(el._on){ const p=$('cPorVencer'); p._on=false; p.classList.add('off'); } aplicarCartera(); }
+function togglePorVencer(el){ el._on=!el._on; el.classList.toggle('off',!el._on); if(el._on){ const v=$('cVencidos'); v._on=false; v.classList.add('off'); } aplicarCartera(); }
 
 function cartSortBy(key,th){
   cartSc===key ? cartSd*=-1 : (cartSc=key, cartSd=1);
@@ -1964,6 +2057,7 @@ function aplicarCartera(){
   const fc = $('cComercial').value, fcli = $('cCliente').value, fr = $('cRegion').value, fm = $('cMoneda').value, fa = $('cAging').value;
   const ec = $('cEstadoCobro').value;   // '' | flag:inc | est:Contactado …
   const soloVenc = !!$('cVencidos')._on;
+  const soloPorVenc = !!$('cPorVencer')._on;   // vence en los próximos 10 días
 
   // Contexto (comercial + cliente + región + moneda) → base del resumen por brackets
   const base = cartData.filter(r=>{
@@ -1984,6 +2078,7 @@ function aplicarCartera(){
   cartFiltered = base.filter(r=>{
     if(fa && agingOf(r.days).k!==fa) return false;
     if(soloVenc && !(r.days>0)) return false;
+    if(soloPorVenc && !(r.days<=0 && r.days>=-10)) return false;
     if(ec==='act:task'){ if(!r.esTarea) return false; }
     else if(ec.startsWith('flag:')){ if(r.flag !== ec.slice(5)) return false; }
     else if(ec.startsWith('est:')){ if((r.estado||'') !== ec.slice(4)) return false; }
@@ -2096,9 +2191,10 @@ async function cargarSeguimiento(){
     if(j && j.ok){
       segData={}; (j.rows||[]).forEach(row=>{ segData[row.key]=row; });
       cerradasData = j.cerradas || [];
+      compromisosData = j.compromisos || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
       if(activeTab==='historial') renderHistorial();
-      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1') renderGerencia();
+      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); }
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -2347,6 +2443,7 @@ function exportCarteraPDF(){
   if($('cMoneda').value)    F.push('Currency: '+$('cMoneda').value);
   if($('cAging').value)     F.push('Aging: '+(AG_LABELS[$('cAging').value]||''));
   if($('cVencidos')._on)    F.push('Overdue only');
+  if($('cPorVencer')._on)   F.push('Due soon (10d)');
   if($('cQ').value.trim())  F.push('Customer: "'+$('cQ').value.trim()+'"');
   doc.setFontSize(9); doc.setTextColor(70);
   doc.text('Filters: '+(F.length?F.join('   ·   '):'none (full AR)'), 40, 60);
@@ -2464,9 +2561,16 @@ function gerSub(which){
   gerSubActive = which;
   $('gsCartera').classList.toggle('active', which==='cartera');
   $('gsRotacion').classList.toggle('active', which==='rotacion');
-  $('gerCarteraWrap').style.display  = which==='cartera'  ? '' : 'none';
-  $('gerRotacionWrap').style.display = which==='rotacion' ? '' : 'none';
-  which==='rotacion' ? renderRotacion() : renderGerencia();
+  $('gsMetas').classList.toggle('active', which==='metas');
+  $('gsPorVencer').classList.toggle('active', which==='porvencer');
+  $('gerCarteraWrap').style.display   = which==='cartera'   ? '' : 'none';
+  $('gerRotacionWrap').style.display  = which==='rotacion'  ? '' : 'none';
+  $('gerMetasWrap').style.display     = which==='metas'     ? '' : 'none';
+  $('gerPorVencerWrap').style.display = which==='porvencer' ? '' : 'none';
+  if(which==='rotacion') renderRotacion();
+  else if(which==='metas') renderMetas();
+  else if(which==='porvencer') renderPorVencer();
+  else renderGerencia();
 }
 // Agrega la cartera por comercial (mismo cálculo para pantalla y exports)
 function gerenciaRows(){
@@ -2516,6 +2620,137 @@ function renderGerencia(){
   const {cobS, cobM} = gerCobrado();
   $('gCobS').textContent=money(cobS); $('gCobM').textContent=money(cobM);
   $('gTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+
+// ═══════════════════════════════════════════════════
+// METAS DE COBRO — compromiso de gerencia por bracket vs cobrado real
+// ═══════════════════════════════════════════════════
+const kMoney = n => { n=Math.round(Number(n)||0); return Math.abs(n)>=1000 ? '$'+Math.round(n/1000)+'k' : '$'+n; };
+function mondayISO(d){ const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); const p=n=>String(n).padStart(2,'0'); return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`; }
+function fmtWeek(iso){ if(!iso) return '—'; const d=new Date(iso+'T00:00:00'); return isNaN(d)?iso:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function bracketKey(days){ const d=Number(days); if(isNaN(days)||days==='') return ''; if(d<=0)return'current'; if(d<=30)return'b1'; if(d<=60)return'b2'; if(d<=90)return'b3'; return'b4'; }
+// Cobrado agrupado por semana (lunes) desde las cerradas, desglosado por bracket, comercial y región.
+function collectedByWeek(){
+  const map={};
+  cerradasData.forEach(r=>{
+    const d=new Date(r.fechaCierre); if(isNaN(d)) return;
+    const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(!m) return;
+    const wk=mondayISO(d);
+    const g=map[wk]=map[wk]||{total:0,current:0,b1:0,b2:0,b3:0,b4:0,unk:0,byRep:{},byReg:{}};
+    g.total+=m;
+    const bk=bracketKey(r.diasAlPagar); if(bk) g[bk]+=m; else g.unk+=m;
+    const c=normComercial(r.comercial||'Unassigned'); g.byRep[c]=(g.byRep[c]||0)+m;
+    const rg=r.region||'—'; g.byReg[rg]=(g.byReg[rg]||0)+m;
+  });
+  return map;
+}
+let metaSelCob = {total:0};   // cobrado de la semana seleccionada (para el cálculo live)
+function renderMetas(){
+  if(!$('metaWeek').value) $('metaWeek').value = mondayISO(new Date());
+  cargarMetaSemana();
+  renderMetaHistory();
+  if(window.lucide) lucide.createIcons();
+  $('mTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+function cargarMetaSemana(){
+  const wk=$('metaWeek').value; if(!wk) return;
+  const comp=compromisosData.find(c=>c.semana===wk)||{current:0,b1:0,b2:0,b3:0,b4:0,total:0,nota:''};
+  $('miCur').value=comp.current||''; $('miB1').value=comp.b1||''; $('miB2').value=comp.b2||'';
+  $('miB3').value=comp.b3||''; $('miB4').value=comp.b4||''; $('miNota').value=comp.nota||'';
+  const col=collectedByWeek()[wk]||{total:0,current:0,b1:0,b2:0,b3:0,b4:0};
+  metaSelCob=col;
+  $('mrCur').textContent='cobrado '+kMoney(col.current);
+  $('mrB1').textContent='cobrado '+kMoney(col.b1);
+  $('mrB2').textContent='cobrado '+kMoney(col.b2);
+  $('mrB3').textContent='cobrado '+kMoney(col.b3);
+  $('mrB4').textContent='cobrado '+kMoney(col.b4);
+  $('mWeekLbl').textContent='semana del '+fmtWeek(wk);
+  metaLiveTotal();
+}
+function metaLiveTotal(){
+  const v=id=>Number($(id).value||0);
+  const total=v('miCur')+v('miB1')+v('miB2')+v('miB3')+v('miB4');
+  $('miTotal').textContent=money(total);
+  const cob=metaSelCob.total||0;
+  $('mMeta').textContent=money(total);
+  $('mCob').textContent=money(cob);
+  $('mCobP').textContent = total? Math.round(cob/total*100)+'% de la meta' : 'sin meta';
+  $('mFalta').textContent=money(Math.max(0,total-cob));
+  $('mPct').textContent = total? Math.round(cob/total*100)+'%' : '—';
+}
+async function guardarMeta(){
+  const wk=$('metaWeek').value; if(!wk){ alert('Elige la semana (lunes).'); return; }
+  if(!SEG_API_URL){ alert('Falta configurar el backend.'); return; }
+  const v=id=>Number($(id).value||0);
+  const payload={ tipo:'compromiso', semana:wk, current:v('miCur'), b1:v('miB1'), b2:v('miB2'), b3:v('miB3'), b4:v('miB4'), nota:$('miNota').value, usuario:'gerencia' };
+  const btn=$('btnGuardarMeta'); const old=btn.innerHTML; btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    const resp=await fetch(SEG_API_URL,{method:'POST', body:JSON.stringify(payload)});
+    const j=await resp.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||'Error');
+    const total=v('miCur')+v('miB1')+v('miB2')+v('miB3')+v('miB4');
+    const rec={ semana:wk, total, current:v('miCur'), b1:v('miB1'), b2:v('miB2'), b3:v('miB3'), b4:v('miB4'), nota:$('miNota').value };
+    const i=compromisosData.findIndex(c=>c.semana===wk);
+    if(i>=0) compromisosData[i]=rec; else compromisosData.push(rec);
+    renderMetaHistory();
+    btn.innerHTML='✓ Guardado';
+    setTimeout(()=>{ btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); }, 1400);
+  }catch(err){ alert('No se pudo guardar: '+err.message); btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); }
+}
+function renderMetaHistory(){
+  const cw=collectedByWeek();
+  const weeks=[...new Set([].concat(compromisosData.map(c=>c.semana), Object.keys(cw)).filter(Boolean))].sort().reverse();
+  const cell=(cob,meta)=> meta>0
+    ? `${kMoney(cob)}<span style="color:var(--text3)">/${kMoney(meta)}</span>`
+    : (cob? kMoney(cob) : '<span style="color:var(--text3)">—</span>');
+  const rowH=w=>{
+    const c=compromisosData.find(x=>x.semana===w)||{total:0,current:0,b1:0,b2:0,b3:0,b4:0};
+    const g=cw[w]||{total:0,current:0,b1:0,b2:0,b3:0,b4:0};
+    const pct=c.total? Math.round(g.total/c.total*100):0;
+    const bar=c.total? `<span class="meta-bar"><i style="width:${Math.min(100,pct)}%"></i></span>`:'';
+    const pctTxt=c.total? pct+'%' : '<span style="color:var(--text3)">sin meta</span>';
+    return `<tr><td class="c-cliente">${fmtWeek(w)}</td>`
+      +`<td class="c-num">${c.total?money(c.total):'<span style="color:var(--text3)">—</span>'}</td>`
+      +`<td class="c-num" style="color:#2c7a2c;font-weight:700">${g.total?money(g.total):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td class="c-num">${pctTxt}${bar}</td>`
+      +`<td class="c-num">${cell(g.current,c.current)}</td><td class="c-num">${cell(g.b1,c.b1)}</td>`
+      +`<td class="c-num">${cell(g.b2,c.b2)}</td><td class="c-num">${cell(g.b3,c.b3)}</td><td class="c-num">${cell(g.b4,c.b4)}</td></tr>`;
+  };
+  $('tbodyMeta').innerHTML = weeks.length ? weeks.map(rowH).join('') : '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:22px">Aún no hay metas ni cobros registrados.</td></tr>';
+}
+
+// ═══════════════════════════════════════════════════
+// POR VENCER — facturas que vencen en los próximos 10 días
+// ═══════════════════════════════════════════════════
+function porVencerRows(rep){
+  return cartData
+    .filter(r=> r.days<=0 && r.days>=-10)                 // vence entre hoy y +10 días
+    .filter(r=> !rep || (r.comercial||'Unassigned')===rep)
+    .sort((a,b)=> b.days-a.days);                          // más cercano a vencer primero
+}
+function renderPorVencer(){
+  // Poblar selector de comercial (preservando selección)
+  const sel=$('pvRepSel'); const cur=sel.value;
+  const reps=[...new Set(cartData.filter(r=>r.days<=0&&r.days>=-10).map(r=>r.comercial||'Unassigned'))].sort((a,b)=>a.localeCompare(b,'es'));
+  sel.innerHTML='<option value="">Todos los comerciales</option>'+reps.map(r=>`<option value="${escAttr(r)}">${esc(r)}</option>`).join('');
+  if(reps.indexOf(cur)>=0) sel.value=cur;
+  const rows=porVencerRows(sel.value);
+  const tot=rows.reduce((a,r)=>a+r.saldoUsd,0);
+  const s3=rows.filter(r=>r.days>=-3).reduce((a,r)=>a+r.saldoUsd,0);
+  const s0=rows.filter(r=>r.days===0).reduce((a,r)=>a+r.saldoUsd,0);
+  const cli=new Set(rows.map(r=>r.cliente)).size;
+  $('pvTot').textContent=money(tot); $('pvCnt').textContent=rows.length+' factura'+(rows.length!==1?'s':'');
+  $('pv3').textContent=money(s3); $('pv0').textContent=money(s0); $('pvCli').textContent=cli;
+  const enTxt=d=> d===0?'<span style="color:#b86000;font-weight:700">hoy</span>':`${-d}d`;
+  $('tbodyPv').innerHTML = rows.length ? rows.map(r=>{
+    const due=r.due? new Date(r.due+'T00:00:00') : null;
+    const dueTxt=due&&!isNaN(due)? due.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : (r.due||'—');
+    return `<tr><td class="c-cliente">${dueTxt}</td><td style="text-align:center">${enTxt(r.days)}</td>`
+      +`<td class="c-cliente">${esc(r.cliente)}</td><td>${esc(r.comercial||'Unassigned')}</td>`
+      +`<td>${esc(r.region)}</td><td style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(r.factura)}</td>`
+      +`<td class="c-num">${money(r.saldoUsd)}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">No hay facturas por vencer en los próximos 10 días.</td></tr>';
+  $('pvTs').textContent='Updated: '+new Date().toLocaleString('en-US');
 }
 
 // ── Exportar la vista de Gerencia (cartera por comercial) ──
@@ -2692,6 +2927,7 @@ function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab===
 
 // ── Historial (facturas cerradas / pagadas) ──
 let cerradasData = [];
+let compromisosData = [];   // metas de cobro de gerencia por semana
 function renderHistorial(){
   const q=($('hQ').value||'').toLowerCase().trim(), fc=$('hComercial').value, fcu=$('hCumplio').value;
   const coms=[...new Set(cerradasData.map(r=>r.comercial).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
