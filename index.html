@@ -386,7 +386,23 @@ tbody#tbodyGer tr.ger-tot td{background:var(--surface3);font-weight:700;border-t
 .bulk-act{margin-left:auto;display:flex;gap:8px}
 .bbtn{height:31px;border-radius:6px;padding:0 14px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer}
 .bbtn.y{background:var(--fc-yellow);color:var(--fc-navy)}
+.bbtn.m{background:#fff;color:var(--fc-navy)}
 .bbtn.g{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3)}
+
+/* Modal correo de cobro */
+.mailmodal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(15,17,26,.55);padding:20px}
+.mailmodal.hidden{display:none}
+.mailmodal-card{background:var(--card,#fff);color:var(--text);width:min(680px,100%);max-height:90vh;display:flex;flex-direction:column;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}
+.mailmodal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;background:var(--fc-navy);color:#fff}
+.mailmodal-head h3{margin:0;font-size:15px;font-weight:800;flex:1}
+.mail-x{background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer;line-height:1}
+.mailmodal-body{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.mail-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-top:8px}
+.mail-inp{padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;color:var(--text)}
+.mail-txt{padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;line-height:1.5;color:var(--text);font-family:inherit;resize:vertical;min-height:280px}
+.mailmodal-foot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap}
+.mail-info{font-size:12px;color:var(--text3);flex:1;min-width:120px}
+@media(max-width:560px){.mailmodal-foot .btn-excel{flex:1;justify-content:center}}
 /* Panel slide-over */
 .pn-backdrop{position:absolute;inset:0;background:rgba(12,12,11,.28);z-index:30}
 .pn-backdrop.hidden{display:none}
@@ -713,7 +729,32 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="bulk-txt" id="bulkTxt"></span>
     <div class="bulk-act">
       <button class="bbtn y" onclick="gestionSel()">Apply follow-up</button>
+      <button class="bbtn m" onclick="abrirMailCobro()">📧 Collection email</button>
       <button class="bbtn g" onclick="limpiarSel()">Clear</button>
+    </div>
+  </div>
+
+  <!-- MODAL: correo de cobro -->
+  <div id="mailModal" class="mailmodal hidden">
+    <div class="mailmodal-card">
+      <div class="mailmodal-head">
+        <h3>Collection email</h3>
+        <button class="mail-x" onclick="cerrarMail()" title="Close">✕</button>
+      </div>
+      <div class="mailmodal-body">
+        <label class="mail-lbl">To (optional)</label>
+        <input id="mailTo" class="mail-inp" placeholder="client@email.com">
+        <label class="mail-lbl">Subject</label>
+        <input id="mailSubj" class="mail-inp">
+        <label class="mail-lbl">Message</label>
+        <textarea id="mailBody" class="mail-txt" spellcheck="false"></textarea>
+      </div>
+      <div class="mailmodal-foot">
+        <span class="mail-info" id="mailInfo"></span>
+        <button class="btn-excel" onclick="mailCopiar()"><i data-lucide="copy"></i> <span id="mailCopyLbl">Copy</span></button>
+        <button class="btn-excel" onclick="mailPDF()" style="background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel" onclick="mailAbrir()" style="background:#1B203D;color:#fff"><i data-lucide="mail"></i> Open in email</button>
+      </div>
     </div>
   </div>
 
@@ -2268,6 +2309,106 @@ function renderBulk(){
   let tot=0; for(const r of cartFiltered){ if(selKeys.has(r.region+'|'+r.factura)) tot+=r.saldoUsd; }
   $('bulkCnt').textContent=selKeys.size;
   $('bulkTxt').innerHTML=`invoice${selKeys.size!==1?'s':''} selected · <b>${esc(selClient)}</b> · Balance <span class="mono" style="color:var(--fc-yellow)">${money(tot)}</span>`;
+}
+
+// ═══════════════════════════════════════════════════
+// CORREO DE COBRO — copy formal (inglés) para un cliente con facturas vencidas
+// ═══════════════════════════════════════════════════
+let mailData = null;   // {cliente, invoices:[...], totalUsd}
+function fmtMailDate(d){ const x=new Date((d||'')+'T00:00:00'); return isNaN(x)? (d||'—') : x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function fmtMailAmount(n,cur){ const num=(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return (cur==='USD'||!cur)?`$${num}`:`${cur} ${num}`; }
+function fmtUsd2(n){ return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function buildMailBody(cliente, inv, totalUsd){
+  const lines = inv.map(r=>`• Invoice ${r.factura} — due ${fmtMailDate(r.due)} (${r.days} ${r.days===1?'day':'days'} overdue) — ${fmtMailAmount(r.saldo, r.currency)}`).join('\n');
+  return `Dear ${cliente} team,
+
+We hope this message finds you well. We are writing to kindly follow up on the following overdue invoice(s) on your account with Forest Coffee. We would greatly appreciate your support in arranging payment at your earliest convenience.
+
+${lines}
+
+Total outstanding: ${fmtUsd2(totalUsd)}
+
+Should any of these already have been settled, please disregard the corresponding line and kindly share the payment confirmation so we can update our records.
+
+Could you please let us know the expected payment date? We remain at your disposal for any clarification regarding these invoices.
+
+Thank you very much for your prompt attention and continued partnership.
+
+Kind regards,
+Forest Coffee`;
+}
+function abrirMailCobro(){
+  if(!selKeys.size) return;
+  const sel = cartFiltered.filter(r=>selKeys.has(r.region+'|'+r.factura));
+  const overdue = sel.filter(r=>r.days>0).sort((a,b)=>b.days-a.days);   // más vencida primero
+  const skipped = sel.length - overdue.length;
+  if(!overdue.length){ alert('None of the selected invoices are overdue (days > 0), so there is nothing to claim.'); return; }
+  const cliente = selClient || overdue[0].cliente;
+  const totalUsd = overdue.reduce((a,r)=>a+r.saldoUsd,0);
+  mailData = { cliente, invoices:overdue, totalUsd };
+  $('mailTo').value = '';
+  $('mailSubj').value = `Outstanding invoices — ${cliente} · Forest Coffee`;
+  $('mailBody').value = buildMailBody(cliente, overdue, totalUsd);
+  $('mailInfo').textContent = `${overdue.length} overdue invoice${overdue.length!==1?'s':''} · ${fmtUsd2(totalUsd)}` + (skipped>0?` · ${skipped} non-overdue omitted`:'');
+  $('mailCopyLbl').textContent='Copy';
+  $('mailModal').classList.remove('hidden');
+  if(window.lucide) lucide.createIcons();
+}
+function cerrarMail(){ $('mailModal').classList.add('hidden'); }
+async function mailCopiar(){
+  const text = `Subject: ${$('mailSubj').value}\n\n${$('mailBody').value}`;
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){ const t=$('mailBody'); t.focus(); t.select(); try{ document.execCommand('copy'); }catch(_){} }
+  $('mailCopyLbl').textContent='Copied ✓';
+  setTimeout(()=>{ $('mailCopyLbl').textContent='Copy'; }, 1600);
+}
+function mailAbrir(){
+  const to=encodeURIComponent($('mailTo').value.trim());
+  const su=encodeURIComponent($('mailSubj').value);
+  const bo=encodeURIComponent($('mailBody').value);
+  window.location.href = `mailto:${to}?subject=${su}&body=${bo}`;
+}
+function mailPDF(){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('The PDF generator is still loading, try again in a moment.'); return; }
+  if(!mailData){ return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait', unit:'pt', format:'a4'});
+  const W = doc.internal.pageSize.getWidth();
+  const NAVY=[27,32,61], INK=[26,23,16], MUT=[120,120,120];
+  const M=48;
+  // Membrete
+  doc.setFillColor(...NAVY); doc.rect(0,0,W,64,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(17);
+  doc.text('FOREST COFFEE', M, 34);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(231,226,68);
+  doc.text('Statement of overdue invoices', M, 50);
+  const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  doc.setTextColor(255,255,255); doc.text(today, W-M, 50, {align:'right'});
+  // Encabezado cliente
+  let y=96;
+  doc.setTextColor(...MUT); doc.setFontSize(9); doc.text('TO', M, y);
+  doc.setTextColor(...INK); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(String(mailData.cliente), M, y+15);
+  // Intro
+  y+=42; doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(...INK);
+  const intro='We kindly follow up on the overdue invoice(s) below on your account with Forest Coffee. We would greatly appreciate your support in arranging payment at your earliest convenience.';
+  doc.splitTextToSize(intro, W-M*2).forEach((ln,i)=>doc.text(ln, M, y+i*15)); y+=15*Math.ceil(doc.splitTextToSize(intro,W-M*2).length)+10;
+  // Tabla
+  const body = mailData.invoices.map(r=>[r.factura, fmtMailDate(r.due), `${r.days} days`, fmtMailAmount(r.saldo,r.currency)]);
+  body.push([{content:'Total outstanding (USD)',colSpan:3,styles:{fontStyle:'bold',halign:'right'}}, {content:fmtUsd2(mailData.totalUsd),styles:{fontStyle:'bold'}}]);
+  doc.autoTable({
+    startY:y, head:[['Invoice','Due date','Days overdue','Amount']], body,
+    theme:'grid', styles:{fontSize:10,cellPadding:6,textColor:INK,lineColor:[221,217,207]},
+    headStyles:{fillColor:NAVY,textColor:[255,255,255],fontStyle:'bold'},
+    columnStyles:{2:{halign:'right'},3:{halign:'right'}},
+    margin:{left:M,right:M}
+  });
+  y=doc.lastAutoTable.finalY+24;
+  doc.setFontSize(10.5);
+  const outro=['Should any of these already have been settled, please disregard the corresponding line and share the payment confirmation so we can update our records.','','Could you please let us know the expected payment date? We remain at your disposal for any clarification.','','Thank you very much for your prompt attention and continued partnership.'];
+  outro.forEach(p=>{ if(p===''){ y+=8; return; } const ls=doc.splitTextToSize(p,W-M*2); ls.forEach((ln,i)=>doc.text(ln,M,y+i*15)); y+=ls.length*15; });
+  y+=22; doc.setFont('helvetica','bold'); doc.text('Kind regards,', M, y); doc.text('Forest Coffee', M, y+15);
+  const safe=String(mailData.cliente).replace(/[^a-z0-9]+/gi,'_').slice(0,40);
+  doc.save(`Forest_Collection_${safe}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
 // ── Abrir panel: en lote (selección) o una sola factura ──
