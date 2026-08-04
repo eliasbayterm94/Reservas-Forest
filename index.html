@@ -2314,11 +2314,13 @@ function renderBulk(){
 // ═══════════════════════════════════════════════════
 // CORREO DE COBRO — copy formal (inglés) para un cliente con facturas vencidas
 // ═══════════════════════════════════════════════════
-let mailData = null;   // {cliente, invoices:[...], totalUsd}
+let mailData = null;   // {cliente, invoices:[...], totals:{CUR:monto}}
 function fmtMailDate(d){ const x=new Date((d||'')+'T00:00:00'); return isNaN(x)? (d||'—') : x.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function fmtMailAmount(n,cur){ const num=(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); return (cur==='USD'||!cur)?`$${num}`:`${cur} ${num}`; }
-function fmtUsd2(n){ return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function buildMailBody(cliente, inv, totalUsd){
+// Totales por moneda (nunca convierte a USD): {USD:1200, EUR:800}
+function mailTotalsByCur(inv){ const m={}; inv.forEach(r=>{ const c=r.currency||'USD'; m[c]=(m[c]||0)+(Number(r.saldo)||0); }); return m; }
+function fmtTotals(m){ return Object.keys(m).map(c=>fmtMailAmount(m[c],c)).join('  ·  '); }
+function buildMailBody(cliente, inv, totals){
   const lines = inv.map(r=>`• Invoice ${r.factura} — due ${fmtMailDate(r.due)} (${r.days} ${r.days===1?'day':'days'} overdue) — ${fmtMailAmount(r.saldo, r.currency)}`).join('\n');
   return `Dear ${cliente} team,
 
@@ -2326,7 +2328,7 @@ We hope this message finds you well. We are writing to kindly follow up on the f
 
 ${lines}
 
-Total outstanding: ${fmtUsd2(totalUsd)}
+Total outstanding: ${fmtTotals(totals)}
 
 Should any of these already have been settled, please disregard the corresponding line and kindly share the payment confirmation so we can update our records.
 
@@ -2344,12 +2346,12 @@ function abrirMailCobro(){
   const skipped = sel.length - overdue.length;
   if(!overdue.length){ alert('None of the selected invoices are overdue (days > 0), so there is nothing to claim.'); return; }
   const cliente = selClient || overdue[0].cliente;
-  const totalUsd = overdue.reduce((a,r)=>a+r.saldoUsd,0);
-  mailData = { cliente, invoices:overdue, totalUsd };
+  const totals = mailTotalsByCur(overdue);
+  mailData = { cliente, invoices:overdue, totals };
   $('mailTo').value = '';
   $('mailSubj').value = `Outstanding invoices — ${cliente} · Forest Coffee`;
-  $('mailBody').value = buildMailBody(cliente, overdue, totalUsd);
-  $('mailInfo').textContent = `${overdue.length} overdue invoice${overdue.length!==1?'s':''} · ${fmtUsd2(totalUsd)}` + (skipped>0?` · ${skipped} non-overdue omitted`:'');
+  $('mailBody').value = buildMailBody(cliente, overdue, totals);
+  $('mailInfo').textContent = `${overdue.length} overdue invoice${overdue.length!==1?'s':''} · ${fmtTotals(totals)}` + (skipped>0?` · ${skipped} non-overdue omitted`:'');
   $('mailCopyLbl').textContent='Copy';
   $('mailModal').classList.remove('hidden');
   if(window.lucide) lucide.createIcons();
@@ -2394,7 +2396,8 @@ function mailPDF(){
   doc.splitTextToSize(intro, W-M*2).forEach((ln,i)=>doc.text(ln, M, y+i*15)); y+=15*Math.ceil(doc.splitTextToSize(intro,W-M*2).length)+10;
   // Tabla
   const body = mailData.invoices.map(r=>[r.factura, fmtMailDate(r.due), `${r.days} days`, fmtMailAmount(r.saldo,r.currency)]);
-  body.push([{content:'Total outstanding (USD)',colSpan:3,styles:{fontStyle:'bold',halign:'right'}}, {content:fmtUsd2(mailData.totalUsd),styles:{fontStyle:'bold'}}]);
+  const curKeys = Object.keys(mailData.totals);
+  curKeys.forEach((c,i)=> body.push([{content:i===0?'Total outstanding':'',colSpan:3,styles:{fontStyle:'bold',halign:'right'}}, {content:fmtMailAmount(mailData.totals[c],c),styles:{fontStyle:'bold'}}]));
   doc.autoTable({
     startY:y, head:[['Invoice','Due date','Days overdue','Amount']], body,
     theme:'grid', styles:{fontSize:10,cellPadding:6,textColor:INK,lineColor:[221,217,207]},
