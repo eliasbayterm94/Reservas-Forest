@@ -2823,7 +2823,17 @@ function renderGerencia(){
 // ═══════════════════════════════════════════════════
 // COMPROMISOS — promesas de pago de los comerciales por comercial y bracket
 // ═══════════════════════════════════════════════════
-function compAmount(r){ const m=Number(String(r.montoComp||'').replace(/[^0-9.\-]/g,''))||0; return m>0 ? m : (r.saldoUsd||0); }
+// Monto del compromiso SIEMPRE en USD (como en Receivables).
+// El comercial escribe el monto prometido en la moneda de su factura, así que lo
+// convertimos a USD con el tipo de cambio real de esa fila (saldoUsd / saldo).
+function compAmount(r){
+  const m=Number(String(r.montoComp||'').replace(/[^0-9.\-]/g,''))||0;
+  if(m<=0) return r.saldoUsd||0;                 // sin monto → saldo en USD
+  if(r.currency && r.currency!=='USD' && r.saldo>0 && r.saldoUsd>0){
+    return m * (r.saldoUsd / r.saldo);           // moneda local → USD
+  }
+  return m;                                       // ya está en USD (o sin FX disponible)
+}
 function compSituacion(r){
   const today=new Date(); today.setHours(0,0,0,0);
   const d=new Date(r.compromiso); if(isNaN(d)) return {l:'—',c:'sit-fut',diff:9999};
