@@ -185,7 +185,7 @@ td:last-child{border-right:none}
 .ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
-#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 .sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .sit-inc{background:#fde5e0;color:#a8351c}
 .sit-hoy{background:#fff0d6;color:#b86000}
@@ -372,7 +372,7 @@ tbody tr.rfl-warn td:nth-child(2){box-shadow:inset 3px 0 0 #9c5e15}
 #rotTable td{padding:0 14px;height:34px}
 #gerTable td{padding:0 14px}
 #gerTable .c-num{font-family:'DM Mono',monospace;font-size:12.5px;text-align:right}
-tbody#tbodyGer tr.ger-tot td{background:var(--surface3);font-weight:700;border-top:2px solid var(--border2);color:var(--fc-navy)}
+tbody#tbodyGer tr.ger-tot td,tbody#cfBody tr.ger-tot td{background:var(--surface3);font-weight:700;border-top:2px solid var(--border2);color:var(--fc-navy)}
 .mut2{color:var(--text3);font-family:'DM Mono',monospace;font-size:11px}
 .comp2{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--text)}
 .comp2.venc{color:var(--warn)}
@@ -867,6 +867,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <button class="ger-subtab" id="gsRotacion" onclick="gerSub('rotacion')">Rotación</button>
       <button class="ger-subtab" id="gsCompromisos" onclick="gerSub('compromisos')">Compromisos</button>
       <button class="ger-subtab" id="gsMetas" onclick="gerSub('metas')">Metas de cobro</button>
+      <button class="ger-subtab" id="gsCashflow" onclick="gerSub('cashflow')">Cash Flow</button>
       <button class="ger-subtab" id="gsPorVencer" onclick="gerSub('porvencer')">Por vencer (10d)</button>
     </div>
 
@@ -1048,6 +1049,44 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="footer">
         <span>El equipo puede accionarlas desde Cartera con el filtro "Por vencer (10d)".</span>
         <span style="margin-left:auto;color:var(--text3)" id="pvTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: CASH FLOW (pronóstico de flujo por empresa y semana, USD) ─ -->
+    <div id="gerCashflowWrap" class="hidden">
+      <div class="resumen" id="cfKpis">
+        <div class="rcard b0"><div class="rc-l">Esperado esta semana</div><div class="rc-n" id="cfNext">—</div><div class="rc-s" id="cfNextWk">USD</div></div>
+        <div class="rcard b60"><div class="rc-l">Esperado próx. 4 sem</div><div class="rc-n" id="cf4">—</div><div class="rc-s">USD</div></div>
+        <div class="rcard g"><div class="rc-l">Precisión del modelo</div><div class="rc-n" id="cfAcc">—</div><div class="rc-s" id="cfAccS">últimas semanas</div></div>
+        <div class="rcard b90"><div class="rc-l">AR pronosticado</div><div class="rc-n" id="cfAR">—</div><div class="rc-s">USD abierto</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Flujo esperado por empresa y semana (USD)</span>
+        <select id="cfHorizon" class="ger-sel" style="margin-left:auto" onchange="renderCashflow()" title="Semanas a proyectar">
+          <option value="8">8 semanas</option><option value="12" selected>12 semanas</option><option value="16">16 semanas</option>
+        </select>
+        <button class="btn-excel" id="btnSaveForecast" onclick="guardarPronostico()" style="margin-left:8px;background:#1B203D;color:#fff" title="Guarda una foto del pronóstico de esta semana para trazar estimado vs real en el tiempo"><i data-lucide="camera"></i> Guardar pronóstico</button>
+        <button class="btn-excel" onclick="exportCashflowExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
+      </div>
+      <div class="table-wrap" id="twCf">
+        <table id="cfTable">
+          <thead id="cfHead"></thead>
+          <tbody id="cfBody"></tbody>
+        </table>
+      </div>
+      <div class="ger-toolbar" style="margin-top:16px"><span class="res-count">Estimado vs. real por semana — trazabilidad</span></div>
+      <div class="table-wrap" id="twCfTrack" style="flex:none;max-height:340px">
+        <table id="cfTrackTable">
+          <thead><tr>
+            <th>Semana</th><th style="text-align:right">Estimado</th><th style="text-align:right">Real cobrado</th>
+            <th style="text-align:right">Variación</th><th style="text-align:right">Precisión</th>
+          </tr></thead>
+          <tbody id="cfTrackBody"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span id="cfFoot">Predicción por cliente: usa la fecha de compromiso; si no hay, vencimiento + retraso promedio aprendido del historial. Se autoajusta al cargar datos. Guarda el pronóstico cada semana para trazar estimado vs. real.</span>
+        <span style="margin-left:auto;color:var(--text3)" id="cfTs">—</span>
       </div>
     </div>
   </div>
@@ -2284,9 +2323,10 @@ async function cargarSeguimiento(){
       segData={}; (j.rows||[]).forEach(row=>{ segData[row.key]=row; });
       cerradasData = j.cerradas || [];
       compromisosData = j.compromisos || [];
+      forecastsData = j.forecasts || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
       if(activeTab==='historial') renderHistorial();
-      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); if(gerSubActive==='compromisos') renderCompromisos(); }
+      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); if(gerSubActive==='compromisos') renderCompromisos(); if(gerSubActive==='cashflow') renderCashflow(); }
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -2758,15 +2798,18 @@ function gerSub(which){
   $('gsRotacion').classList.toggle('active', which==='rotacion');
   $('gsCompromisos').classList.toggle('active', which==='compromisos');
   $('gsMetas').classList.toggle('active', which==='metas');
+  $('gsCashflow').classList.toggle('active', which==='cashflow');
   $('gsPorVencer').classList.toggle('active', which==='porvencer');
   $('gerCarteraWrap').style.display     = which==='cartera'     ? '' : 'none';
   $('gerRotacionWrap').style.display    = which==='rotacion'    ? '' : 'none';
   $('gerCompromisosWrap').style.display = which==='compromisos' ? '' : 'none';
   $('gerMetasWrap').style.display       = which==='metas'       ? '' : 'none';
+  $('gerCashflowWrap').style.display    = which==='cashflow'    ? '' : 'none';
   $('gerPorVencerWrap').style.display   = which==='porvencer'   ? '' : 'none';
   if(which==='rotacion') renderRotacion();
   else if(which==='compromisos') renderCompromisos();
   else if(which==='metas') renderMetas();
+  else if(which==='cashflow') renderCashflow();
   else if(which==='porvencer') renderPorVencer();
   else renderGerencia();
 }
@@ -2923,6 +2966,192 @@ function exportCompromisosExcel(){
   for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:10})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0%'; } }
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Compromisos');
   XLSX.writeFile(wb,`Forest_Compromisos_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// CASH FLOW — pronóstico de flujo de caja por empresa y semana (USD)
+// Modelo estadístico auto-ajustable: aprende el retraso de pago de cada cliente
+// desde el historial cerrado y corrige el sesgo comparando fotos vs. cobro real.
+// ═══════════════════════════════════════════════════
+let forecastsData = [];   // fotos guardadas: [{semana, total, horizon:[{week,amt}], generado}]
+
+function cfAddDays(iso, n){ const d=new Date(String(iso)+'T00:00:00'); if(isNaN(d)) return null; d.setDate(d.getDate()+Math.round(n)); return d; }
+
+// Parámetros aprendidos del historial (retraso promedio de pago por cliente/región).
+function cfLearn(){
+  const byCli={}, byReg={}; let gS=0, gN=0;
+  cerradasData.forEach(r=>{
+    const d=Number(r.diasAlPagar); if(isNaN(d)) return;
+    const c=(r.cliente||'').trim().toLowerCase(), rg=(r.region||'').trim().toLowerCase();
+    if(c){ (byCli[c]=byCli[c]||{s:0,n:0}); byCli[c].s+=d; byCli[c].n++; }
+    if(rg){ (byReg[rg]=byReg[rg]||{s:0,n:0}); byReg[rg].s+=d; byReg[rg].n++; }
+    gS+=d; gN++;
+  });
+  const gAvg = gN ? gS/gN : 7;   // sin historial → asume 7 días tras vencimiento
+  return {
+    lag(cli,reg){
+      const c=(cli||'').trim().toLowerCase(), rg=(reg||'').trim().toLowerCase();
+      if(byCli[c] && byCli[c].n>=3) return {v:byCli[c].s/byCli[c].n, n:byCli[c].n, src:'cliente'};
+      if(byReg[rg] && byReg[rg].n>=3) return {v:byReg[rg].s/byReg[rg].n, n:byReg[rg].n, src:'región'};
+      return {v:gAvg, n:gN, src:'global'};
+    }
+  };
+}
+function cfConf(L){ if(L.src==='cliente' && L.n>=6) return 0.85; if(L.src==='cliente'||L.src==='región') return 0.6; return 0.35; }
+
+// Precisión del modelo: compara lo que las fotos predijeron para su propia
+// semana contra el cobro real. Mide el desempeño (no infla los montos del
+// pronóstico); el autoajuste real es el retraso de pago aprendido por cliente.
+function cfBias(){
+  const col=collectedByWeek();
+  let est=0, real=0, k=0;
+  forecastsData.forEach(f=>{
+    const wk=f.semana; if(!wk || !col[wk]) return;
+    const h=(f.horizon||[]).find(x=>x.week===wk);
+    const e=h ? Number(h.amt)||0 : 0;
+    if(e>0){ est+=e; real+=col[wk].total; k++; }
+  });
+  if(k<1 || est<=0) return {f:1, acc:null, n:k};
+  const acc=Math.max(0, Math.min(100, Math.round((1-Math.abs(real-est)/est)*100)));
+  const f = k>=2 ? Math.max(0.5, Math.min(1.5, real/est)) : 1;   // corrige sesgo solo con ≥2 semanas
+  return {f, acc, n:k};
+}
+
+// Predice fecha(s) y monto(s) USD de cada factura abierta.
+function cfPredict(){
+  const learn=cfLearn();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const thisMon=mondayISO(today);
+  const items=[];
+  cartData.forEach(r=>{
+    const usd=Number(r.saldoUsd)||0; if(usd<=0) return;
+    const cli=(r.cliente||'—');
+    if(r.compromiso && !isNaN(new Date(r.compromiso))){
+      // Promesa: usa el monto prometido (USD) en la fecha de compromiso; el resto, por modelo.
+      const prom=Math.min(usd, compAmount(r));
+      const pd=new Date(r.compromiso+'T00:00:00');
+      items.push({cli, date:(pd<today?today:pd), amt:(prom>0?prom:usd), conf:0.9});
+      const resto=usd-(prom>0?prom:usd);
+      if(resto>1){ const L=learn.lag(cli,r.region); const dd=cfAddDays(r.due||thisMon, L.v)||today; items.push({cli, date:(dd<today?today:dd), amt:resto, conf:cfConf(L)}); }
+    } else {
+      const L=learn.lag(cli,r.region);
+      const dd=cfAddDays(r.due||thisMon, L.v)||today;
+      items.push({cli, date:(dd<today?today:dd), amt:usd, conf:cfConf(L)});
+    }
+  });
+  return items;
+}
+
+function cfWeeks(n){
+  const start=mondayISO(new Date());
+  const weeks=[]; const d=new Date(start+'T00:00:00');
+  for(let i=0;i<n;i++){ weeks.push(mondayISO(d)); d.setDate(d.getDate()+7); }
+  return weeks;
+}
+
+function cashflowMatrix(){
+  const n=Number(($('cfHorizon')||{}).value)||12;
+  const weeks=cfWeeks(n); const first=weeks[0], last=weeks[weeks.length-1];
+  const bias=cfBias();
+  const rep={}; const colTot={}; weeks.forEach(w=>colTot[w]=0); let later=0, grand=0;
+  cfPredict().forEach(it=>{
+    let wk=mondayISO(it.date);
+    if(wk<first) wk=first;
+    const amt=it.amt;                        // valor nominal (no se infla el monto; se aprende el TIMING)
+    const g=rep[it.cli]=rep[it.cli]||{later:0,tot:0,cs:0,cn:0};
+    if(wk>last){ g.later+=amt; later+=amt; }
+    else { g[wk]=(g[wk]||0)+amt; colTot[wk]+=amt; }
+    g.tot+=amt; grand+=amt; g.cs+=it.conf*it.amt; g.cn+=it.amt;
+  });
+  const rows=Object.keys(rep).map(c=>{ const g=rep[c]; g.conf=g.cn? g.cs/g.cn : 0; return Object.assign({cli:c},g); })
+    .sort((a,b)=>b.tot-a.tot);
+  return {weeks, first, last, rows, colTot, later, grand, bias};
+}
+
+function renderCashflow(){
+  if(!cartLoaded){ if($('cfBody')) $('cfBody').innerHTML='<tr><td style="padding:20px;color:var(--text3)">Cargando cartera…</td></tr>'; return; }
+  const M=cashflowMatrix(); const {weeks, rows, colTot, later, grand, bias}=M;
+  const cell=v=> v>0? money(v) : '<span style="color:var(--text3)">—</span>';
+  const dot=c=> c>=0.75?'#2c7a2c':c>=0.5?'#8a6d00':'#a8351c';
+  $('cfHead').innerHTML='<tr><th>Empresa</th>'+weeks.map(w=>`<th style="text-align:right">${fmtWeek(w)}</th>`).join('')
+    +(later>0?'<th style="text-align:right">Después</th>':'')+'<th style="text-align:right">Total</th></tr>';
+  const body=rows.map(r=>{
+    let tds=`<td class="c-cliente"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot(r.conf)};margin-right:6px;vertical-align:middle" title="Confianza ${Math.round(r.conf*100)}%"></span>${esc(r.cli)}</td>`;
+    tds+=weeks.map(w=>`<td class="c-num">${cell(r[w]||0)}</td>`).join('');
+    if(later>0) tds+=`<td class="c-num">${cell(r.later||0)}</td>`;
+    tds+=`<td class="c-num" style="font-weight:700">${money(r.tot)}</td>`;
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  let totRow='<tr class="ger-tot"><td>TOTAL</td>'+weeks.map(w=>`<td class="c-num">${cell(colTot[w])}</td>`).join('');
+  if(later>0) totRow+=`<td class="c-num">${cell(later)}</td>`;
+  totRow+=`<td class="c-num">${money(grand)}</td></tr>`;
+  $('cfBody').innerHTML = rows.length ? body+totRow
+    : `<tr><td colspan="${weeks.length+2}" style="text-align:center;color:var(--text3);padding:22px">Sin cartera abierta para pronosticar.</td></tr>`;
+  $('cfNext').textContent=money(colTot[weeks[0]]||0); $('cfNextWk').textContent='semana del '+fmtWeek(weeks[0]);
+  $('cf4').textContent=money(weeks.slice(0,4).reduce((a,w)=>a+(colTot[w]||0),0));
+  $('cfAR').textContent=money(grand);
+  $('cfAcc').textContent = bias.acc==null ? '—' : bias.acc+'%';
+  $('cfAccS').textContent = bias.n ? `${bias.n} sem medida${bias.n!==1?'s':''}` : 'guarda fotos para medir';
+  renderCfTrack();
+  $('cfTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+  if(window.lucide) lucide.createIcons();
+}
+
+// Trazabilidad: estimado (de las fotos) vs. real cobrado, semana a semana.
+function renderCfTrack(){
+  const col=collectedByWeek(); const thisMon=mondayISO(new Date());
+  const set=new Set();
+  forecastsData.forEach(f=>{ if(f.semana) set.add(f.semana); });
+  Object.keys(col).forEach(w=>set.add(w));
+  const weeks=[...set].filter(w=>w<=thisMon).sort().slice(-10).reverse();
+  if(!weeks.length){ $('cfTrackBody').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:18px">Aún no hay fotos ni cobros para trazar. Pulsa "Guardar pronóstico" cada semana para empezar la traza.</td></tr>'; return; }
+  $('cfTrackBody').innerHTML=weeks.map(w=>{
+    const f=forecastsData.filter(x=>x.semana && x.semana<=w).sort((a,b)=>String(a.semana).localeCompare(String(b.semana))).pop();
+    const h=f ? (f.horizon||[]).find(x=>x.week===w) : null;
+    const est=h ? Number(h.amt)||0 : null;
+    const real=col[w] ? col[w].total : 0;
+    const varr=est==null ? null : real-est;
+    const acc=(est&&est>0) ? Math.max(0,Math.min(100,Math.round((1-Math.abs(real-est)/est)*100))) : null;
+    const vcol=varr==null ? '' : (varr>=0?'#2c7a2c':'#a8351c');
+    return `<tr><td class="c-mono">${fmtWeek(w)}</td>`
+      +`<td class="c-num">${est==null?'<span style="color:var(--text3)">— sin foto</span>':money(est)}</td>`
+      +`<td class="c-num">${money(real)}</td>`
+      +`<td class="c-num"${vcol?` style="color:${vcol};font-weight:600"`:''}>${varr==null?'—':(varr>=0?'+':'')+money(varr)}</td>`
+      +`<td class="c-num">${acc==null?'—':acc+'%'}</td></tr>`;
+  }).join('');
+}
+
+async function guardarPronostico(){
+  if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
+  if(!SEG_API_URL){ alert('Falta configurar el backend.'); return; }
+  const M=cashflowMatrix();
+  const semana=mondayISO(new Date());
+  const horizon=M.weeks.map(w=>({week:w, amt:Math.round(M.colTot[w]||0)}));
+  const payload={ tipo:'forecast', semana, total:Math.round(M.grand), horizon, usuario:'gerencia', generado:new Date().toISOString() };
+  const btn=$('btnSaveForecast'); const old=btn.innerHTML; btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    const resp=await fetch(SEG_API_URL,{method:'POST', body:JSON.stringify(payload)});
+    const j=await resp.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||'Error');
+    const rec={semana, total:payload.total, horizon, generado:payload.generado};
+    const i=forecastsData.findIndex(f=>f.semana===semana);
+    if(i>=0) forecastsData[i]=rec; else forecastsData.push(rec);
+    renderCashflow();
+    btn.innerHTML='✓ Guardado'; setTimeout(()=>{ btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); },1400);
+  }catch(err){ alert('No se pudo guardar: '+err.message); btn.innerHTML=old; btn.disabled=false; if(window.lucide) lucide.createIcons(); }
+}
+
+function exportCashflowExcel(){
+  if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
+  const M=cashflowMatrix();
+  const head=['Empresa',...M.weeks.map(w=>fmtWeek(w))]; if(M.later>0) head.push('Después'); head.push('Total');
+  const R=r=>{ const a=[r.cli,...M.weeks.map(w=>Math.round(r[w]||0))]; if(M.later>0) a.push(Math.round(r.later||0)); a.push(Math.round(r.tot)); return a; };
+  const totA=['TOTAL',...M.weeks.map(w=>Math.round(M.colTot[w]||0))]; if(M.later>0) totA.push(Math.round(M.later)); totA.push(Math.round(M.grand));
+  const aoa=[head].concat(M.rows.map(R)).concat([totA]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:22}].concat(head.slice(1).map(()=>({wch:12})));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Cash Flow');
+  XLSX.writeFile(wb,`Forest_CashFlow_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
