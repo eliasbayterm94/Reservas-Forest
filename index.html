@@ -1062,20 +1062,21 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </div>
       <div class="ger-toolbar">
         <span class="res-count">Flujo esperado por empresa y semana (USD)</span>
+        <span id="cfRatesInfo" class="res-count" style="margin-left:12px;cursor:help;color:var(--text2)"></span>
         <select id="cfHorizon" class="ger-sel" style="margin-left:auto" onchange="renderCashflow()" title="Semanas a proyectar">
           <option value="8">8 semanas</option><option value="12" selected>12 semanas</option><option value="16">16 semanas</option>
         </select>
         <button class="btn-excel" id="btnSaveForecast" onclick="guardarPronostico()" style="margin-left:8px;background:#1B203D;color:#fff" title="Guarda una foto del pronóstico de esta semana para trazar estimado vs real en el tiempo"><i data-lucide="camera"></i> Guardar pronóstico</button>
         <button class="btn-excel" onclick="exportCashflowExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
-      <div class="table-wrap" id="twCf">
+      <div class="table-wrap" id="twCf" style="flex:0 1 auto;max-height:42vh;contain:layout paint">
         <table id="cfTable">
           <thead id="cfHead"></thead>
           <tbody id="cfBody"></tbody>
         </table>
       </div>
-      <div class="ger-toolbar" style="margin-top:16px"><span class="res-count">Estimado vs. real por semana — trazabilidad</span></div>
-      <div class="table-wrap" id="twCfTrack" style="flex:none;max-height:340px">
+      <div class="ger-toolbar" style="margin-top:16px"><span class="res-count">📊 Estimado vs. real por semana — trazabilidad (aquí ves qué tan acertados fuimos)</span></div>
+      <div class="table-wrap" id="twCfTrack" style="flex:none;max-height:340px;contain:layout paint">
         <table id="cfTrackTable">
           <thead><tr>
             <th>Semana</th><th style="text-align:right">Estimado</th><th style="text-align:right">Real cobrado</th>
@@ -3126,6 +3127,19 @@ function renderCashflow(){
   $('cfAR').textContent=money(grand);
   $('cfAcc').textContent = bias.acc==null ? '—' : bias.acc+'%';
   $('cfAccS').textContent = bias.n ? `${bias.n} sem · ${bias.bias||''}` : 'guarda fotos para medir';
+  // Chip con las probabilidades de cobro por bracket (de dónde sale el reparto)
+  const rr=cfBracketRates(); const pct=v=>Math.round(v*100)+'%';
+  const LBL={current:'Current',b1:'1–30',b2:'31–60',b3:'61–90',b4:'90+'};
+  const BR=['current','b1','b2','b3','b4'];
+  const ri=$('cfRatesInfo');
+  if(ri){
+    ri.textContent='ℹ Prob. cobro/sem: '+BR.map(b=>`${LBL[b]} ${pct(rr.rate[b])}`).join(' · ');
+    ri.title='Probabilidad de cobro SEMANAL por bracket — así se reparte cada saldo por semana:\n'
+      +BR.map(b=>`  ${LBL[b]}: ${pct(rr.rate[b])}/sem  ${rr.dataDriven[b]?'(de tus datos)':'(default, aún sin historial)'}`).join('\n')
+      +`\n\nReparto: semana0 = saldo×p, semana1 = saldo×p×(1-p), … y la cola pegajosa cae en "Después".`
+      +`\nAdemás se escala por la velocidad de cada cliente (paga más rápido → cobra antes).`
+      +`\nBase: ${rr.nW} semana(s) de cobro reales.`;
+  }
   renderCfTrack();
   $('cfTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
