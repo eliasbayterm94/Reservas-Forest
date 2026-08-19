@@ -1085,7 +1085,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         </table>
       </div>
       <div class="footer">
-        <span id="cfFoot">Predicción por cliente: usa la fecha de compromiso; si no hay, vencimiento + retraso promedio aprendido del historial. Se autoajusta al cargar datos. Guarda el pronóstico cada semana para trazar estimado vs. real.</span>
+        <span id="cfFoot">Si hay compromiso, el monto prometido cae en su semana. El resto se reparte por la probabilidad de cobro semanal de cada bracket (aprendida del historial y escalada por la velocidad de cada cliente); lo que no se espera pronto cae en "Después". Se autoajusta al cargar datos.</span>
         <span style="margin-left:auto;color:var(--text3)" id="cfTs">—</span>
       </div>
     </div>
@@ -2970,76 +2970,87 @@ function exportCompromisosExcel(){
 
 // ═══════════════════════════════════════════════════
 // CASH FLOW — pronóstico de flujo de caja por empresa y semana (USD)
-// Modelo estadístico auto-ajustable: aprende el retraso de pago de cada cliente
-// desde el historial cerrado y corrige el sesgo comparando fotos vs. cobro real.
+// Modelo de PROBABILIDAD DE COBRO por bracket (auto, desde datos):
+// cada saldo se reparte semana a semana según qué tan rápido paga históricamente
+// su bracket, escalado por la velocidad del cliente. Lo pegajoso cae en "Después"
+// (no se apila todo lo viejo en la semana actual).
 // ═══════════════════════════════════════════════════
 let forecastsData = [];   // fotos guardadas: [{semana, total, horizon:[{week,amt}], generado}]
 
-function cfAddDays(iso, n){ const d=new Date(String(iso)+'T00:00:00'); if(isNaN(d)) return null; d.setDate(d.getDate()+Math.round(n)); return d; }
-
-// Parámetros aprendidos del historial (retraso promedio de pago por cliente/región).
+// Velocidad de pago aprendida por cliente/región (media de días al pagar).
 function cfLearn(){
   const byCli={}, byReg={}; let gS=0, gN=0;
   cerradasData.forEach(r=>{
+    if(r.diasAlPagar==='' || r.diasAlPagar==null) return;
     const d=Number(r.diasAlPagar); if(isNaN(d)) return;
     const c=(r.cliente||'').trim().toLowerCase(), rg=(r.region||'').trim().toLowerCase();
     if(c){ (byCli[c]=byCli[c]||{s:0,n:0}); byCli[c].s+=d; byCli[c].n++; }
     if(rg){ (byReg[rg]=byReg[rg]||{s:0,n:0}); byReg[rg].s+=d; byReg[rg].n++; }
     gS+=d; gN++;
   });
-  const gAvg = gN ? gS/gN : 7;   // sin historial → asume 7 días tras vencimiento
+  const gAvg = gN ? gS/gN : 15;
+  function pick(cli,reg){
+    const c=(cli||'').trim().toLowerCase(), rg=(reg||'').trim().toLowerCase();
+    if(byCli[c] && byCli[c].n>=3) return {v:byCli[c].s/byCli[c].n, n:byCli[c].n, src:'cliente'};
+    if(byReg[rg] && byReg[rg].n>=3) return {v:byReg[rg].s/byReg[rg].n, n:byReg[rg].n, src:'región'};
+    return {v:gAvg, n:gN, src:'global'};
+  }
   return {
-    lag(cli,reg){
-      const c=(cli||'').trim().toLowerCase(), rg=(reg||'').trim().toLowerCase();
-      if(byCli[c] && byCli[c].n>=3) return {v:byCli[c].s/byCli[c].n, n:byCli[c].n, src:'cliente'};
-      if(byReg[rg] && byReg[rg].n>=3) return {v:byReg[rg].s/byReg[rg].n, n:byReg[rg].n, src:'región'};
-      return {v:gAvg, n:gN, src:'global'};
-    }
+    global: gAvg,
+    // Factor de velocidad: cliente que paga MÁS RÁPIDO que el promedio → >1 (cobra antes).
+    speed(cli,reg){ const a=pick(cli,reg); if(a.src==='global') return 1;
+      return Math.max(0.5, Math.min(2, (gAvg+7)/(a.v+7))); },
+    conf(cli,reg){ return cfConf(pick(cli,reg)); }
   };
 }
 function cfConf(L){ if(L.src==='cliente' && L.n>=6) return 0.85; if(L.src==='cliente'||L.src==='región') return 0.6; return 0.35; }
 
-// Precisión del modelo: compara lo que las fotos predijeron para su propia
-// semana contra el cobro real. Mide el desempeño (no infla los montos del
-// pronóstico); el autoajuste real es el retraso de pago aprendido por cliente.
+// Probabilidad de cobro SEMANAL por bracket (auto, desde datos):
+//   p_bracket = cobrado semanal promedio del bracket ÷ pendiente actual del bracket.
+// Bracket viejo con poco cobro → p baja → se reparte fino y lo pegajoso cae en "Después".
+function cfBracketRates(){
+  const col=collectedByWeek(); const thisMon=mondayISO(new Date());
+  const wks=Object.keys(col).filter(w=>w<=thisMon).sort().slice(-8);   // últimas 8 semanas con cobro
+  const nW=wks.length||1;
+  const BR=['current','b1','b2','b3','b4'];
+  const acc={current:0,b1:0,b2:0,b3:0,b4:0};
+  wks.forEach(w=>BR.forEach(b=>acc[b]+=(col[w][b]||0)));
+  const out={current:0,b1:0,b2:0,b3:0,b4:0};
+  cartData.forEach(r=>{ const b=bracketKey(r.days); if(b) out[b]+=(Number(r.saldoUsd)||0); });
+  const DEF={current:0.6,b1:0.4,b2:0.25,b3:0.15,b4:0.06};   // curva por defecto sin historial
+  const rate={}, dataDriven={};
+  BR.forEach(b=>{
+    const weekly=acc[b]/nW;
+    if(out[b]>0 && weekly>0){ rate[b]=Math.max(0.03, Math.min(0.85, weekly/out[b])); dataDriven[b]=true; }
+    else { rate[b]=DEF[b]; dataDriven[b]=false; }
+  });
+  return {rate, nW, dataDriven};
+}
+
+// Índice de semana (0..n) de una fecha dentro del horizonte; ≥n = "Después".
+function cfWeekIndex(date, weeks, today){
+  const wk=mondayISO(date<today?today:date);
+  if(wk<weeks[0]) return 0;
+  const i=weeks.indexOf(wk);
+  return i<0 ? weeks.length : i;
+}
+
+// Precisión del modelo: compara lo que cada foto predijo para su propia semana
+// contra el cobro real. Devuelve la precisión promedio y si venimos siendo
+// optimistas (predecimos de más) o conservadores (de menos).
 function cfBias(){
   const col=collectedByWeek();
-  let est=0, real=0, k=0;
+  let sumAcc=0, k=0, est=0, real=0;
   forecastsData.forEach(f=>{
     const wk=f.semana; if(!wk || !col[wk]) return;
     const h=(f.horizon||[]).find(x=>x.week===wk);
     const e=h ? Number(h.amt)||0 : 0;
-    if(e>0){ est+=e; real+=col[wk].total; k++; }
+    if(e>0){ const a=col[wk].total;
+      sumAcc+=Math.max(0, Math.min(100, Math.round((1-Math.abs(a-e)/e)*100)));
+      est+=e; real+=a; k++; }
   });
-  if(k<1 || est<=0) return {f:1, acc:null, n:k};
-  const acc=Math.max(0, Math.min(100, Math.round((1-Math.abs(real-est)/est)*100)));
-  const f = k>=2 ? Math.max(0.5, Math.min(1.5, real/est)) : 1;   // corrige sesgo solo con ≥2 semanas
-  return {f, acc, n:k};
-}
-
-// Predice fecha(s) y monto(s) USD de cada factura abierta.
-function cfPredict(){
-  const learn=cfLearn();
-  const today=new Date(); today.setHours(0,0,0,0);
-  const thisMon=mondayISO(today);
-  const items=[];
-  cartData.forEach(r=>{
-    const usd=Number(r.saldoUsd)||0; if(usd<=0) return;
-    const cli=(r.cliente||'—');
-    if(r.compromiso && !isNaN(new Date(r.compromiso))){
-      // Promesa: usa el monto prometido (USD) en la fecha de compromiso; el resto, por modelo.
-      const prom=Math.min(usd, compAmount(r));
-      const pd=new Date(r.compromiso+'T00:00:00');
-      items.push({cli, date:(pd<today?today:pd), amt:(prom>0?prom:usd), conf:0.9});
-      const resto=usd-(prom>0?prom:usd);
-      if(resto>1){ const L=learn.lag(cli,r.region); const dd=cfAddDays(r.due||thisMon, L.v)||today; items.push({cli, date:(dd<today?today:dd), amt:resto, conf:cfConf(L)}); }
-    } else {
-      const L=learn.lag(cli,r.region);
-      const dd=cfAddDays(r.due||thisMon, L.v)||today;
-      items.push({cli, date:(dd<today?today:dd), amt:usd, conf:cfConf(L)});
-    }
-  });
-  return items;
+  if(k<1 || est<=0) return {acc:null, n:k, bias:null};
+  return {acc:Math.round(sumAcc/k), n:k, bias:(est>real?'optimista':'conservador')};
 }
 
 function cfWeeks(n){
@@ -3049,20 +3060,43 @@ function cfWeeks(n){
   return weeks;
 }
 
+// Reparte cada saldo abierto por la probabilidad de cobro de su bracket
+// (escalada por la velocidad del cliente); las promesas caen en su semana.
 function cashflowMatrix(){
   const n=Number(($('cfHorizon')||{}).value)||12;
-  const weeks=cfWeeks(n); const first=weeks[0], last=weeks[weeks.length-1];
+  const weeks=cfWeeks(n); const first=weeks[0], last=weeks[n-1];
   const bias=cfBias();
+  const learn=cfLearn(); const {rate}=cfBracketRates();
+  const today=new Date(); today.setHours(0,0,0,0);
   const rep={}; const colTot={}; weeks.forEach(w=>colTot[w]=0); let later=0, grand=0;
-  cfPredict().forEach(it=>{
-    let wk=mondayISO(it.date);
-    if(wk<first) wk=first;
-    const amt=it.amt;                        // valor nominal (no se infla el monto; se aprende el TIMING)
-    const g=rep[it.cli]=rep[it.cli]||{later:0,tot:0,cs:0,cn:0};
-    if(wk>last){ g.later+=amt; later+=amt; }
-    else { g[wk]=(g[wk]||0)+amt; colTot[wk]+=amt; }
-    g.tot+=amt; grand+=amt; g.cs+=it.conf*it.amt; g.cn+=it.amt;
+
+  cartData.forEach(r=>{
+    const usd=Number(r.saldoUsd)||0; if(usd<=0) return;
+    const cli=r.cliente||'—';
+    const g=rep[cli]=rep[cli]||{later:0,tot:0,cs:0,cn:0};
+    const conf=learn.conf(cli,r.region);
+    const dep=(idx,amt)=>{ if(amt<=0) return;
+      if(idx>=n){ g.later+=amt; later+=amt; }
+      else { const w=weeks[idx]; g[w]=(g[w]||0)+amt; colTot[w]+=amt; }
+      g.tot+=amt; grand+=amt; g.cs+=conf*amt; g.cn+=amt;
+    };
+    let base=usd;
+    // 1) Promesa explícita → monto prometido en su semana (alta certeza).
+    if(r.compromiso && !isNaN(new Date(r.compromiso))){
+      const prom=Math.min(usd, compAmount(r));
+      const amtP=prom>0?prom:usd;
+      dep(cfWeekIndex(new Date(r.compromiso+'T00:00:00'), weeks, today), amtP);
+      base=usd-amtP;
+      if(base<=1) return;
+    }
+    // 2) Resto (o todo) repartido por la probabilidad semanal del bracket, escalada por velocidad del cliente.
+    const b=bracketKey(r.days)||'current';
+    const p=Math.max(0.02, Math.min(0.95, rate[b]*learn.speed(cli,r.region)));
+    let rem=base;
+    for(let k=0;k<n;k++){ const amt=base*p*Math.pow(1-p,k); dep(k,amt); rem-=amt; }
+    if(rem>0.5) dep(n, rem);   // cola pegajosa → "Después"
   });
+
   const rows=Object.keys(rep).map(c=>{ const g=rep[c]; g.conf=g.cn? g.cs/g.cn : 0; return Object.assign({cli:c},g); })
     .sort((a,b)=>b.tot-a.tot);
   return {weeks, first, last, rows, colTot, later, grand, bias};
@@ -3091,7 +3125,7 @@ function renderCashflow(){
   $('cf4').textContent=money(weeks.slice(0,4).reduce((a,w)=>a+(colTot[w]||0),0));
   $('cfAR').textContent=money(grand);
   $('cfAcc').textContent = bias.acc==null ? '—' : bias.acc+'%';
-  $('cfAccS').textContent = bias.n ? `${bias.n} sem medida${bias.n!==1?'s':''}` : 'guarda fotos para medir';
+  $('cfAccS').textContent = bias.n ? `${bias.n} sem · ${bias.bias||''}` : 'guarda fotos para medir';
   renderCfTrack();
   $('cfTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
@@ -3103,8 +3137,8 @@ function renderCfTrack(){
   const set=new Set();
   forecastsData.forEach(f=>{ if(f.semana) set.add(f.semana); });
   Object.keys(col).forEach(w=>set.add(w));
-  const weeks=[...set].filter(w=>w<=thisMon).sort().slice(-10).reverse();
-  if(!weeks.length){ $('cfTrackBody').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:18px">Aún no hay fotos ni cobros para trazar. Pulsa "Guardar pronóstico" cada semana para empezar la traza.</td></tr>'; return; }
+  const weeks=[...set].filter(w=>w<=thisMon).sort().slice(-16).reverse();
+  if(!weeks.length){ $('cfTrackBody').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:18px">Aún no hay fotos ni cobros para trazar. La foto se guarda sola cada lunes (o pulsa "Guardar pronóstico").</td></tr>'; return; }
   $('cfTrackBody').innerHTML=weeks.map(w=>{
     const f=forecastsData.filter(x=>x.semana && x.semana<=w).sort((a,b)=>String(a.semana).localeCompare(String(b.semana))).pop();
     const h=f ? (f.horizon||[]).find(x=>x.week===w) : null;
@@ -3113,11 +3147,12 @@ function renderCfTrack(){
     const varr=est==null ? null : real-est;
     const acc=(est&&est>0) ? Math.max(0,Math.min(100,Math.round((1-Math.abs(real-est)/est)*100))) : null;
     const vcol=varr==null ? '' : (varr>=0?'#2c7a2c':'#a8351c');
+    const accCol=acc==null ? '' : (acc>=85?'#2c7a2c':acc>=60?'#8a6d00':'#a8351c');
     return `<tr><td class="c-mono">${fmtWeek(w)}</td>`
       +`<td class="c-num">${est==null?'<span style="color:var(--text3)">— sin foto</span>':money(est)}</td>`
       +`<td class="c-num">${money(real)}</td>`
       +`<td class="c-num"${vcol?` style="color:${vcol};font-weight:600"`:''}>${varr==null?'—':(varr>=0?'+':'')+money(varr)}</td>`
-      +`<td class="c-num">${acc==null?'—':acc+'%'}</td></tr>`;
+      +`<td class="c-num"${accCol?` style="color:${accCol};font-weight:700"`:''}>${acc==null?'—':acc+'%'}</td></tr>`;
   }).join('');
 }
 
