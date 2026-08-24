@@ -889,8 +889,31 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <tbody id="r90Body"></tbody>
     </table>
   </div>
+
+  <!-- ── Lotes por mover (>150 días) ── -->
+  <div class="ger-toolbar" style="margin-top:18px">
+    <span class="res-count">Lotes por mover (&gt;150 días)</span>
+    <select id="rlReg" class="ger-sel" style="margin-left:12px" onchange="renderRotLotes()"><option value="">Todas las regiones</option></select>
+    <select id="rlCat" class="ger-sel" style="margin-left:8px" onchange="renderRotLotes()"><option value="">Todas las categorías</option></select>
+    <button class="btn-excel" onclick="exportRotLotesExcel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+  </div>
+  <div class="resumen" id="rlCards">
+    <div class="rcard g"><div class="rc-l">0–90 días</div><div class="rc-n" id="rlB1">—</div><div class="rc-s">lotes disponibles</div></div>
+    <div class="rcard b60"><div class="rc-l">91–180 días</div><div class="rc-n" id="rlB2">—</div><div class="rc-s">lotes disponibles</div></div>
+    <div class="rcard b90"><div class="rc-l">+180 días</div><div class="rc-n" id="rlB3">—</div><div class="rc-s">lotes disponibles</div></div>
+  </div>
+  <div class="table-wrap" id="twRl" style="flex:0 1 auto;max-height:46vh;contain:layout paint">
+    <table id="rlTable">
+      <thead><tr>
+        <th>Región</th><th>Warehouse</th><th>ICO</th><th>Name</th><th>Series</th>
+        <th style="text-align:center">Bag Size</th><th>Container</th><th style="text-align:right">Días</th><th style="text-align:right">Actual</th>
+      </tr></thead>
+      <tbody id="rlBody"></tbody>
+    </table>
+  </div>
+
   <div class="footer">
-    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote ÚNICO (por ICO) disponible en ACTUAL con &gt;150 días. Vejez = Σ(Actual KG × Dias)÷Σ(Actual KG); target &lt;90 días (verde), ≥90 rojo.</span>
+    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote ÚNICO (por ICO) disponible en ACTUAL con &gt;150 días. Vejez = Σ(Actual KG × Dias)÷Σ(Actual KG); target &lt;90 días (verde), ≥90 rojo. Cards y lista: lotes con ACTUAL&gt;0.</span>
     <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
   </div>
 </div><!-- /viewRotacion90 -->
@@ -2375,6 +2398,7 @@ async function cargarRotacion(){
 // Vejez de inventario por región (pestaña "vejez"): vejez ponderada por kg
 // disponibles + conteo de lotes disponibles con Dias>150 (para la penalidad).
 let vejezByRegion = {};      // { region: {kg, kgdays, vejez, old, penalty, n} }
+let vejezLots = [];          // lotes disponibles (ACTUAL>0) para la lista/cards: {region,warehouse,ico,name,series,bagSize,container,dias,actual,category}
 let vejezLoaded = false, vejezError = '';
 async function cargarVejez(){
   try{
@@ -2387,11 +2411,15 @@ async function cargarVejez(){
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iDias=find(['dias','días','days']),
           iKg=find(['actual kg']), iAct=find(['actual']), iICO=find(['ico']);   // vejez pondera por Actual KG; disponible = ACTUAL>0; lotes únicos por ICO
+    // Columnas para la lista de lotes por mover
+    const iWh=find(['warehouse']), iName=find(['name']), iSer=find(['series']),
+          iBag=find(['bag size']), iCont=find(['container']),
+          iCat=find(['category','categoria','categoría','filtro']);   // categoría (no hay col Category en vejez → usa "Filtro" si existe)
     if(iReg<0 || iDias<0 || iKg<0){
       vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Actual KG). Encabezados: '+head.join(' | ');
       vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
     }
-    const rep={};
+    const rep={}; const lots=[];
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
       const rawReg=String(row[iReg]||'').trim(); if(esFilaTotal_(rawReg)) continue;   // ignora filas de total/vacías
@@ -2407,9 +2435,14 @@ async function cargarVejez(){
         if(ico) g.oldIco.add(ico); else g.oldNoIco++;        // cuenta lotes únicos por ICO (evita duplicados)
       }
       g.n++;
+      if(actUn>0){   // lotes disponibles para la lista/cards
+        const gv=v=>v>=0?String(row[v]||'').trim():'';
+        lots.push({ region, warehouse:gv(iWh), ico:gv(iICO), name:gv(iName), series:gv(iSer),
+          bagSize:gv(iBag), container:gv(iCont), dias, actual:actUn, category:gv(iCat) });
+      }
     }
     Object.keys(rep).forEach(reg=>{ const g=rep[reg]; g.vejez=g.kg?g.kgdays/g.kg:0; g.old=g.oldIco.size+g.oldNoIco; g.penalty=VEJEZ_PENAL*g.old; });
-    vejezByRegion=rep; vejezLoaded=true; vejezError='';
+    vejezByRegion=rep; vejezLots=lots; vejezLoaded=true; vejezError='';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
     vejezError='No se pudo leer "vejez": '+err.message; vejezLoaded=true;
@@ -3676,6 +3709,7 @@ function renderRotacion90(){
   if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos')); if(rotWh2Dbg) src.push(rotWh2Dbg); }
   if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
   $('r90Src').textContent=src.join('  ·  ');
+  renderRotLotes();   // filtros + cards + lista de lotes por mover
   if(!rows.length){ body.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
     ['r90Vejez','r90Global','r90Old','r90Slow','r90SlowD','r90OldD'].forEach(id=>$(id).textContent='—');
     $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US'); if(window.lucide) lucide.createIcons(); return; }
@@ -3708,6 +3742,46 @@ function exportRotacion90Excel(){
   ws['!cols']=[{wch:14},{wch:11},{wch:11},{wch:11},{wch:13},{wch:12},{wch:12}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion y Vejez');
   XLSX.writeFile(wb,`Forest_RotacionVejez_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// Lista de lotes por mover (>150 días) + cards por bracket, con filtros región/categoría.
+function rlFiltered(){
+  const reg=($('rlReg')||{}).value||'', cat=($('rlCat')||{}).value||'';
+  return vejezLots.filter(l=> (!reg || l.region===reg) && (!cat || (l.category||'')===cat));
+}
+function renderRotLotes(){
+  const body=$('rlBody'); if(!body) return;
+  // Poblar filtros (preservando selección)
+  const regSel=$('rlReg'), catSel=$('rlCat');
+  const regs=[...new Set(vejezLots.map(l=>l.region).filter(Boolean))].sort();
+  const cats=[...new Set(vejezLots.map(l=>l.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const cur=regSel.value; regSel.innerHTML='<option value="">Todas las regiones</option>'+regs.map(r=>`<option${r===cur?' selected':''}>${esc(r)}</option>`).join('');
+  const curc=catSel.value; catSel.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option${c===curc?' selected':''}>${esc(c)}</option>`).join('');
+  const f=rlFiltered();
+  // Cards por bracket de edad (lotes disponibles)
+  $('rlB1').textContent=f.filter(l=>l.dias<=90).length;
+  $('rlB2').textContent=f.filter(l=>l.dias>90 && l.dias<=180).length;
+  $('rlB3').textContent=f.filter(l=>l.dias>180).length;
+  // Lista >150 días, del más viejo al menos
+  const list=f.filter(l=>l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
+  body.innerHTML = list.length ? list.map(l=>{
+    const dc = l.dias>180 ? '#a8351c' : '#8a6d00';
+    return `<tr><td class="c-cliente">${esc(l.region)}</td><td>${esc(l.warehouse)}</td>`
+      +`<td style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(l.ico)}</td>`
+      +`<td>${esc(l.name)}</td><td>${esc(l.series)}</td><td style="text-align:center">${esc(l.bagSize)}</td>`
+      +`<td>${esc(l.container)}</td><td class="c-num" style="font-weight:700;color:${dc}">${Math.round(l.dias)}</td>`
+      +`<td class="c-num">${kgFmt(l.actual)}</td></tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">${vejezLoaded?'No hay lotes >150 días con estos filtros.':'Cargando…'}</td></tr>`;
+}
+function exportRotLotesExcel(){
+  if(!vejezLoaded){ alert('La vejez aún se está cargando.'); return; }
+  const list=rlFiltered().filter(l=>l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
+  const head=['Region','Warehouse','ICO','Name','Series','Bag Size','Container','Dias','Actual'];
+  const aoa=[head].concat(list.map(l=>[l.region,l.warehouse,l.ico,l.name,l.series,l.bagSize,l.container,Math.round(l.dias),Math.round(l.actual)]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:10},{wch:16},{wch:12},{wch:22},{wch:10},{wch:10},{wch:14},{wch:7},{wch:9}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Lotes por mover');
+  XLSX.writeFile(wb,`Forest_LotesPorMover_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
