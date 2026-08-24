@@ -2129,6 +2129,18 @@ function normComercial(n){
   if(!s) return 'Sin asignar';
   return COMERCIAL_ALIAS[s.toLowerCase()] || s;
 }
+// Unifica nombres de región entre pestañas (ej. DUBAI = MENA).
+function normRegion(s){
+  const r=String(s||'').trim();
+  const k=r.toLowerCase().replace(/[^a-z]/g,'');
+  const MAP={ dubai:'MENA', uae:'MENA', mena:'MENA', middleeast:'MENA',
+    uk:'UK', unitedkingdom:'UK', gb:'UK', greatbritain:'UK', england:'UK', london:'UK',
+    usa:'USA', us:'USA', unitedstates:'USA', america:'USA', northamerica:'USA',
+    eu:'EU', europe:'EU', europa:'EU', euro:'EU',
+    australia:'Australia', au:'Australia', aus:'Australia', oceania:'Australia' };
+  return MAP[k] || r;
+}
+function esFilaTotal_(s){ const k=String(s||'').trim().toLowerCase(); return !k || k.includes('total') || k.includes('grand') || k.includes('suma'); }
 
 function fmtCur(val, cur){
   const n = Math.round(Number(val)||0).toLocaleString('en-US');
@@ -2330,7 +2342,8 @@ async function cargarRotacion(){
     const out=[];
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
-      const region=String(row[iReg]||'').trim(); if(!region) continue;
+      const rawReg=String(row[iReg]||'').trim(); if(esFilaTotal_(rawReg)) continue;   // ignora filas de total/vacías
+      const region=normRegion(rawReg);
       const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
       const kg=qty*size; if(!(kg>0)) continue;
       const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
@@ -2368,8 +2381,10 @@ async function cargarVejez(){
     const rep={};
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
-      const region=String(row[iReg]||'').trim(); if(!region) continue;
+      const rawReg=String(row[iReg]||'').trim(); if(esFilaTotal_(rawReg)) continue;   // ignora filas de total/vacías
+      const region=normRegion(rawReg);
       const dias=cleanNum(row[iDias]);
+      if(dias<0 || dias>3650) continue;            // ignora Dias absurdos (ej. una fecha metida en la columna)
       const kg=cleanNum(row[iKg]);
       const un=iUn>=0 ? cleanNum(row[iUn]) : kg;   // disponible (unidades); si no hay, usa kg
       const g=rep[region]=rep[region]||{kg:0,kgdays:0,old:0,n:0};
@@ -3642,9 +3657,9 @@ function renderRotacion90(){
   if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="7" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
   const M=rotVejezRows(); const rows=M.rows;
   const src=[];
-  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded) src.push(`${rotRaw.length} líneas rot.`);
-  if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push(`${Object.keys(vejezByRegion).length} regiones vejez`);
-  $('r90Src').textContent=src.join(' · ');
+  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded) src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos'));
+  if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
+  $('r90Src').textContent=src.join('  ·  ');
   if(!rows.length){ body.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
     ['r90Vejez','r90Global','r90Old','r90Slow','r90SlowD','r90OldD'].forEach(id=>$(id).textContent='—');
     $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US'); if(window.lucide) lucide.createIcons(); return; }
