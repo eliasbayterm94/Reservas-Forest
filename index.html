@@ -2334,6 +2334,8 @@ async function cargarRotacion(){
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iQty=find(['quantity']), iSize=find(['size']),
           iRot=find(['rotation days','rotation']), iDate=find(['transaction date','transaction','date']);
+    // "Warehouse**" (columna con asteriscos): para UK la región viene de aquí, no de Region.
+    let iWh2=-1; for(let i=0;i<head.length;i++){ if(head[i].includes('warehouse') && head[i].includes('*')){ iWh2=i; break; } }
     if(iReg<0 || iQty<0 || iSize<0 || iRot<0){
       rotError='Faltan columnas en "Rotacion" (necesito Region, Quantity, SIZE, Rotation Days). Encabezados: '+head.join(' | ');
       rotLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
@@ -2343,13 +2345,16 @@ async function cargarRotacion(){
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
       const rawReg=String(row[iReg]||'').trim(); if(esFilaTotal_(rawReg)) continue;   // ignora filas de total/vacías
-      const region=normRegion(rawReg);
+      // Región: usa "Region" si es una de las 5 canónicas; si no (ej. UK), usa "Warehouse**".
+      const CANON=['USA','EU','UK','Australia','MENA'];
+      const cReg=normRegion(rawReg), cWh=iWh2>=0 ? normRegion(row[iWh2]) : '';
+      const region = CANON.includes(cReg) ? cReg : (CANON.includes(cWh) ? cWh : (cReg||cWh));
       const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
       const kg=qty*size; if(!(kg>0)) continue;
       const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
       const days=cleanNum(rawDays);
-      // Nota: la pestaña "Rotacion" ya es el dataset de rotación (últimos 90d), así que
-      // NO se filtra por Transaction Date aquí (antes eso dejaba fuera regiones no-USA).
+      // Filtra a los últimos 90 días por Transaction Date (solo si la fecha es válida).
+      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }
       out.push({region, kg, days});
     }
     rotRaw=out; rotLoaded=true; rotError='';
