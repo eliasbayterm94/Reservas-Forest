@@ -2322,7 +2322,7 @@ async function cargarVentas(){
 
 // Rotación ponderada por región (últimos 90 días). Lee la pestaña "Rotacion".
 let rotRaw = [];             // [{region, kg, days}]
-let rotLoaded = false, rotError = '';
+let rotLoaded = false, rotError = '', rotWh2Dbg = '';
 async function cargarRotacion(){
   try{
     const resp = await fetch(ROT_CSV_URL + '&_=' + Date.now());
@@ -2334,21 +2334,27 @@ async function cargarRotacion(){
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iQty=find(['quantity']), iSize=find(['size']),
           iRot=find(['rotation days','rotation']), iDate=find(['transaction date','transaction','date']);
-    // "Warehouse**" (columna con asteriscos): para UK la región viene de aquí, no de Region.
-    let iWh2=-1; for(let i=0;i<head.length;i++){ if(head[i].includes('warehouse') && head[i].includes('*')){ iWh2=i; break; } }
+    // "Warehouse**": para UK la región viene de aquí. gviz a veces quita los asteriscos,
+    // así que si no hay una con '*', uso la SEGUNDA columna que contenga "warehouse".
+    const whCols=[]; for(let i=0;i<head.length;i++){ if(head[i].includes('warehouse')) whCols.push(i); }
+    let iWh2=-1; for(const i of whCols){ if(head[i].includes('*')){ iWh2=i; break; } }
+    if(iWh2<0 && whCols.length>=2) iWh2=whCols[whCols.length-1];
     if(iReg<0 || iQty<0 || iSize<0 || iRot<0){
       rotError='Faltan columnas en "Rotacion" (necesito Region, Quantity, SIZE, Rotation Days). Encabezados: '+head.join(' | ');
       rotLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
     }
     const today=new Date(); today.setHours(0,0,0,0); const min=new Date(today.getTime()-90*86400000);
+    const CANON=['USA','EU','UK','Australia','MENA']; const wh2dbg=new Set();
     const out=[];
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
-      const rawReg=String(row[iReg]||'').trim(); if(esFilaTotal_(rawReg)) continue;   // ignora filas de total/vacías
-      // Región: usa "Region" si es una de las 5 canónicas; si no (ej. UK), usa "Warehouse**".
-      const CANON=['USA','EU','UK','Australia','MENA'];
-      const cReg=normRegion(rawReg), cWh=iWh2>=0 ? normRegion(row[iWh2]) : '';
-      const region = CANON.includes(cReg) ? cReg : (CANON.includes(cWh) ? cWh : (cReg||cWh));
+      const rawReg=String(row[iReg]||'').trim();
+      const rawWh=iWh2>=0 ? String(row[iWh2]||'').trim() : '';
+      if(rawWh) wh2dbg.add(rawWh);
+      // Región: "Warehouse**" MANDA si da una región canónica (ahí viene UK); si no, usa "Region".
+      const cReg=normRegion(rawReg), cWh=normRegion(rawWh);
+      const region = CANON.includes(cWh) ? cWh : (CANON.includes(cReg) ? cReg : (cReg||cWh));
+      if(esFilaTotal_(region)) continue;   // descarta solo si no quedó región (ni en Region ni en Warehouse**) o es total
       const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
       const kg=qty*size; if(!(kg>0)) continue;
       const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
@@ -2358,6 +2364,7 @@ async function cargarRotacion(){
       out.push({region, kg, days});
     }
     rotRaw=out; rotLoaded=true; rotError='';
+    rotWh2Dbg = iWh2>=0 ? ('Wh**: '+([...wh2dbg].slice(0,10).join('/')||'(vacío)')) : 'sin col Warehouse**';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
     rotError='No se pudo leer "Rotacion": '+err.message; rotLoaded=true;
@@ -3666,7 +3673,7 @@ function renderRotacion90(){
   if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="7" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
   const M=rotVejezRows(); const rows=M.rows;
   const src=[];
-  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded) src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos'));
+  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos')); if(rotWh2Dbg) src.push(rotWh2Dbg); }
   if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
   $('r90Src').textContent=src.join('  ·  ');
   if(!rows.length){ body.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
