@@ -867,7 +867,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 </div><!-- /viewRepcom -->
 
 <!-- ══════════ VISTA: ROTACIÓN 90d (ponderada por región) ══════════ -->
-<div id="viewRotacion90" class="view hidden">
+<div id="viewRotacion90" class="view hidden" style="overflow-y:auto">
   <div class="resumen" id="r90Kpis" style="margin-top:4px">
     <div class="rcard b0"><div class="rc-l">Vejez global</div><div class="rc-n" id="r90Vejez">—</div><div class="rc-s">días pond. · target &lt;90</div></div>
     <div class="rcard b60"><div class="rc-l">Rotación global ajustada</div><div class="rc-n" id="r90Global">—</div><div class="rc-s">base + penalidad</div></div>
@@ -879,7 +879,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span id="r90Src" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
     <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
   </div>
-  <div class="table-wrap" id="twR90" style="flex:0 1 auto;max-height:56vh;contain:layout paint">
+  <div class="table-wrap" id="twR90" style="flex:0 0 auto;max-height:60vh;contain:layout paint">
     <table id="r90Table">
       <thead><tr>
         <th>Región</th><th style="text-align:right">Rot. base</th><th style="text-align:right">Penalidad</th>
@@ -902,7 +902,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <div class="rcard b60"><div class="rc-l">91–180 días</div><div class="rc-n" id="rlB2">—</div><div class="rc-s">lotes disponibles</div></div>
     <div class="rcard b90"><div class="rc-l">+180 días</div><div class="rc-n" id="rlB3">—</div><div class="rc-s">lotes disponibles</div></div>
   </div>
-  <div class="table-wrap" id="twRl" style="flex:0 1 auto;max-height:46vh;contain:layout paint">
+  <div class="table-wrap" id="twRl" style="flex:0 0 auto;max-height:60vh;contain:layout paint">
     <table id="rlTable">
       <thead><tr>
         <th>Región</th><th>Warehouse</th><th>ICO</th><th>Name</th><th>Series</th>
