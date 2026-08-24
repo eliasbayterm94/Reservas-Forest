@@ -884,13 +884,13 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <thead><tr>
         <th>Región</th><th style="text-align:right">Rot. base</th><th style="text-align:right">Penalidad</th>
         <th style="text-align:right">Rot. ajustada</th><th style="text-align:right">Vejez pond.</th>
-        <th style="width:20%"></th><th style="text-align:right">kg disp.</th>
+        <th style="width:20%"></th><th style="text-align:right">Actual kg</th>
       </tr></thead>
       <tbody id="r90Body"></tbody>
     </table>
   </div>
   <div class="footer">
-    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote disponible con &gt;150 días. Vejez = Σ(Total Available KG × Dias)÷Σ(Total Available KG); target &lt;90 días (verde), ≥90 rojo.</span>
+    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote disponible con &gt;150 días. Vejez = Σ(Actual KG × Dias)÷Σ(Actual KG); target &lt;90 días (verde), ≥90 rojo.</span>
     <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
   </div>
 </div><!-- /viewRotacion90 -->
@@ -2373,9 +2373,9 @@ async function cargarVejez(){
     const find = cands => { for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iDias=find(['dias','días','days']),
-          iKg=find(['total available kg']), iUn=find(['total available']);
+          iKg=find(['actual kg']), iUn=find(['total available']);   // vejez pondera por Actual KG; disponible = Total Available
     if(iReg<0 || iDias<0 || iKg<0){
-      vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Total Available KG). Encabezados: '+head.join(' | ');
+      vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Actual KG). Encabezados: '+head.join(' | ');
       vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
     }
     const rep={};
