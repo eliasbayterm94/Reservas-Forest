@@ -2348,7 +2348,8 @@ async function cargarRotacion(){
       const kg=qty*size; if(!(kg>0)) continue;
       const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
       const days=cleanNum(rawDays);
-      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }  // filtra 90d si la fecha es válida
+      // Nota: la pestaña "Rotacion" ya es el dataset de rotación (últimos 90d), así que
+      // NO se filtra por Transaction Date aquí (antes eso dejaba fuera regiones no-USA).
       out.push({region, kg, days});
     }
     rotRaw=out; rotLoaded=true; rotError='';
@@ -2373,7 +2374,7 @@ async function cargarVejez(){
     const find = cands => { for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iDias=find(['dias','días','days']),
-          iKg=find(['actual kg']), iUn=find(['total available']);   // vejez pondera por Actual KG; disponible = Total Available
+          iKg=find(['actual kg']), iUn=find(['total available']), iAct=find(['actual']);   // vejez pondera por Actual KG; solo lotes con ACTUAL>0; disponible(penalidad)=Total Available
     if(iReg<0 || iDias<0 || iKg<0){
       vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Actual KG). Encabezados: '+head.join(' | ');
       vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
@@ -2386,10 +2387,11 @@ async function cargarVejez(){
       const dias=cleanNum(row[iDias]);
       if(dias<0 || dias>3650) continue;            // ignora Dias absurdos (ej. una fecha metida en la columna)
       const kg=cleanNum(row[iKg]);
-      const un=iUn>=0 ? cleanNum(row[iUn]) : kg;   // disponible (unidades); si no hay, usa kg
+      const un=iUn>=0 ? cleanNum(row[iUn]) : kg;              // disponible p/ penalidad (Total Available)
+      const actUn=iAct>=0 ? cleanNum(row[iAct]) : kg;         // unidades en ACTUAL (para incluir en vejez)
       const g=rep[region]=rep[region]||{kg:0,kgdays:0,old:0,n:0};
-      if(kg>0){ g.kg+=kg; g.kgdays+=kg*dias; }
-      if(un>0 && dias>VEJEZ_PENAL_DIAS) g.old++;   // lote disponible > 150 días
+      if(actUn>0 && kg>0){ g.kg+=kg; g.kgdays+=kg*dias; }     // vejez: solo lotes con unidades en ACTUAL
+      if(un>0 && dias>VEJEZ_PENAL_DIAS) g.old++;              // penalidad: lote disponible > 150 días
       g.n++;
     }
     Object.keys(rep).forEach(reg=>{ const g=rep[reg]; g.vejez=g.kg?g.kgdays/g.kg:0; g.penalty=VEJEZ_PENAL*g.old; });
