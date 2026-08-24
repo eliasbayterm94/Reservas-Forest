@@ -506,6 +506,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab active" id="tabReservas" onclick="switchTab('reservas')"><i data-lucide="package"></i> Reservas Activas</button>
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
+  <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
@@ -848,6 +849,21 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span style="margin-left:auto;color:var(--text3)" id="hTs">—</span>
   </div>
 </div><!-- /viewHistorial -->
+
+<!-- ══════════ VISTA: CARTERA COMISIONES (auto-servicio del comercial) ══════════ -->
+<div id="viewRepcom" class="view hidden">
+  <div class="ger-toolbar" style="margin-top:4px">
+    <span class="res-count">Mi cartera vencida vs. límite 8% — base: ventas 90d</span>
+    <select id="rcSel" class="ger-sel" style="margin-left:auto;min-width:200px" onchange="renderCarteraComisiones()">
+      <option value="">Elige tu nombre…</option>
+    </select>
+  </div>
+  <div id="rcCard" style="padding:4px 2px"></div>
+  <div class="footer">
+    <span>% vencida = tu cartera vencida ÷ tus ventas de los últimos 90 días. 🔴 ≥8% (comisiones se congelan al cierre del día 5) · 🟡 5–7% · 🟢 &lt;5%.</span>
+    <span style="margin-left:auto;color:var(--text3)" id="rcTs">—</span>
+  </div>
+</div><!-- /viewRepcom -->
 
 <!-- ══════════ VISTA: GERENCIA (con código) ══════════ -->
 <div id="viewGerencia" class="view hidden">
@@ -2195,13 +2211,16 @@ async function cargarVentas(){
     const aoa = parseCSV(await resp.text());
     if(!aoa.length) throw new Error('Sheet vacío');
     const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
-    const findCol = cands => {
-      for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
-      for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; }
+    const findCol = (cands, exclude) => {
+      exclude = exclude||[];
+      for(const c of cands){ const i=head.indexOf(c); if(i>=0 && !exclude.includes(i)) return i; }   // exacto
+      for(let i=0;i<head.length;i++){ if(!exclude.includes(i) && cands.some(c=>head[i].includes(c))) return i; }   // parcial
       return -1;
     };
     const iRep = findCol(['sales rep','comercial','rep','vendedor','salesperson','asesor','seller']);
-    const iVen = findCol(['sales 90d','ventas 90d','ventas usd','sales usd','ventas','sales','venta','revenue','usd','monto','amount']);
+    // Ventas: primero coincidencias específicas; 'sales'/'usd' al final y EXCLUYENDO la col de comercial
+    // (si no, "Sales Rep" haría match con 'sales').
+    const iVen = findCol(['sales 90 days','sales 90 day','sales 90d','ventas 90 dias','ventas 90d','ventas usd','sales usd','ventas','revenue','venta','monto','amount','sales','usd'], [iRep]);
     if(iRep<0 || iVen<0){ ventasError='No encontré las columnas de comercial y ventas en "Sales 90D". Encabezados vistos: '+head.join(' | '); ventasLoaded=true; return; }
     const m = {};
     for(let r=1;r<aoa.length;r++){
@@ -2214,10 +2233,12 @@ async function cargarVentas(){
     }
     ventas90d=m; ventasLoaded=true; ventasError='';
     if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1' && gerSubActive==='comisiones') renderComisiones();
+    if(activeTab==='repcom') renderCarteraComisiones();
   }catch(err){
     ventasError='No se pudo leer "Sales 90D": '+err.message; ventasLoaded=true;
     console.warn('Ventas no disponible:', err);
     if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1' && gerSubActive==='comisiones') renderComisiones();
+    if(activeTab==='repcom') renderCarteraComisiones();
   }
 }
 
@@ -2833,20 +2854,23 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia';
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom';
   $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
   $('viewHistorial').classList.toggle('hidden', !isH);
   $('viewGerencia').classList.toggle('hidden', !isG);
+  $('viewRepcom').classList.toggle('hidden', !isRC);
   $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
   $('tabHistorial').classList.toggle('active', isH);
   $('tabGerencia').classList.toggle('active', isG);
+  $('tabRepcom').classList.toggle('active', isRC);
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : `Posiciones activas · ${DATA.length} registros`;
   { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = isR ? 'Actualizar' : 'Refresh'; }
-  if((isC||isH||isG) && !cartLoaded) cargarCartera(false);
+  if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
+  if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -3364,11 +3388,8 @@ function renderComisiones(){
   $('cmTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
 }
-function renderComisionDetalle(){
-  const box=$('cmDetalle'); const name=$('cmSel').value;
-  if(!name){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Elige un comercial (o haz clic en una fila) para ver su detalle.</div>'; return; }
-  const r=comisionesRows().find(x=>x.c===name);
-  if(!r){ box.innerHTML=''; return; }
+// Tarjeta de detalle de un comercial (compartida por Management y el tab de autoservicio).
+function cmCardHtml(r){
   const cl=diasAlCierre();
   const s=cmColor(r.pct);
   const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
@@ -3382,7 +3403,7 @@ function renderComisionDetalle(){
       <div style="flex:1;background:var(--surface3);border-radius:4px;height:14px;overflow:hidden"><div style="width:${w}%;height:100%;background:${s.c};opacity:.8"></div></div>
       <span style="width:150px;text-align:right;font-family:'DM Mono',monospace;font-size:12px">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
   }).join('');
-  box.innerHTML=`<div style="border:1px solid var(--border2);border-radius:10px;padding:16px;background:var(--surface2);display:flex;gap:24px;flex-wrap:wrap">
+  return `<div style="border:1px solid var(--border2);border-radius:10px;padding:16px;background:var(--surface2);display:flex;gap:24px;flex-wrap:wrap">
     <div style="min-width:200px">
       <div style="font-size:15px;font-weight:800;color:var(--fc-navy)">${esc(r.c)}</div>
       <div style="font-size:34px;font-weight:800;color:${s.c};line-height:1.1;margin-top:4px">${pctTxt}</div>
@@ -3398,6 +3419,25 @@ function renderComisionDetalle(){
       ${brkHtml}
     </div>
   </div>`;
+}
+function renderComisionDetalle(){
+  const box=$('cmDetalle'); const name=$('cmSel').value;
+  if(!name){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Elige un comercial (o haz clic en una fila) para ver su detalle.</div>'; return; }
+  const r=comisionesRows().find(x=>x.c===name);
+  box.innerHTML = r ? cmCardHtml(r) : '';
+}
+// Tab de autoservicio "Cartera Comisiones" (sin clave): cada comercial elige su nombre.
+function renderCarteraComisiones(){
+  const rows = cartLoaded ? comisionesRows() : [];
+  const sel=$('rcSel'); const cur=sel.value;
+  sel.innerHTML='<option value="">Elige tu nombre…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)}</option>`).join('');
+  if(rows.some(r=>r.c===cur)) sel.value=cur;
+  const box=$('rcCard'); const name=sel.value;
+  if(!cartLoaded){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Cargando datos…</div>'; }
+  else if(!name){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Elige tu nombre en el selector de arriba para ver tu estado de comisiones.</div>'; }
+  else { const r=rows.find(x=>x.c===name); box.innerHTML = r ? cmCardHtml(r) : ''; }
+  $('rcTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+  if(window.lucide) lucide.createIcons();
 }
 function exportComisionesExcel(){
   if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
