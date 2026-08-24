@@ -2345,6 +2345,7 @@ async function cargarVentas(){
 
 // Rotación ponderada por región (últimos 90 días). Lee la pestaña "Rotacion".
 let rotRaw = [];             // [{region, kg, days}]
+let rotCatByIco = {};        // categoría (Community/Microlot/…) por ICO, desde la pestaña Rotacion
 let rotLoaded = false, rotError = '', rotWh2Dbg = '';
 async function cargarRotacion(){
   try{
@@ -2357,6 +2358,7 @@ async function cargarRotacion(){
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iQty=find(['quantity']), iSize=find(['size']),
           iRot=find(['rotation days','rotation']), iDate=find(['transaction date','transaction','date']);
+    const iCatR=find(['category','categoria','categoría']), iIcoR=find(['ico']);   // categoría por ICO (Community/Microlot…)
     // "Warehouse**": para UK la región viene de aquí. gviz a veces quita los asteriscos,
     // así que si no hay una con '*', uso la SEGUNDA columna que contenga "warehouse".
     const whCols=[]; for(let i=0;i<head.length;i++){ if(head[i].includes('warehouse')) whCols.push(i); }
@@ -2367,10 +2369,11 @@ async function cargarRotacion(){
       rotLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
     }
     const today=new Date(); today.setHours(0,0,0,0); const min=new Date(today.getTime()-90*86400000);
-    const CANON=['USA','EU','UK','Australia','MENA']; const wh2dbg=new Set();
+    const CANON=['USA','EU','UK','Australia','MENA']; const wh2dbg=new Set(); const catMap={};
     const out=[];
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
+      if(iCatR>=0 && iIcoR>=0){ const ic=String(row[iIcoR]||'').trim(), ct=String(row[iCatR]||'').trim(); if(ic && ct) catMap[ic]=ct; }
       const rawReg=String(row[iReg]||'').trim();
       const rawWh=iWh2>=0 ? String(row[iWh2]||'').trim() : '';
       if(rawWh) wh2dbg.add(rawWh);
@@ -2386,7 +2389,7 @@ async function cargarRotacion(){
       if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }
       out.push({region, kg, days});
     }
-    rotRaw=out; rotLoaded=true; rotError='';
+    rotRaw=out; rotCatByIco=catMap; rotLoaded=true; rotError='';
     rotWh2Dbg = iWh2>=0 ? ('Wh**: '+([...wh2dbg].slice(0,10).join('/')||'(vacío)')) : 'sin col Warehouse**';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
@@ -2414,7 +2417,7 @@ async function cargarVejez(){
     // Columnas para la lista de lotes por mover
     const iWh=find(['warehouse']), iName=find(['name']), iSer=find(['series']),
           iBag=find(['bag size']), iCont=find(['container']),
-          iCat=find(['category','categoria','categoría','filtro']);   // categoría (no hay col Category en vejez → usa "Filtro" si existe)
+          iCat=find(['category','categoria','categoría']);   // categoría (Community/Microlot…); si no está en vejez, se toma de Rotacion por ICO
     if(iReg<0 || iDias<0 || iKg<0){
       vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Actual KG). Encabezados: '+head.join(' | ');
       vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
@@ -3745,16 +3748,18 @@ function exportRotacion90Excel(){
 }
 
 // Lista de lotes por mover (>150 días) + cards por bracket, con filtros región/categoría.
+// Categoría efectiva del lote: la de vejez si viene; si no, la de Rotacion por ICO.
+function lotCat(l){ return l.category || (l.ico && rotCatByIco[l.ico]) || ''; }
 function rlFiltered(){
   const reg=($('rlReg')||{}).value||'', cat=($('rlCat')||{}).value||'';
-  return vejezLots.filter(l=> (!reg || l.region===reg) && (!cat || (l.category||'')===cat));
+  return vejezLots.filter(l=> (!reg || l.region===reg) && (!cat || lotCat(l)===cat));
 }
 function renderRotLotes(){
   const body=$('rlBody'); if(!body) return;
   // Poblar filtros (preservando selección)
   const regSel=$('rlReg'), catSel=$('rlCat');
   const regs=[...new Set(vejezLots.map(l=>l.region).filter(Boolean))].sort();
-  const cats=[...new Set(vejezLots.map(l=>l.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const cats=[...new Set(vejezLots.map(lotCat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const cur=regSel.value; regSel.innerHTML='<option value="">Todas las regiones</option>'+regs.map(r=>`<option${r===cur?' selected':''}>${esc(r)}</option>`).join('');
   const curc=catSel.value; catSel.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option${c===curc?' selected':''}>${esc(c)}</option>`).join('');
   const f=rlFiltered();
