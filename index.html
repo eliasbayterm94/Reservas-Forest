@@ -2231,8 +2231,22 @@ async function cargarVentas(){
     const iRep = findCol(['sales rep','comercial','rep','vendedor','salesperson','asesor','seller']);
     // Ventas: primero coincidencias específicas; 'sales'/'usd' al final y EXCLUYENDO la col de comercial
     // (si no, "Sales Rep" haría match con 'sales').
-    const iVen = findCol(['sales 90 days','sales 90 day','sales 90d','ventas 90 dias','ventas 90d','ventas usd','sales usd','ventas','revenue','venta','monto','amount','sales','usd'], [iRep]);
-    if(iRep<0 || iVen<0){ ventasError='No encontré las columnas de comercial y ventas en "Sales 90D". Encabezados vistos: '+head.join(' | '); ventasLoaded=true; return; }
+    let iVen = findCol(['sales 90 days','sales 90 day','sales 90d','ventas 90 dias','ventas 90d','ventas usd','sales usd','ventas','revenue','venta','monto','amount','sales','usd'], [iRep]);
+    // Fallback: si el header de ventas viene vacío (gviz a veces lo devuelve en blanco),
+    // elige la columna numérica con mayor suma que NO sea el comercial ni una columna de "%"
+    // (así toma "Sales 90 days" y no la de "8%").
+    if(iVen<0){
+      let best=-1, bestSum=-1;
+      for(let c=0;c<head.length;c++){
+        if(c===iRep) continue;
+        if((head[c]||'').includes('%')) continue;
+        let sum=0, cnt=0;
+        for(let r=1;r<aoa.length;r++){ const v=cleanNum((aoa[r]||[])[c]); if(v){ sum+=v; cnt++; } }
+        if(cnt>0 && sum>bestSum){ bestSum=sum; best=c; }
+      }
+      iVen=best;
+    }
+    if(iRep<0 || iVen<0){ ventasError='No encontré las columnas de comercial y ventas en "Sales 90D". Encabezados vistos: '+head.join(' | '); ventasLoaded=true; if(activeTab==='repcom') renderCarteraComisiones(); return; }
     const m = {};
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
