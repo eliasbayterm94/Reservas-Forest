@@ -185,7 +185,7 @@ td:last-child{border-right:none}
 .ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
-#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 .sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .sit-inc{background:#fde5e0;color:#a8351c}
 .sit-hoy{background:#fff0d6;color:#b86000}
@@ -868,6 +868,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <button class="ger-subtab" id="gsCompromisos" onclick="gerSub('compromisos')">Compromisos</button>
       <button class="ger-subtab" id="gsMetas" onclick="gerSub('metas')">Metas de cobro</button>
       <button class="ger-subtab" id="gsCashflow" onclick="gerSub('cashflow')">Cash Flow</button>
+      <button class="ger-subtab" id="gsComisiones" onclick="gerSub('comisiones')">Comisiones</button>
       <button class="ger-subtab" id="gsPorVencer" onclick="gerSub('porvencer')">Por vencer (10d)</button>
     </div>
 
@@ -1088,6 +1089,40 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="footer">
         <span id="cfFoot">Si hay compromiso, el monto prometido cae en su semana. El resto se reparte por la probabilidad de cobro semanal de cada bracket (aprendida del historial y escalada por la velocidad de cada cliente); lo que no se espera pronto cae en "Después". Se autoajusta al cargar datos.</span>
         <span style="margin-left:auto;color:var(--text3)" id="cfTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: COMISIONES (límite de cartera vencida 8% sobre ventas 90d) ─ -->
+    <div id="gerComisionesWrap" class="hidden">
+      <div class="resumen" id="cmKpis">
+        <div class="rcard b0"><div class="rc-l">Cierre en</div><div class="rc-n" id="cmClose">—</div><div class="rc-s">día 5 de cada mes</div></div>
+        <div class="rcard b90"><div class="rc-l">En rojo (≥8%)</div><div class="rc-n" id="cmRed">—</div><div class="rc-s">comisiones en riesgo</div></div>
+        <div class="rcard b60"><div class="rc-l">En amarillo (5–7%)</div><div class="rc-n" id="cmAmber">—</div><div class="rc-s">por vigilar</div></div>
+        <div class="rcard g"><div class="rc-l">A cobrar para destrabar</div><div class="rc-n" id="cmToCollect">—</div><div class="rc-s">suma de los en rojo</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count">Cartera vencida vs. límite 8% — base: ventas 90d</span>
+        <span id="cmSrc" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
+        <button class="btn-excel" onclick="exportComisionesExcel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+      </div>
+      <div class="table-wrap" id="twCm" style="flex:0 1 auto;max-height:44vh;contain:layout paint">
+        <table id="cmTable">
+          <thead><tr>
+            <th>Comercial</th><th style="text-align:right">Ventas 90d</th><th style="text-align:right">Vencida</th>
+            <th style="text-align:center">% vencida</th><th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
+            <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
+            <th style="text-align:right">A cobrar</th><th style="text-align:center">Estado</th>
+          </tr></thead>
+          <tbody id="cmBody"></tbody>
+        </table>
+      </div>
+      <div class="ger-toolbar" style="margin-top:16px"><span class="res-count">Detalle del comercial</span>
+        <select id="cmSel" class="ger-sel" style="margin-left:auto" onchange="renderComisionDetalle()" title="Ver el detalle de un comercial"><option value="">Elige un comercial…</option></select>
+      </div>
+      <div id="cmDetalle" style="flex:none"></div>
+      <div class="footer">
+        <span id="cmFoot">% vencida = cartera vencida ÷ ventas de los últimos 90 días. 🔴 ≥8% (comisiones congeladas al cierre) · 🟡 5–7% · 🟢 &lt;5%. "A cobrar" = lo que hay que reducir para llegar al 8%.</span>
+        <span style="margin-left:auto;color:var(--text3)" id="cmTs">—</span>
       </div>
     </div>
   </div>
@@ -1975,6 +2010,8 @@ function exportReservasPDF(){
 // CARTERA — cuentas por cobrar (fuente: Google Sheet AR, vía CSV)
 // ═══════════════════════════════════════════════════
 const CART_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&gid=0';
+// Ventas por comercial últimos 90 días — pestaña "Sales 90D" del mismo AR consolidado.
+const VENTAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&sheet=Sales%2090D';
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 // Clientes intercompany: sus facturas se omiten de toda la cartera.
@@ -2134,6 +2171,7 @@ async function cargarCartera(forzar=false){
     aplicarCartera();
     if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1') renderGerencia();
     cargarSeguimiento();   // trae los compromisos guardados y re-mergea
+    cargarVentas();        // ventas 90d por comercial (para el tab de Comisiones)
     const ts=new Date().toLocaleString('en-US');
     $('cFooterTs').textContent=`Updated: ${ts}`;
     if(activeTab==='cartera') setStatus('ok', ts);
@@ -2144,6 +2182,42 @@ async function cargarCartera(forzar=false){
     if(activeTab==='cartera') setStatus('err','Connection error');
   }finally{
     if(activeTab==='cartera') setLoading(false);
+  }
+}
+
+// Ventas por comercial últimos 90 días (pestaña "Sales 90D"). Autodetecta columnas.
+let ventas90d = {};          // { keyLower: {name, monto} }
+let ventasLoaded = false, ventasError = '';
+async function cargarVentas(){
+  try{
+    const resp = await fetch(VENTAS_CSV_URL + '&_=' + Date.now());
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const aoa = parseCSV(await resp.text());
+    if(!aoa.length) throw new Error('Sheet vacío');
+    const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
+    const findCol = cands => {
+      for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
+      for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; }
+      return -1;
+    };
+    const iRep = findCol(['sales rep','comercial','rep','vendedor','salesperson','asesor','seller']);
+    const iVen = findCol(['sales 90d','ventas 90d','ventas usd','sales usd','ventas','sales','venta','revenue','usd','monto','amount']);
+    if(iRep<0 || iVen<0){ ventasError='No encontré las columnas de comercial y ventas en "Sales 90D". Encabezados vistos: '+head.join(' | '); ventasLoaded=true; return; }
+    const m = {};
+    for(let r=1;r<aoa.length;r++){
+      const row=aoa[r]; if(!row||!row.length) continue;
+      const raw=String(row[iRep]||'').trim(); if(!raw) continue;
+      const name=normComercial(titleCase(raw));
+      const k=name.toLowerCase();
+      const v=cleanNum(row[iVen]);
+      if(m[k]) m[k].monto+=v; else m[k]={name, monto:v};
+    }
+    ventas90d=m; ventasLoaded=true; ventasError='';
+    if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1' && gerSubActive==='comisiones') renderComisiones();
+  }catch(err){
+    ventasError='No se pudo leer "Sales 90D": '+err.message; ventasLoaded=true;
+    console.warn('Ventas no disponible:', err);
+    if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1' && gerSubActive==='comisiones') renderComisiones();
   }
 }
 
@@ -2800,17 +2874,20 @@ function gerSub(which){
   $('gsCompromisos').classList.toggle('active', which==='compromisos');
   $('gsMetas').classList.toggle('active', which==='metas');
   $('gsCashflow').classList.toggle('active', which==='cashflow');
+  $('gsComisiones').classList.toggle('active', which==='comisiones');
   $('gsPorVencer').classList.toggle('active', which==='porvencer');
   $('gerCarteraWrap').style.display     = which==='cartera'     ? '' : 'none';
   $('gerRotacionWrap').style.display    = which==='rotacion'    ? '' : 'none';
   $('gerCompromisosWrap').style.display = which==='compromisos' ? '' : 'none';
   $('gerMetasWrap').style.display       = which==='metas'       ? '' : 'none';
   $('gerCashflowWrap').style.display    = which==='cashflow'    ? '' : 'none';
+  $('gerComisionesWrap').style.display  = which==='comisiones'  ? '' : 'none';
   $('gerPorVencerWrap').style.display   = which==='porvencer'   ? '' : 'none';
   if(which==='rotacion') renderRotacion();
   else if(which==='compromisos') renderCompromisos();
   else if(which==='metas') renderMetas();
   else if(which==='cashflow') renderCashflow();
+  else if(which==='comisiones'){ if(!ventasLoaded) cargarVentas(); renderComisiones(); }
   else if(which==='porvencer') renderPorVencer();
   else renderGerencia();
 }
@@ -3201,6 +3278,138 @@ function exportCashflowExcel(){
   ws['!cols']=[{wch:22}].concat(head.slice(1).map(()=>({wch:12})));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Cash Flow');
   XLSX.writeFile(wb,`Forest_CashFlow_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// COMISIONES — límite de cartera vencida 8% sobre ventas 90d por comercial
+// ═══════════════════════════════════════════════════
+const CM_LIMIT = 0.08;   // límite: cartera vencida ≤ 8% de las ventas 90d
+// Días desde hoy hasta el próximo cierre (día 5 de cada mes).
+function diasAlCierre(){
+  const t=new Date(); t.setHours(0,0,0,0);
+  let close=new Date(t.getFullYear(), t.getMonth(), 5);
+  if(t>close) close=new Date(t.getFullYear(), t.getMonth()+1, 5);
+  return { dias: Math.round((close-t)/86400000), fecha: close };
+}
+// Vencida por comercial y bracket (USD) + ventas 90d + % y monto a cobrar.
+function comisionesRows(){
+  const rep={};
+  cartData.forEach(r=>{
+    if(!(r.days>0)) return;                 // solo vencida
+    const c=r.comercial||'Unassigned';
+    const g=rep[c]=rep[c]||{venc:0,b1:0,b2:0,b3:0,b4:0};
+    const s=Number(r.saldoUsd)||0; g.venc+=s;
+    if(r.days<=30)g.b1+=s; else if(r.days<=60)g.b2+=s; else if(r.days<=90)g.b3+=s; else g.b4+=s;
+  });
+  // Une comerciales con vencida y/o con ventas
+  const keys=new Set();
+  Object.keys(rep).forEach(c=>keys.add(c.toLowerCase()));
+  Object.keys(ventas90d).forEach(k=>keys.add(k));
+  const nmeOf=k=>{ // nombre a mostrar
+    const v=ventas90d[k]; if(v&&v.name) return v.name;
+    const hit=Object.keys(rep).find(c=>c.toLowerCase()===k); return hit||k;
+  };
+  const rows=[...keys].map(k=>{
+    const name=nmeOf(k);
+    const g=rep[Object.keys(rep).find(c=>c.toLowerCase()===k)]||{venc:0,b1:0,b2:0,b3:0,b4:0};
+    const ventas=(ventas90d[k]&&ventas90d[k].monto)||0;
+    const pct = ventas>0 ? g.venc/ventas : null;
+    const aCobrar = ventas>0 ? Math.max(0, g.venc - CM_LIMIT*ventas) : null;
+    return { c:name, ventas, venc:g.venc, b1:g.b1, b2:g.b2, b3:g.b3, b4:g.b4, pct, aCobrar };
+  }).sort((a,b)=>{
+    // peores primero: los con % primero (desc), luego sin ventas
+    if(a.pct==null && b.pct==null) return b.venc-a.venc;
+    if(a.pct==null) return 1; if(b.pct==null) return -1;
+    return b.pct-a.pct;
+  });
+  return rows;
+}
+function cmColor(pct){ if(pct==null) return {c:'var(--text3)',lbl:'sin ventas',k:'gray'};
+  if(pct>=CM_LIMIT) return {c:'#a8351c',lbl:'CONGELA',k:'red'};
+  if(pct>=0.05)     return {c:'#8a6d00',lbl:'Alerta',k:'amber'};
+  return {c:'#2c7a2c',lbl:'OK',k:'green'}; }
+function cmBadge(pct){ const s=cmColor(pct);
+  const txt = pct==null ? '—' : (pct*100).toFixed(1)+'%';
+  return `<span style="display:inline-block;min-width:52px;padding:2px 8px;border-radius:10px;font-weight:700;color:#fff;background:${s.c}">${txt}</span>`;
+}
+function renderComisiones(){
+  const cl=diasAlCierre();
+  $('cmClose').textContent = cl.dias===0 ? 'HOY' : cl.dias+(cl.dias===1?' día':' días');
+  if(!cartLoaded){ $('cmBody').innerHTML='<tr><td colspan="10" style="padding:20px;color:var(--text3)">Cargando cartera…</td></tr>'; return; }
+  const rows=comisionesRows();
+  const num=v=> v>0?money(v):'<span style="color:var(--text3)">—</span>';
+  $('cmBody').innerHTML = rows.length ? rows.map(r=>{
+    const s=cmColor(r.pct);
+    return `<tr style="cursor:pointer" onclick="$('cmSel').value='${escAttr(r.c)}';renderComisionDetalle()">`
+      +`<td class="c-cliente">${esc(r.c)}</td>`
+      +`<td class="c-num">${r.ventas>0?money(r.ventas):'<span style=\"color:var(--text3)\">— sin dato</span>'}</td>`
+      +`<td class="c-num" style="font-weight:700">${num(r.venc)}</td>`
+      +`<td style="text-align:center">${cmBadge(r.pct)}</td>`
+      +`<td class="c-num">${num(r.b1)}</td><td class="c-num">${num(r.b2)}</td><td class="c-num">${num(r.b3)}</td><td class="c-num">${num(r.b4)}</td>`
+      +`<td class="c-num"${r.aCobrar>0?' style="color:#a8351c;font-weight:700"':''}>${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0')}</td>`
+      +`<td style="text-align:center"><span style="color:${s.c};font-weight:700">${s.lbl}</span></td></tr>`;
+  }).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:22px">Sin datos de comerciales.</td></tr>';
+  // KPIs
+  const red=rows.filter(r=>r.pct!=null && r.pct>=CM_LIMIT);
+  const amber=rows.filter(r=>r.pct!=null && r.pct>=0.05 && r.pct<CM_LIMIT);
+  $('cmRed').textContent=red.length; $('cmAmber').textContent=amber.length;
+  $('cmToCollect').textContent=money(red.reduce((a,r)=>a+(r.aCobrar||0),0));
+  // Fuente / estado de ventas
+  $('cmSrc').textContent = ventasError ? ('⚠ '+ventasError) : (ventasLoaded ? `${Object.keys(ventas90d).length} comerciales con ventas` : 'cargando ventas…');
+  // Selector detalle (preservar selección)
+  const sel=$('cmSel'); const cur=sel.value;
+  sel.innerHTML='<option value="">Elige un comercial…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)}</option>`).join('');
+  if(rows.some(r=>r.c===cur)) sel.value=cur;
+  renderComisionDetalle();
+  $('cmTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+  if(window.lucide) lucide.createIcons();
+}
+function renderComisionDetalle(){
+  const box=$('cmDetalle'); const name=$('cmSel').value;
+  if(!name){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Elige un comercial (o haz clic en una fila) para ver su detalle.</div>'; return; }
+  const r=comisionesRows().find(x=>x.c===name);
+  if(!r){ box.innerHTML=''; return; }
+  const cl=diasAlCierre();
+  const s=cmColor(r.pct);
+  const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
+  const brk=[['1–30',r.b1],['31–60',r.b2],['61–90',r.b3],['90+',r.b4]];
+  const barMax=Math.max(r.b1,r.b2,r.b3,r.b4,1);
+  const brkHtml=brk.map(([l,v])=>{
+    const p = r.ventas>0 ? (v/r.ventas*100) : 0;
+    const w = Math.round(v/barMax*100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
+      <span style="width:52px;color:var(--text2);font-size:12px">${l}</span>
+      <div style="flex:1;background:var(--surface3);border-radius:4px;height:14px;overflow:hidden"><div style="width:${w}%;height:100%;background:${s.c};opacity:.8"></div></div>
+      <span style="width:150px;text-align:right;font-family:'DM Mono',monospace;font-size:12px">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
+  }).join('');
+  box.innerHTML=`<div style="border:1px solid var(--border2);border-radius:10px;padding:16px;background:var(--surface2);display:flex;gap:24px;flex-wrap:wrap">
+    <div style="min-width:200px">
+      <div style="font-size:15px;font-weight:800;color:var(--fc-navy)">${esc(r.c)}</div>
+      <div style="font-size:34px;font-weight:800;color:${s.c};line-height:1.1;margin-top:4px">${pctTxt}</div>
+      <div style="color:${s.c};font-weight:700">${s.lbl}${r.pct!=null&&r.pct>=CM_LIMIT?' — comisiones se congelan al cierre':''}</div>
+      <div style="margin-top:8px;color:var(--text2);font-size:13px">Límite: 8% · faltan <b>${cl.dias===0?'0 (hoy)':cl.dias}</b> día(s) para el cierre (día 5)</div>
+    </div>
+    <div style="flex:1;min-width:280px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Ventas 90d</span><b>${r.ventas>0?money(r.ventas):'— sin dato'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Cartera vencida</span><b>${money(r.venc)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Tope 8% (vencida máx.)</span><b>${r.ventas>0?money(CM_LIMIT*r.ventas):'—'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;margin:8px 0 10px;padding-top:8px;border-top:1px solid var(--border2)"><span style="font-weight:700">A cobrar para no congelar</span><b style="color:${r.aCobrar>0?'#a8351c':'#2c7a2c'};font-size:16px">${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien')}</b></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Desglose de la vencida por bracket:</div>
+      ${brkHtml}
+    </div>
+  </div>`;
+}
+function exportComisionesExcel(){
+  if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
+  const rows=comisionesRows();
+  const head=['Comercial','Ventas 90d','Vencida','% vencida','1-30','31-60','61-90','90+','A cobrar','Estado'];
+  const R=r=>[r.c, Math.round(r.ventas), Math.round(r.venc), r.pct==null?'':r.pct, Math.round(r.b1), Math.round(r.b2), Math.round(r.b3), Math.round(r.b4), r.aCobrar==null?'':Math.round(r.aCobrar), cmColor(r.pct).lbl];
+  const aoa=[head].concat(rows.map(R));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:18},{wch:13},{wch:13},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:9}];
+  for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:3})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0.0%'; } }
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Comisiones');
+  XLSX.writeFile(wb,`Forest_Comisiones_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
