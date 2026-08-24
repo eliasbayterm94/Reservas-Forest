@@ -507,6 +507,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
+  <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación 90d</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
@@ -864,6 +865,34 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span style="margin-left:auto;color:var(--text3)" id="rcTs">—</span>
   </div>
 </div><!-- /viewRepcom -->
+
+<!-- ══════════ VISTA: ROTACIÓN 90d (ponderada por región) ══════════ -->
+<div id="viewRotacion90" class="view hidden">
+  <div class="resumen" id="r90Kpis" style="margin-top:4px">
+    <div class="rcard b0"><div class="rc-l">Rotación global</div><div class="rc-n" id="r90Global">—</div><div class="rc-s">días ponderados (90d)</div></div>
+    <div class="rcard g"><div class="rc-l">Total kg rotados</div><div class="rc-n" id="r90Kg">—</div><div class="rc-s">últimos 90 días</div></div>
+    <div class="rcard b60"><div class="rc-l">Regiones</div><div class="rc-n" id="r90Regs">—</div><div class="rc-s">con rotación</div></div>
+    <div class="rcard b90"><div class="rc-l">Más lenta</div><div class="rc-n" id="r90Slow">—</div><div class="rc-s" id="r90SlowD">—</div></div>
+  </div>
+  <div class="ger-toolbar">
+    <span class="res-count">Rotación ponderada por región — últimos 90 días</span>
+    <span id="r90Src" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
+    <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+  </div>
+  <div class="table-wrap" id="twR90" style="flex:0 1 auto;max-height:56vh;contain:layout paint">
+    <table id="r90Table">
+      <thead><tr>
+        <th>Región</th><th style="text-align:right">Días ponderados</th><th style="width:32%"></th>
+        <th style="text-align:right">Total kg</th><th style="text-align:right">Participación</th><th style="text-align:right">Líneas</th>
+      </tr></thead>
+      <tbody id="r90Body"></tbody>
+    </table>
+  </div>
+  <div class="footer">
+    <span>Días ponderados = Σ(Quantity × SIZE × Rotation Days) ÷ Σ(Quantity × SIZE). Ponderado por kg; menos días = rota más rápido.</span>
+    <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
+  </div>
+</div><!-- /viewRotacion90 -->
 
 <!-- ══════════ VISTA: GERENCIA (con código) ══════════ -->
 <div id="viewGerencia" class="view hidden">
@@ -2032,6 +2061,10 @@ const VENTAS_GID = '';   // ej. '123456789' (número tras #gid= en la URL de la 
 const VENTAS_SHEET_NAME = 'Sales 90D';
 const VENTAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&'
   + (VENTAS_GID ? ('gid='+VENTAS_GID) : ('sheet='+encodeURIComponent(VENTAS_SHEET_NAME)));
+// Rotación ponderada por región (últimos 90 días) — pestaña "Rotacion" del AR consolidado.
+const ROT_GID = '';   // opcional: gid de la pestaña Rotacion (más confiable que sheet=)
+const ROT_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&'
+  + (ROT_GID ? ('gid='+ROT_GID) : ('sheet='+encodeURIComponent('Rotacion')));
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 // Clientes intercompany: sus facturas se omiten de toda la cartera.
@@ -2265,6 +2298,56 @@ async function cargarVentas(){
     if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1' && gerSubActive==='comisiones') renderComisiones();
     if(activeTab==='repcom') renderCarteraComisiones();
   }
+}
+
+// Rotación ponderada por región (últimos 90 días). Lee la pestaña "Rotacion".
+let rotRaw = [];             // [{region, kg, days}]
+let rotLoaded = false, rotError = '';
+async function cargarRotacion(){
+  try{
+    const resp = await fetch(ROT_CSV_URL + '&_=' + Date.now());
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const aoa = parseCSV(await resp.text());
+    if(!aoa.length) throw new Error('Sheet vacío');
+    const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
+    const find = cands => { for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
+      for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
+    const iReg=find(['region']), iQty=find(['quantity']), iSize=find(['size']),
+          iRot=find(['rotation days','rotation']), iDate=find(['transaction date','transaction','date']);
+    if(iReg<0 || iQty<0 || iSize<0 || iRot<0){
+      rotError='Faltan columnas en "Rotacion" (necesito Region, Quantity, SIZE, Rotation Days). Encabezados: '+head.join(' | ');
+      rotLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
+    }
+    const today=new Date(); today.setHours(0,0,0,0); const min=new Date(today.getTime()-90*86400000);
+    const out=[];
+    for(let r=1;r<aoa.length;r++){
+      const row=aoa[r]; if(!row||!row.length) continue;
+      const region=String(row[iReg]||'').trim(); if(!region) continue;
+      const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
+      const kg=qty*size; if(!(kg>0)) continue;
+      const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
+      const days=cleanNum(rawDays);
+      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }  // filtra 90d si la fecha es válida
+      out.push({region, kg, days});
+    }
+    rotRaw=out; rotLoaded=true; rotError='';
+    if(activeTab==='rotacion90') renderRotacion90();
+  }catch(err){
+    rotError='No se pudo leer "Rotacion": '+err.message; rotLoaded=true;
+    console.warn('Rotación no disponible:', err);
+    if(activeTab==='rotacion90') renderRotacion90();
+  }
+}
+// Agrega por región: días ponderados por kg + total kg + participación.
+function rot90Rows(){
+  const rep={};
+  rotRaw.forEach(x=>{ const g=rep[x.region]=rep[x.region]||{kg:0,kgdays:0,n:0}; g.kg+=x.kg; g.kgdays+=x.kg*x.days; g.n++; });
+  const totKg=Object.values(rep).reduce((a,g)=>a+g.kg,0);
+  const totKgDays=Object.values(rep).reduce((a,g)=>a+g.kgdays,0);
+  const rows=Object.keys(rep).map(reg=>{ const g=rep[reg];
+    return {region:reg, kg:g.kg, dias:g.kg?g.kgdays/g.kg:0, n:g.n, share:totKg?g.kg/totKg:0}; })
+    .sort((a,b)=>b.kg-a.kg);
+  return { rows, totKg, globalDias: totKg?totKgDays/totKg:0 };
 }
 
 function llenarFiltrosCartera(){
@@ -2879,23 +2962,26 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom';
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom', isR90=tab==='rotacion90';
   $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
   $('viewHistorial').classList.toggle('hidden', !isH);
   $('viewGerencia').classList.toggle('hidden', !isG);
   $('viewRepcom').classList.toggle('hidden', !isRC);
+  $('viewRotacion90').classList.toggle('hidden', !isR90);
   $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
   $('tabHistorial').classList.toggle('active', isH);
   $('tabGerencia').classList.toggle('active', isG);
   $('tabRepcom').classList.toggle('active', isRC);
+  $('tabRot90').classList.toggle('active', isR90);
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación ponderada por región · 90 días' : `Posiciones activas · ${DATA.length} registros`;
   { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = isR ? 'Actualizar' : 'Refresh'; }
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
+  if(isR90){ if(!rotLoaded) cargarRotacion(); renderRotacion90(); }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -3477,6 +3563,51 @@ function exportComisionesExcel(){
   for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:3})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0.0%'; } }
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Comisiones');
   XLSX.writeFile(wb,`Forest_Comisiones_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// ROTACIÓN 90d — días de rotación ponderados por kg, por región
+// ═══════════════════════════════════════════════════
+const kgFmt = n => Math.round(Number(n)||0).toLocaleString('en-US');
+function renderRotacion90(){
+  const body=$('r90Body'); if(!body) return;
+  if(!rotLoaded){ body.innerHTML='<tr><td colspan="6" style="padding:20px;color:var(--text3)">Cargando rotación…</td></tr>';
+    $('r90Src').textContent='cargando…'; return; }
+  $('r90Src').textContent = rotError ? ('⚠ '+rotError) : `${rotRaw.length} líneas · ${rot90Rows().rows.length} regiones`;
+  const {rows, totKg, globalDias}=rot90Rows();
+  if(!rows.length){ body.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:22px">${rotError?'No se pudo leer la rotación (ver aviso arriba).':'Sin datos de rotación en los últimos 90 días.'}</td></tr>`;
+    $('r90Global').textContent='—'; $('r90Kg').textContent='—'; $('r90Regs').textContent='0'; $('r90Slow').textContent='—'; $('r90SlowD').textContent='—';
+    $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US'); if(window.lucide) lucide.createIcons(); return; }
+  const maxD=Math.max(...rows.map(r=>r.dias),1);
+  const dfmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+  body.innerHTML=rows.map(r=>{
+    const w=Math.round(r.dias/maxD*100);
+    return `<tr><td class="c-cliente">${esc(r.region)}</td>`
+      +`<td class="c-num" style="font-weight:700">${dfmt(r.dias)} d</td>`
+      +`<td><div style="background:var(--surface3);border-radius:4px;height:12px;overflow:hidden"><div style="width:${w}%;height:100%;background:var(--fc-navy);opacity:.75"></div></div></td>`
+      +`<td class="c-num">${kgFmt(r.kg)} kg</td>`
+      +`<td class="c-num">${(r.share*100).toFixed(1)}%</td>`
+      +`<td class="c-num">${r.n}</td></tr>`;
+  }).join('');
+  const slow=rows.reduce((a,b)=>b.dias>a.dias?b:a, rows[0]);
+  $('r90Global').textContent=dfmt(globalDias)+' d';
+  $('r90Kg').textContent=kgFmt(totKg)+' kg';
+  $('r90Regs').textContent=rows.length;
+  $('r90Slow').textContent=slow.region; $('r90SlowD').textContent=dfmt(slow.dias)+' días';
+  $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US');
+  if(window.lucide) lucide.createIcons();
+}
+function exportRotacion90Excel(){
+  if(!rotLoaded){ alert('La rotación aún se está cargando.'); return; }
+  const {rows, totKg, globalDias}=rot90Rows();
+  const head=['Región','Días ponderados','Total kg','Participación','Líneas'];
+  const aoa=[head].concat(rows.map(r=>[r.region, +r.dias.toFixed(2), Math.round(r.kg), r.share, r.n]))
+    .concat([['TOTAL', +globalDias.toFixed(2), Math.round(totKg), 1, rows.reduce((a,r)=>a+r.n,0)]]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:16},{wch:14},{wch:13},{wch:8}];
+  for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:3})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0.0%'; } }
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion 90d');
+  XLSX.writeFile(wb,`Forest_Rotacion90d_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
