@@ -882,9 +882,10 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div class="table-wrap" id="twR90" style="flex:0 0 auto;max-height:60vh;contain:layout paint">
     <table id="r90Table">
       <thead><tr>
-        <th>Región</th><th style="text-align:right">Rot. base</th><th style="text-align:right">Penalidad</th>
-        <th style="text-align:right">Rot. ajustada</th><th style="text-align:right">Vejez pond.</th>
-        <th style="width:20%"></th><th style="text-align:right">Actual kg</th>
+        <th>Región</th><th style="text-align:right">Actual (90d)</th><th style="text-align:right">Target 6-mo</th>
+        <th style="text-align:right">Destino</th><th style="text-align:center">vs Target</th>
+        <th style="text-align:right">Penalidad</th><th style="text-align:right">Rot. ajustada</th>
+        <th style="text-align:right">Vejez pond.</th><th style="text-align:right">Actual kg</th>
       </tr></thead>
       <tbody id="r90Body"></tbody>
     </table>
@@ -2096,6 +2097,24 @@ const VEJEZ_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6
   + (VEJEZ_GID ? ('gid='+VEJEZ_GID) : ('sheet='+encodeURIComponent('vejez')));
 const VEJEZ_TARGET = 90;   // target: vejez ponderada < 90 días
 const VEJEZ_PENAL_DIAS = 150, VEJEZ_PENAL = 2;   // lotes disponibles > 150 días → +2 días c/u
+// Target de rotación (6 meses) por región. t6 = texto a mostrar; tNum = target numérico
+// para el estado; dest = destino; nota = anotación. Editable aquí.
+const ROT_TARGETS = {
+  'USA':       { t6:'70',      tNum:70,  dest:60, nota:'swing · 46% del volumen' },
+  'EU':        { t6:'52',      tNum:52,  dest:50, nota:'' },
+  'Australia': { t6:'52',      tNum:52,  dest:50, nota:'' },
+  'MENA':      { t6:'72',      tNum:72,  dest:65, nota:'' },
+  'UK':        { t6:'130→90',  tNum:130, dest:90, nota:'limpieza' }
+};
+// Estado Actual(90d, base) vs Target: Ahead <0.95 · On 0.95–1.05 · Watch 1.05–1.25 · Off >1.25
+function rotStatus(actual, tNum){
+  if(!tNum || !(actual>0)) return null;
+  const r=actual/tNum;
+  if(r<0.95)  return {lbl:'Ahead', c:'#2c7a2c'};
+  if(r<=1.05) return {lbl:'On',    c:'#2563a8'};
+  if(r<=1.25) return {lbl:'Watch', c:'#8a6d00'};
+  return {lbl:'Off', c:'#a8351c'};
+}
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 // Clientes intercompany: sus facturas se omiten de toda la cartera.
@@ -3706,25 +3725,32 @@ const kgFmt = n => Math.round(Number(n)||0).toLocaleString('en-US');
 const dfmt1 = n => (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
 function renderRotacion90(){
   const body=$('r90Body'); if(!body) return;
-  if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="7" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
+  if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="9" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
   const M=rotVejezRows(); const rows=M.rows;
   const src=[];
   if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos')); if(rotWh2Dbg) src.push(rotWh2Dbg); }
   if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
   $('r90Src').textContent=src.join('  ·  ');
   renderRotLotes();   // filtros + cards + lista de lotes por mover
-  if(!rows.length){ body.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
+  if(!rows.length){ body.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
     ['r90Vejez','r90Global','r90Old','r90Slow','r90SlowD','r90OldD'].forEach(id=>$(id).textContent='—');
     $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US'); if(window.lucide) lucide.createIcons(); return; }
-  const maxV=Math.max(...rows.map(r=>r.vejez),1);
+  const dash='<span style="color:var(--text3)">—</span>';
   body.innerHTML=rows.map(r=>{
-    const w=Math.round(r.vejez/maxV*100); const vc=vejColor(r.vejez);
+    const vc=vejColor(r.vejez);
+    const tg=ROT_TARGETS[r.region]; const st = tg ? rotStatus(r.rotBase, tg.tNum) : null;
+    const badge = st
+      ? `<span style="display:inline-block;min-width:58px;padding:2px 9px;border-radius:11px;color:#fff;font-weight:700;background:${st.c}">${st.lbl}</span>`
+        + (tg.nota?`<div style="font-size:10.5px;color:var(--text2);margin-top:2px">${esc(tg.nota)}</div>`:'')
+      : dash;
     return `<tr><td class="c-cliente">${esc(r.region)}</td>`
-      +`<td class="c-num">${r.hasRot?dfmt1(r.rotBase)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td class="c-num" style="font-weight:700">${r.hasRot?dfmt1(r.rotBase)+' d':dash}</td>`
+      +`<td class="c-num">${tg?esc(tg.t6):dash}</td>`
+      +`<td class="c-num">${tg&&tg.dest?tg.dest:dash}</td>`
+      +`<td style="text-align:center">${badge}</td>`
       +`<td class="c-num"${r.penalty>0?' style="color:#a8351c;font-weight:700"':' style="color:var(--text3)"'}>${r.penalty>0?('+'+r.penalty+' d · '+r.oldCount+' lote'+(r.oldCount!==1?'s':'')):'—'}</td>`
-      +`<td class="c-num" style="font-weight:700">${r.hasRot?dfmt1(r.rotAdj)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
-      +`<td class="c-num" style="font-weight:700;color:${vc}">${r.hasVejez?dfmt1(r.vejez)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
-      +`<td><div style="background:var(--surface3);border-radius:4px;height:12px;overflow:hidden"><div style="width:${w}%;height:100%;background:${vc};opacity:.8"></div></div></td>`
+      +`<td class="c-num">${r.hasRot?dfmt1(r.rotAdj)+' d':dash}</td>`
+      +`<td class="c-num" style="font-weight:700;color:${vc}">${r.hasVejez?dfmt1(r.vejez)+' d':dash}</td>`
       +`<td class="c-num">${r.availKg>0?kgFmt(r.availKg)+' kg':'—'}</td></tr>`;
   }).join('');
   const worst=rows.reduce((a,b)=>b.vejez>a.vejez?b:a, rows[0]);
@@ -3738,11 +3764,12 @@ function renderRotacion90(){
 function exportRotacion90Excel(){
   if(!rotLoaded && !vejezLoaded){ alert('Aún se está cargando.'); return; }
   const M=rotVejezRows();
-  const head=['Región','Rot. base','Penalidad','Lotes >150d','Rot. ajustada','Vejez pond.','kg disp.'];
-  const aoa=[head].concat(M.rows.map(r=>[r.region, +r.rotBase.toFixed(2), r.penalty, r.oldCount, +r.rotAdj.toFixed(2), +r.vejez.toFixed(2), Math.round(r.availKg)]))
-    .concat([['GLOBAL', +M.rotGlobalBase.toFixed(2), M.totPenalty, M.totOld, +M.rotGlobalAdj.toFixed(2), +M.globalVejez.toFixed(2), '']]);
+  const head=['Región','Actual 90d','Target 6-mo','Destino','vs Target','Penalidad','Lotes >150d','Rot. ajustada','Vejez pond.','kg disp.'];
+  const aoa=[head].concat(M.rows.map(r=>{ const tg=ROT_TARGETS[r.region], st=tg?rotStatus(r.rotBase,tg.tNum):null;
+    return [r.region, +r.rotBase.toFixed(2), tg?tg.t6:'', tg&&tg.dest?tg.dest:'', st?st.lbl:'', r.penalty, r.oldCount, +r.rotAdj.toFixed(2), +r.vejez.toFixed(2), Math.round(r.availKg)]; }))
+    .concat([['GLOBAL', +M.rotGlobalBase.toFixed(2), '', '', '', M.totPenalty, M.totOld, +M.rotGlobalAdj.toFixed(2), +M.globalVejez.toFixed(2), '']]);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:11},{wch:11},{wch:11},{wch:13},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:14},{wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:11},{wch:13},{wch:12},{wch:12}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion y Vejez');
   XLSX.writeFile(wb,`Forest_RotacionVejez_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
