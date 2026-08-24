@@ -2027,7 +2027,11 @@ function exportReservasPDF(){
 // ═══════════════════════════════════════════════════
 const CART_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&gid=0';
 // Ventas por comercial últimos 90 días — pestaña "Sales 90D" del mismo AR consolidado.
-const VENTAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&sheet=Sales%2090D';
+// Si sabes el gid de esa pestaña, ponlo en VENTAS_GID (es 100% confiable, como la cartera).
+const VENTAS_GID = '';   // ej. '123456789' (número tras #gid= en la URL de la pestaña)
+const VENTAS_SHEET_NAME = 'Sales 90D';
+const VENTAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&'
+  + (VENTAS_GID ? ('gid='+VENTAS_GID) : ('sheet='+encodeURIComponent(VENTAS_SHEET_NAME)));
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 // Clientes intercompany: sus facturas se omiten de toda la cartera.
@@ -2217,6 +2221,13 @@ async function cargarVentas(){
       for(let i=0;i<head.length;i++){ if(!exclude.includes(i) && cands.some(c=>head[i].includes(c))) return i; }   // parcial
       return -1;
     };
+    // Si gviz ignoró el parámetro sheet y devolvió AR_TAB (primera pestaña), avisar claro.
+    if(head.includes('balance (local)') || head.includes('doc number') || head.includes('usd balance')){
+      ventasError='gviz devolvió AR_TAB en vez de "Sales 90D" (el parámetro sheet no aplicó). Pásame el gid de la pestaña Sales 90D y lo fijo. Encabezados: '+head.join(' | ');
+      ventasLoaded=true;
+      if(activeTab==='repcom') renderCarteraComisiones();
+      return;
+    }
     const iRep = findCol(['sales rep','comercial','rep','vendedor','salesperson','asesor','seller']);
     // Ventas: primero coincidencias específicas; 'sales'/'usd' al final y EXCLUYENDO la col de comercial
     // (si no, "Sales Rep" haría match con 'sales').
@@ -3433,9 +3444,11 @@ function renderCarteraComisiones(){
   sel.innerHTML='<option value="">Elige tu nombre…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)}</option>`).join('');
   if(rows.some(r=>r.c===cur)) sel.value=cur;
   const box=$('rcCard'); const name=sel.value;
+  const warn = (ventasLoaded && ventasError)
+    ? `<div style="margin:8px 0;padding:10px 12px;border:1px solid #a8351c;border-radius:8px;background:rgba(168,53,28,.08);color:#a8351c;font-size:12.5px">⚠ Ventas no cargadas: ${esc(ventasError)}</div>` : '';
   if(!cartLoaded){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Cargando datos…</div>'; }
-  else if(!name){ box.innerHTML='<div style="padding:14px;color:var(--text3)">Elige tu nombre en el selector de arriba para ver tu estado de comisiones.</div>'; }
-  else { const r=rows.find(x=>x.c===name); box.innerHTML = r ? cmCardHtml(r) : ''; }
+  else if(!name){ box.innerHTML=warn+'<div style="padding:14px;color:var(--text3)">Elige tu nombre en el selector de arriba para ver tu estado de comisiones.</div>'; }
+  else { const r=rows.find(x=>x.c===name); box.innerHTML = warn + (r ? cmCardHtml(r) : ''); }
   $('rcTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
 }
