@@ -890,7 +890,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </table>
   </div>
   <div class="footer">
-    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote disponible con &gt;150 días. Vejez = Σ(Actual KG × Dias)÷Σ(Actual KG); target &lt;90 días (verde), ≥90 rojo.</span>
+    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote ÚNICO (por ICO) disponible en ACTUAL con &gt;150 días. Vejez = Σ(Actual KG × Dias)÷Σ(Actual KG); target &lt;90 días (verde), ≥90 rojo.</span>
     <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
   </div>
 </div><!-- /viewRotacion90 -->
@@ -2374,7 +2374,7 @@ async function cargarVejez(){
     const find = cands => { for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
       for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
     const iReg=find(['region']), iDias=find(['dias','días','days']),
-          iKg=find(['actual kg']), iUn=find(['total available']), iAct=find(['actual']);   // vejez pondera por Actual KG; solo lotes con ACTUAL>0; disponible(penalidad)=Total Available
+          iKg=find(['actual kg']), iAct=find(['actual']), iICO=find(['ico']);   // vejez pondera por Actual KG; disponible = ACTUAL>0; lotes únicos por ICO
     if(iReg<0 || iDias<0 || iKg<0){
       vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Actual KG). Encabezados: '+head.join(' | ');
       vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
@@ -2387,14 +2387,16 @@ async function cargarVejez(){
       const dias=cleanNum(row[iDias]);
       if(dias<0 || dias>3650) continue;            // ignora Dias absurdos (ej. una fecha metida en la columna)
       const kg=cleanNum(row[iKg]);
-      const un=iUn>=0 ? cleanNum(row[iUn]) : kg;              // disponible p/ penalidad (Total Available)
-      const actUn=iAct>=0 ? cleanNum(row[iAct]) : kg;         // unidades en ACTUAL (para incluir en vejez)
-      const g=rep[region]=rep[region]||{kg:0,kgdays:0,old:0,n:0};
+      const actUn=iAct>=0 ? cleanNum(row[iAct]) : kg;         // unidades en ACTUAL (disponible)
+      const g=rep[region]=rep[region]||{kg:0,kgdays:0,oldIco:new Set(),oldNoIco:0,n:0};
       if(actUn>0 && kg>0){ g.kg+=kg; g.kgdays+=kg*dias; }     // vejez: solo lotes con unidades en ACTUAL
-      if(un>0 && dias>VEJEZ_PENAL_DIAS) g.old++;              // penalidad: lote disponible > 150 días
+      if(actUn>0 && dias>VEJEZ_PENAL_DIAS){                   // penalidad: lote disponible (ACTUAL) > 150 días
+        const ico=iICO>=0 ? String(row[iICO]||'').trim() : '';
+        if(ico) g.oldIco.add(ico); else g.oldNoIco++;        // cuenta lotes únicos por ICO (evita duplicados)
+      }
       g.n++;
     }
-    Object.keys(rep).forEach(reg=>{ const g=rep[reg]; g.vejez=g.kg?g.kgdays/g.kg:0; g.penalty=VEJEZ_PENAL*g.old; });
+    Object.keys(rep).forEach(reg=>{ const g=rep[reg]; g.vejez=g.kg?g.kgdays/g.kg:0; g.old=g.oldIco.size+g.oldNoIco; g.penalty=VEJEZ_PENAL*g.old; });
     vejezByRegion=rep; vejezLoaded=true; vejezError='';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
