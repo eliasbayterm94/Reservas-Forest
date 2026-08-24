@@ -507,7 +507,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
-  <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación 90d</button>
+  <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
@@ -869,27 +869,28 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <!-- ══════════ VISTA: ROTACIÓN 90d (ponderada por región) ══════════ -->
 <div id="viewRotacion90" class="view hidden">
   <div class="resumen" id="r90Kpis" style="margin-top:4px">
-    <div class="rcard b0"><div class="rc-l">Rotación global</div><div class="rc-n" id="r90Global">—</div><div class="rc-s">días ponderados (90d)</div></div>
-    <div class="rcard g"><div class="rc-l">Total kg rotados</div><div class="rc-n" id="r90Kg">—</div><div class="rc-s">últimos 90 días</div></div>
-    <div class="rcard b60"><div class="rc-l">Regiones</div><div class="rc-n" id="r90Regs">—</div><div class="rc-s">con rotación</div></div>
-    <div class="rcard b90"><div class="rc-l">Más lenta</div><div class="rc-n" id="r90Slow">—</div><div class="rc-s" id="r90SlowD">—</div></div>
+    <div class="rcard b0"><div class="rc-l">Vejez global</div><div class="rc-n" id="r90Vejez">—</div><div class="rc-s">días pond. · target &lt;90</div></div>
+    <div class="rcard b60"><div class="rc-l">Rotación global ajustada</div><div class="rc-n" id="r90Global">—</div><div class="rc-s">base + penalidad</div></div>
+    <div class="rcard b90"><div class="rc-l">Lotes &gt;150 días</div><div class="rc-n" id="r90Old">—</div><div class="rc-s" id="r90OldD">disponibles</div></div>
+    <div class="rcard g"><div class="rc-l">Peor vejez</div><div class="rc-n" id="r90Slow">—</div><div class="rc-s" id="r90SlowD">—</div></div>
   </div>
   <div class="ger-toolbar">
-    <span class="res-count">Rotación ponderada por región — últimos 90 días</span>
+    <span class="res-count">Rotación (con penalidad) y vejez ponderada por región</span>
     <span id="r90Src" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
     <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="table-wrap" id="twR90" style="flex:0 1 auto;max-height:56vh;contain:layout paint">
     <table id="r90Table">
       <thead><tr>
-        <th>Región</th><th style="text-align:right">Días ponderados</th><th style="width:32%"></th>
-        <th style="text-align:right">Total kg</th><th style="text-align:right">Participación</th><th style="text-align:right">Líneas</th>
+        <th>Región</th><th style="text-align:right">Rot. base</th><th style="text-align:right">Penalidad</th>
+        <th style="text-align:right">Rot. ajustada</th><th style="text-align:right">Vejez pond.</th>
+        <th style="width:20%"></th><th style="text-align:right">kg disp.</th>
       </tr></thead>
       <tbody id="r90Body"></tbody>
     </table>
   </div>
   <div class="footer">
-    <span>Días ponderados = Σ(Quantity × SIZE × Rotation Days) ÷ Σ(Quantity × SIZE). Ponderado por kg; menos días = rota más rápido.</span>
+    <span>Rotación base = Σ(Quantity×SIZE×Rotation Days)÷Σ(Quantity×SIZE) (90d). Penalidad = +2 días por cada lote disponible con &gt;150 días. Vejez = Σ(Total Available KG × Dias)÷Σ(Total Available KG); target &lt;90 días (verde), ≥90 rojo.</span>
     <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
   </div>
 </div><!-- /viewRotacion90 -->
@@ -2065,6 +2066,13 @@ const VENTAS_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG
 const ROT_GID = '';   // opcional: gid de la pestaña Rotacion (más confiable que sheet=)
 const ROT_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&'
   + (ROT_GID ? ('gid='+ROT_GID) : ('sheet='+encodeURIComponent('Rotacion')));
+// Vejez de inventario por región — pestaña "vejez". Aporta la vejez ponderada y
+// la penalidad de rotación (lotes disponibles con Dias>150 → +2 días c/u).
+const VEJEZ_GID = '';
+const VEJEZ_CSV_URL = 'https://docs.google.com/spreadsheets/d/19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg/gviz/tq?tqx=out:csv&'
+  + (VEJEZ_GID ? ('gid='+VEJEZ_GID) : ('sheet='+encodeURIComponent('vejez')));
+const VEJEZ_TARGET = 90;   // target: vejez ponderada < 90 días
+const VEJEZ_PENAL_DIAS = 150, VEJEZ_PENAL = 2;   // lotes disponibles > 150 días → +2 días c/u
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
 let SEG_API_URL = 'https://script.google.com/macros/s/AKfycbzw3BZGOKXNFv_FMwz5_J_15KhH5OYQiEsRpWmGjwcoZrEEpkctwJ-xGByMlKxytBM/exec';
 // Clientes intercompany: sus facturas se omiten de toda la cartera.
@@ -2338,6 +2346,65 @@ async function cargarRotacion(){
     if(activeTab==='rotacion90') renderRotacion90();
   }
 }
+// Vejez de inventario por región (pestaña "vejez"): vejez ponderada por kg
+// disponibles + conteo de lotes disponibles con Dias>150 (para la penalidad).
+let vejezByRegion = {};      // { region: {kg, kgdays, vejez, old, penalty, n} }
+let vejezLoaded = false, vejezError = '';
+async function cargarVejez(){
+  try{
+    const resp = await fetch(VEJEZ_CSV_URL + '&_=' + Date.now());
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const aoa = parseCSV(await resp.text());
+    if(!aoa.length) throw new Error('Sheet vacío');
+    const head = aoa[0].map(h=>String(h||'').trim().toLowerCase());
+    const find = cands => { for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; }
+      for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) return i; } return -1; };
+    const iReg=find(['region']), iDias=find(['dias','días','days']),
+          iKg=find(['total available kg']), iUn=find(['total available']);
+    if(iReg<0 || iDias<0 || iKg<0){
+      vejezError='Faltan columnas en "vejez" (necesito Region, Dias, Total Available KG). Encabezados: '+head.join(' | ');
+      vejezLoaded=true; if(activeTab==='rotacion90') renderRotacion90(); return;
+    }
+    const rep={};
+    for(let r=1;r<aoa.length;r++){
+      const row=aoa[r]; if(!row||!row.length) continue;
+      const region=String(row[iReg]||'').trim(); if(!region) continue;
+      const dias=cleanNum(row[iDias]);
+      const kg=cleanNum(row[iKg]);
+      const un=iUn>=0 ? cleanNum(row[iUn]) : kg;   // disponible (unidades); si no hay, usa kg
+      const g=rep[region]=rep[region]||{kg:0,kgdays:0,old:0,n:0};
+      if(kg>0){ g.kg+=kg; g.kgdays+=kg*dias; }
+      if(un>0 && dias>VEJEZ_PENAL_DIAS) g.old++;   // lote disponible > 150 días
+      g.n++;
+    }
+    Object.keys(rep).forEach(reg=>{ const g=rep[reg]; g.vejez=g.kg?g.kgdays/g.kg:0; g.penalty=VEJEZ_PENAL*g.old; });
+    vejezByRegion=rep; vejezLoaded=true; vejezError='';
+    if(activeTab==='rotacion90') renderRotacion90();
+  }catch(err){
+    vejezError='No se pudo leer "vejez": '+err.message; vejezLoaded=true;
+    console.warn('Vejez no disponible:', err);
+    if(activeTab==='rotacion90') renderRotacion90();
+  }
+}
+// Combina rotación (pestaña Rotacion) + vejez/penalidad (pestaña vejez) por región.
+function rotVejezRows(){
+  const rot=rot90Rows(); const rotMap={}; rot.rows.forEach(r=>rotMap[r.region]=r);
+  const regions=new Set([...Object.keys(rotMap), ...Object.keys(vejezByRegion)]);
+  const rows=[...regions].map(reg=>{
+    const rr=rotMap[reg]||{dias:0,kg:0,n:0}; const vv=vejezByRegion[reg]||{vejez:0,penalty:0,old:0,kg:0};
+    const rotBase=rr.dias||0, penalty=vv.penalty||0;
+    return {region:reg, rotBase, penalty, oldCount:vv.old||0, rotAdj:rotBase+penalty,
+      vejez:vv.vejez||0, rotKg:rr.kg||0, availKg:vv.kg||0, hasRot:!!rotMap[reg], hasVejez:!!vejezByRegion[reg]};
+  }).sort((a,b)=> b.vejez-a.vejez);
+  const totAvailKg=Object.values(vejezByRegion).reduce((a,g)=>a+(g.kg||0),0);
+  const totKgDays=Object.values(vejezByRegion).reduce((a,g)=>a+(g.kgdays||0),0);
+  const totOld=Object.values(vejezByRegion).reduce((a,g)=>a+(g.old||0),0);
+  let rw=0, rwd=0; rows.forEach(r=>{ if(r.rotKg>0){ rw+=r.rotKg; rwd+=r.rotKg*r.rotAdj; } });
+  return { rows, globalVejez: totAvailKg?totKgDays/totAvailKg:0, totOld, totPenalty:VEJEZ_PENAL*totOld,
+    rotGlobalAdj: rw?rwd/rw:0, rotGlobalBase: rot.globalDias, totRotKg: rot.totKg };
+}
+function vejColor(v){ return v>0 && v<VEJEZ_TARGET ? '#2c7a2c' : (v>0 ? '#a8351c' : 'var(--text3)'); }
+
 // Agrega por región: días ponderados por kg + total kg + participación.
 function rot90Rows(){
   const rep={};
@@ -2977,11 +3044,11 @@ function switchTab(tab){
   $('tabRot90').classList.toggle('active', isR90);
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación ponderada por región · 90 días' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : `Posiciones activas · ${DATA.length} registros`;
   { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = isR ? 'Actualizar' : 'Refresh'; }
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
-  if(isR90){ if(!rotLoaded) cargarRotacion(); renderRotacion90(); }
+  if(isR90){ if(!rotLoaded) cargarRotacion(); if(!vejezLoaded) cargarVejez(); renderRotacion90(); }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -3566,48 +3633,50 @@ function exportComisionesExcel(){
 }
 
 // ═══════════════════════════════════════════════════
-// ROTACIÓN 90d — días de rotación ponderados por kg, por región
+// ROTACIÓN & VEJEZ por región (Rotacion + penalidad y vejez de "vejez")
 // ═══════════════════════════════════════════════════
 const kgFmt = n => Math.round(Number(n)||0).toLocaleString('en-US');
+const dfmt1 = n => (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
 function renderRotacion90(){
   const body=$('r90Body'); if(!body) return;
-  if(!rotLoaded){ body.innerHTML='<tr><td colspan="6" style="padding:20px;color:var(--text3)">Cargando rotación…</td></tr>';
-    $('r90Src').textContent='cargando…'; return; }
-  $('r90Src').textContent = rotError ? ('⚠ '+rotError) : `${rotRaw.length} líneas · ${rot90Rows().rows.length} regiones`;
-  const {rows, totKg, globalDias}=rot90Rows();
-  if(!rows.length){ body.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:22px">${rotError?'No se pudo leer la rotación (ver aviso arriba).':'Sin datos de rotación en los últimos 90 días.'}</td></tr>`;
-    $('r90Global').textContent='—'; $('r90Kg').textContent='—'; $('r90Regs').textContent='0'; $('r90Slow').textContent='—'; $('r90SlowD').textContent='—';
+  if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="7" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
+  const M=rotVejezRows(); const rows=M.rows;
+  const src=[];
+  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded) src.push(`${rotRaw.length} líneas rot.`);
+  if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push(`${Object.keys(vejezByRegion).length} regiones vejez`);
+  $('r90Src').textContent=src.join(' · ');
+  if(!rows.length){ body.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
+    ['r90Vejez','r90Global','r90Old','r90Slow','r90SlowD','r90OldD'].forEach(id=>$(id).textContent='—');
     $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US'); if(window.lucide) lucide.createIcons(); return; }
-  const maxD=Math.max(...rows.map(r=>r.dias),1);
-  const dfmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const maxV=Math.max(...rows.map(r=>r.vejez),1);
   body.innerHTML=rows.map(r=>{
-    const w=Math.round(r.dias/maxD*100);
+    const w=Math.round(r.vejez/maxV*100); const vc=vejColor(r.vejez);
     return `<tr><td class="c-cliente">${esc(r.region)}</td>`
-      +`<td class="c-num" style="font-weight:700">${dfmt(r.dias)} d</td>`
-      +`<td><div style="background:var(--surface3);border-radius:4px;height:12px;overflow:hidden"><div style="width:${w}%;height:100%;background:var(--fc-navy);opacity:.75"></div></div></td>`
-      +`<td class="c-num">${kgFmt(r.kg)} kg</td>`
-      +`<td class="c-num">${(r.share*100).toFixed(1)}%</td>`
-      +`<td class="c-num">${r.n}</td></tr>`;
+      +`<td class="c-num">${r.hasRot?dfmt1(r.rotBase)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td class="c-num"${r.penalty>0?' style="color:#a8351c;font-weight:700"':' style="color:var(--text3)"'}>${r.penalty>0?('+'+r.penalty+' d · '+r.oldCount+' lote'+(r.oldCount!==1?'s':'')):'—'}</td>`
+      +`<td class="c-num" style="font-weight:700">${r.hasRot?dfmt1(r.rotAdj)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td class="c-num" style="font-weight:700;color:${vc}">${r.hasVejez?dfmt1(r.vejez)+' d':'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td><div style="background:var(--surface3);border-radius:4px;height:12px;overflow:hidden"><div style="width:${w}%;height:100%;background:${vc};opacity:.8"></div></div></td>`
+      +`<td class="c-num">${r.availKg>0?kgFmt(r.availKg)+' kg':'—'}</td></tr>`;
   }).join('');
-  const slow=rows.reduce((a,b)=>b.dias>a.dias?b:a, rows[0]);
-  $('r90Global').textContent=dfmt(globalDias)+' d';
-  $('r90Kg').textContent=kgFmt(totKg)+' kg';
-  $('r90Regs').textContent=rows.length;
-  $('r90Slow').textContent=slow.region; $('r90SlowD').textContent=dfmt(slow.dias)+' días';
+  const worst=rows.reduce((a,b)=>b.vejez>a.vejez?b:a, rows[0]);
+  $('r90Vejez').textContent=dfmt1(M.globalVejez)+' d'; $('r90Vejez').style.color=vejColor(M.globalVejez);
+  $('r90Global').textContent=dfmt1(M.rotGlobalAdj)+' d';
+  $('r90Old').textContent=M.totOld; $('r90OldD').textContent='disponibles · +'+M.totPenalty+' d';
+  $('r90Slow').textContent=worst.region; $('r90SlowD').textContent=dfmt1(worst.vejez)+' días';
   $('r90Ts').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
 }
 function exportRotacion90Excel(){
-  if(!rotLoaded){ alert('La rotación aún se está cargando.'); return; }
-  const {rows, totKg, globalDias}=rot90Rows();
-  const head=['Región','Días ponderados','Total kg','Participación','Líneas'];
-  const aoa=[head].concat(rows.map(r=>[r.region, +r.dias.toFixed(2), Math.round(r.kg), r.share, r.n]))
-    .concat([['TOTAL', +globalDias.toFixed(2), Math.round(totKg), 1, rows.reduce((a,r)=>a+r.n,0)]]);
+  if(!rotLoaded && !vejezLoaded){ alert('Aún se está cargando.'); return; }
+  const M=rotVejezRows();
+  const head=['Región','Rot. base','Penalidad','Lotes >150d','Rot. ajustada','Vejez pond.','kg disp.'];
+  const aoa=[head].concat(M.rows.map(r=>[r.region, +r.rotBase.toFixed(2), r.penalty, r.oldCount, +r.rotAdj.toFixed(2), +r.vejez.toFixed(2), Math.round(r.availKg)]))
+    .concat([['GLOBAL', +M.rotGlobalBase.toFixed(2), M.totPenalty, M.totOld, +M.rotGlobalAdj.toFixed(2), +M.globalVejez.toFixed(2), '']]);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:16},{wch:14},{wch:13},{wch:8}];
-  for(let i=1;i<aoa.length;i++){ const pc=ws[XLSX.utils.encode_cell({r:i,c:3})]; if(pc&&typeof pc.v==='number'){ pc.t='n'; pc.z='0.0%'; } }
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion 90d');
-  XLSX.writeFile(wb,`Forest_Rotacion90d_${new Date().toISOString().slice(0,10)}.xlsx`);
+  ws['!cols']=[{wch:14},{wch:11},{wch:11},{wch:11},{wch:13},{wch:12},{wch:12}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion y Vejez');
+  XLSX.writeFile(wb,`Forest_RotacionVejez_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════
