@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -959,7 +960,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
           <button id="gaCom" class="ger-agg-btn active" onclick="setGerAgg('comercial')">Por comercial</button>
           <button id="gaReg" class="ger-agg-btn" onclick="setGerAgg('region')">Por región</button>
         </div>
-        <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel" onclick="exportGerenciaPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen</button>
+        <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:8px;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
         <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twGer">
@@ -3980,6 +3982,79 @@ function renderPorVencer(){
       +`<td class="c-num">${money(r.saldoUsd)}</td></tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px">No hay facturas por vencer en los próximos 10 días.</td></tr>';
   $('pvTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+
+// ── Exportar la vista de Gerencia como imagen PNG (para pegar en Google Slides) ──
+function exportGerenciaPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
+  const {rows, tot} = gerenciaRows(gerAgg);
+  const {cobS, cobM} = gerCobrado();
+  const porQ = gerAgg==='region' ? 'región' : 'comercial';
+  const slug = gerAgg==='region' ? 'region' : 'comercial';
+  const col1 = gerAgg==='region' ? 'Región' : 'Sales rep';
+  const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
+  const pctTot = tot.ab?Math.round(tot.ve/tot.ab*100):0;
+  const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+
+  const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
+  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const rowHtml=(r,isTot)=>{ const hot=pct(r)>=60;
+    const bg=isTot?'#E9C400':'#fff'; const c1col=isTot?'#1B203D':'#1B203D';
+    const nameW=isTot?'800':'700';
+    return `<tr style="background:${bg}">`
+      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${nameW};color:${c1col};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.c)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'}">${money(r.ab)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${isTot?'#1B203D':'#9a9ea9'}">${money(r.co)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'};color:${hot?'#a8351c':'#1f2430'}">${money(r.ve)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:700;color:${hot?'#a8351c':'#1f2430'}">${pct(r)}%</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b1)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b2)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b3)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b4)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobS>0?'#2c7a2c':'#9a9ea9'};font-weight:${r.cobS>0?'700':'400'}">${money(r.cobS)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobM>0?'#2c7a2c':'#9a9ea9'}">${money(r.cobM)}</td>`
+      +`</tr>`;
+  };
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
+    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1060px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Cartera por ${porQ}</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cuentas por cobrar en USD · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Management</div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      ${kpi('Open AR',money(tot.ab),'USD','#1B203D')}
+      ${kpi('Overdue',money(tot.ve),pctTot+'% of AR','#a8351c')}
+      ${kpi('Cobrado esta semana',money(cobS),'collected','#2c7a2c')}
+      ${kpi('Cobrado este mes',money(cobM),'collected','#2c7a2c')}
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+      <thead><tr>
+        <th style="${th};text-align:left">${col1}</th><th style="${th}">Open</th><th style="${th}">Current</th>
+        <th style="${th}">Overdue</th><th style="${th}">%O</th>
+        <th style="${th}">1–30</th><th style="${th}">31–60</th><th style="${th}">61–90</th><th style="${th}">90+</th>
+        <th style="${th}">Cob. sem</th><th style="${th}">Cob. mes</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>rowHtml(r,false)).join('')}${rowHtml(tot,true)}</tbody>
+    </table>
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Cartera_${slug}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
 }
 
 // ── Exportar la vista de Gerencia (cartera por comercial) ──
