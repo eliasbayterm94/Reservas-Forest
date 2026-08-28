@@ -185,6 +185,9 @@ td:last-child{border-right:none}
 .ger-subtabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
 .ger-subtab{appearance:none;border:0;background:none;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ger-subtab.active{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
+.ger-agg{display:inline-flex;margin-left:12px;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+.ger-agg-btn{appearance:none;border:0;background:var(--surface);color:var(--text2);font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer}
+.ger-agg-btn.active{background:#1B203D;color:#fff}
 #gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 .sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .sit-inc{background:#fde5e0;color:#a8351c}
@@ -951,14 +954,18 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <div class="rcard g"><div class="rc-l">Collected this month</div><div class="rc-n" id="gCobM">—</div><div class="rc-s">collected</div></div>
       </div>
       <div class="ger-toolbar">
-        <span class="res-count">Cartera por comercial (USD)</span>
+        <span class="res-count" id="gerAggLbl">Cartera por comercial (USD)</span>
+        <div class="ger-agg">
+          <button id="gaCom" class="ger-agg-btn active" onclick="setGerAgg('comercial')">Por comercial</button>
+          <button id="gaReg" class="ger-agg-btn" onclick="setGerAgg('region')">Por región</button>
+        </div>
         <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
         <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twGer">
         <table id="gerTable">
           <thead><tr>
-            <th>Sales rep</th><th style="text-align:right">Open</th><th style="text-align:right">Current</th>
+            <th id="gerCol1">Sales rep</th><th style="text-align:right">Open</th><th style="text-align:right">Current</th>
             <th style="text-align:right">Overdue</th><th style="text-align:right">%O</th>
             <th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
             <th style="text-align:right">61–90</th><th style="text-align:right">90+</th>
@@ -3151,6 +3158,13 @@ function gerUnlock(){
   else { $('gerErr').textContent='Incorrect code'; $('gerCode').select(); }
 }
 let gerSubActive = 'cartera';
+let gerAgg = 'comercial';   // vista de la Cartera: 'comercial' | 'region'
+function setGerAgg(v){
+  gerAgg = v;
+  $('gaCom').classList.toggle('active', v==='comercial');
+  $('gaReg').classList.toggle('active', v==='region');
+  renderGerencia();
+}
 function mostrarGerencia(){
   $('gerLock').classList.add('hidden'); $('gerContent').classList.remove('hidden');
   gerSub(gerSubActive);
@@ -3179,21 +3193,24 @@ function gerSub(which){
   else if(which==='porvencer') renderPorVencer();
   else renderGerencia();
 }
-// Agrega la cartera por comercial (mismo cálculo para pantalla y exports)
-function gerenciaRows(){
+// Agrega la cartera por comercial o por región (mismo cálculo para pantalla y exports)
+function gerenciaRows(by){
+  by = by || 'comercial';
   const rep={};
   const nuevo=()=>({ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0,cobS:0,cobM:0});
-  cartData.forEach(o=>{ const c=o.comercial||'Unassigned'; const g=rep[c]=rep[c]||nuevo();
+  cartData.forEach(o=>{ const c = by==='region' ? (normRegion(o.region)||'Sin región') : (o.comercial||'Unassigned');
+    const g=rep[c]=rep[c]||nuevo();
     const s=o.saldoUsd; g.ab+=s;
     if(o.days>0){ g.ve+=s; if(o.days<=30)g.b1+=s; else if(o.days<=60)g.b2+=s; else if(o.days<=90)g.b3+=s; else g.b4+=s; }
     else g.co+=s;
   });
-  // Cobrado por comercial (semana/mes) desde las cerradas
+  // Cobrado (semana/mes) desde las cerradas — agrupado igual que la vista
   const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
   const moStart=new Date(now.getFullYear(),now.getMonth(),1);
   cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return;
     const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
-    const c=normComercial(r.comercial||'Unassigned'); const g=rep[c]=rep[c]||nuevo();
+    const c = by==='region' ? (normRegion(r.region)||'Sin región') : normComercial(r.comercial||'Unassigned');
+    const g=rep[c]=rep[c]||nuevo();
     if(d>=moStart){ g.cobM+=m; if(d>=wk) g.cobS+=m; }
   });
   const rows=Object.keys(rep).map(c=>Object.assign({c},rep[c])).sort((a,b)=>b.ab-a.ab);
@@ -3208,7 +3225,9 @@ function gerCobrado(){   // cobrado esta semana / este mes (desde cerradas)
   return {cobS, cobM};
 }
 function renderGerencia(){
-  const {rows, tot} = gerenciaRows();
+  const {rows, tot} = gerenciaRows(gerAgg);
+  $('gerCol1').textContent = gerAgg==='region' ? 'Región' : 'Sales rep';
+  $('gerAggLbl').textContent = 'Cartera por '+(gerAgg==='region'?'región':'comercial')+' (USD)';
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const rowHtml=(r,isTot)=>{ const hot=pct(r)>=60;
     return `<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
@@ -3966,7 +3985,8 @@ function renderPorVencer(){
 // ── Exportar la vista de Gerencia (cartera por comercial) ──
 function exportGerenciaExcel(){
   if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
-  const {rows, tot} = gerenciaRows();
+  const {rows, tot} = gerenciaRows(gerAgg);
+  const col1 = gerAgg==='region' ? 'Región' : 'Sales rep';
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const R = r => [r.c, Math.round(r.ab), Math.round(r.co), Math.round(r.ve), pct(r)/100, Math.round(r.b1), Math.round(r.b2), Math.round(r.b3), Math.round(r.b4), Math.round(r.cobS), Math.round(r.cobM)];
 
@@ -3976,7 +3996,7 @@ function exportGerenciaExcel(){
   const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:NAVY}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB()}});
   const cell=(v,ev,bold,al,pctFmt)=>{ const o={v,t:typeof v==='number'?'n':'s',s:{fill:{patternType:'solid',fgColor:{rgb:ev?ALT:WHITE}},font:{sz:10,name:'Calibri',bold:!!bold,color:{rgb:INK}},alignment:{horizontal:al||'right',vertical:'center'},border:allB()}}; if(typeof v==='number') o.z = pctFmt?'0%':'#,##0'; return o; };
 
-  const headers=['Sales rep','Open','Current','Overdue','%O','1-30','31-60','61-90','90+','Cobrado sem','Cobrado mes'];
+  const headers=[col1,'Open','Current','Overdue','%O','1-30','31-60','61-90','90+','Cobrado sem','Cobrado mes'];
   const ws={}; headers.forEach((h,c)=> ws[XLSX.utils.encode_cell({r:0,c})]=hdr(h));
   let rn=1;
   rows.forEach((r,i)=>{ const ev=i%2===1, a=R(r); a.forEach((v,c)=> ws[XLSX.utils.encode_cell({r:rn,c})]=cell(v,ev,false,c===0?'left':'right',c===4)); rn++; });
@@ -3996,7 +4016,8 @@ function exportGerenciaExcel(){
 function exportGerenciaPDF(){
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('The PDF generator is still loading, try again in a moment.'); return; }
   if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
-  const {rows, tot} = gerenciaRows();
+  const {rows, tot} = gerenciaRows(gerAgg);
+  const col1 = gerAgg==='region' ? 'Región' : 'Sales rep';
   const {cobS, cobM} = gerCobrado();
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const { jsPDF } = window.jspdf;
@@ -4016,7 +4037,7 @@ function exportGerenciaPDF(){
   const body = rows.map(r=>[ r.c, money(r.ab), money(r.co), money(r.ve), pct(r)+'%', money(r.b1), money(r.b2), money(r.b3), money(r.b4), money(r.cobS), money(r.cobM) ]);
   doc.autoTable({
     startY: 80,
-    head: [['Sales rep','Open','Current','Overdue','%O','1-30','31-60','61-90','90+','Cobrado sem','Cobrado mes']],
+    head: [[col1,'Open','Current','Overdue','%O','1-30','31-60','61-90','90+','Cobrado sem','Cobrado mes']],
     body,
     foot: [['TOTAL', money(tot.ab), money(tot.co), money(tot.ve), pctTot+'%', money(tot.b1), money(tot.b2), money(tot.b3), money(tot.b4), money(tot.cobS), money(tot.cobM)]],
     styles:{fontSize:8.5, cellPadding:4, halign:'right', lineColor:[221,217,207], lineWidth:.5},
