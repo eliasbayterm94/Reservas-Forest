@@ -446,8 +446,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .btn-top.btn-refresh #refreshIcon{font-size:15px}
   .status-pill{font-size:9px;padding:0 8px}
 
-  .tabs{padding:0 6px;gap:0}
-  .tab{padding:0 12px;font-size:10px;height:42px;gap:6px}
+  .tabs{padding:0 6px;gap:0;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:0 12px;font-size:10px;height:42px;gap:6px;flex:0 0 auto;white-space:nowrap}
 
   .filterbar{padding:8px 10px;gap:6px}
   .fi{flex:1 1 calc(50% - 6px);min-width:0}
@@ -3137,6 +3138,8 @@ function switchTab(tab){
   $('tabGerencia').classList.toggle('active', isG);
   $('tabRepcom').classList.toggle('active', isRC);
   $('tabRot90').classList.toggle('active', isR90);
+  // En móvil, desliza la pestaña activa a la vista (la barra tiene scroll horizontal)
+  try{ const at=document.querySelector('.tab.active'); if(at&&at.scrollIntoView) at.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){}
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
   DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : `Posiciones activas · ${DATA.length} registros`;
