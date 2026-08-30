@@ -474,6 +474,25 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .pagination>span{display:none}          /* deja los botones de página */
   .pg-size{margin-left:auto}
   td{font-size:12px}
+
+  /* ── Sub-menú de Management: scroll horizontal (igual que las tabs) ── */
+  .gercontent,.gerlock{padding:0 4px}
+  .ger-subtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0}
+  .ger-subtabs::-webkit-scrollbar{display:none}
+  .ger-subtab{flex:0 0 auto;white-space:nowrap;padding:9px 13px;font-size:12.5px}
+
+  /* ── Barras de acción de Management: que nada se salga a la derecha ── */
+  .ger-toolbar{gap:8px 6px}
+  .ger-toolbar .res-count{flex-basis:100%}          /* la etiqueta ocupa su propia fila */
+  .ger-toolbar .btn-excel{margin-left:0 !important} /* evita que se empujen fuera de pantalla */
+  .ger-toolbar .ger-agg{margin-left:0 !important}
+  .ger-toolbar .ger-sel{margin-left:0 !important;flex:1 1 100%;max-width:none;width:100%}
+
+  /* ── Tablas anchas: scroll horizontal suave dentro de su contenedor ── */
+  .table-wrap{-webkit-overflow-scrolling:touch}
+
+  /* Cards de brackets (rotación/lotes): carril deslizable como el resumen */
+  #rlCards.resumen .rcard{flex:0 0 150px;min-width:150px}
 }
 </style>
 </head>
@@ -3183,6 +3202,8 @@ function gerSub(which){
   $('gsCashflow').classList.toggle('active', which==='cashflow');
   $('gsComisiones').classList.toggle('active', which==='comisiones');
   $('gsPorVencer').classList.toggle('active', which==='porvencer');
+  // En móvil, desliza la sub-pestaña activa a la vista (la barra tiene scroll horizontal)
+  try{ const at=document.querySelector('.ger-subtab.active'); if(at&&at.scrollIntoView) at.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){}
   $('gerCarteraWrap').style.display     = which==='cartera'     ? '' : 'none';
   $('gerRotacionWrap').style.display    = which==='rotacion'    ? '' : 'none';
   $('gerCompromisosWrap').style.display = which==='compromisos' ? '' : 'none';
