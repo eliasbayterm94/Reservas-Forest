@@ -189,7 +189,7 @@ td:last-child{border-right:none}
 .ger-agg{display:inline-flex;margin-left:12px;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
 .ger-agg-btn{appearance:none;border:0;background:var(--surface);color:var(--text2);font-size:12px;font-weight:700;padding:5px 12px;cursor:pointer}
 .ger-agg-btn.active{background:#1B203D;color:#fff}
-#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerRecaudoWrap,#gerPorVencerWrap,#gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{flex:1;display:flex;flex-direction:column;min-height:0}
 .sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .sit-inc{background:#fde5e0;color:#a8351c}
 .sit-hoy{background:#fff0d6;color:#b86000}
@@ -486,7 +486,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
        overflow-x:hidden explícito evita que el contenedor se vuelva un scroll
        horizontal que le robe el swipe a las tablas anchas (Cash Flow). ── */
   .gercontent{overflow:hidden}
-  #gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,
+  #gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerRecaudoWrap,#gerPorVencerWrap,
   #gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
   /* Las tablas fluyen a su alto natural; SOLO hacen scroll horizontal propio */
   .gercontent .table-wrap{flex:none;contain:layout paint;max-height:none !important;overflow-x:auto;overflow-y:hidden}
@@ -971,6 +971,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <button class="ger-subtab" id="gsRotacion" onclick="gerSub('rotacion')">Rotación</button>
       <button class="ger-subtab" id="gsCompromisos" onclick="gerSub('compromisos')">Compromisos</button>
       <button class="ger-subtab" id="gsMetas" onclick="gerSub('metas')">Metas de cobro</button>
+      <button class="ger-subtab" id="gsRecaudo" onclick="gerSub('recaudo')">Recaudo</button>
       <button class="ger-subtab" id="gsCashflow" onclick="gerSub('cashflow')">Cash Flow</button>
       <button class="ger-subtab" id="gsComisiones" onclick="gerSub('comisiones')">Comisiones</button>
       <button class="ger-subtab" id="gsPorVencer" onclick="gerSub('porvencer')">Por vencer (10d)</button>
@@ -1098,8 +1099,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </div>
 
       <div class="ger-toolbar" style="margin-top:2px">
-        <span class="res-count">Detalle del recaudo de la <b>semana pasada</b> — por región y bracket (de dónde vino)</span>
-        <button class="btn-excel" onclick="exportRecaudoSemPasadaPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen recaudo (sem. pasada)</button>
+        <span class="res-count">¿De dónde vino el recaudo? Míralo por comercial/región y semana/mes en la pestaña <b>Recaudo</b>.</span>
+        <button class="btn-excel" onclick="gerSub('recaudo')" style="margin-left:auto"><i data-lucide="pie-chart"></i> Ir a Recaudo</button>
       </div>
 
       <div class="meta-form">
@@ -1137,6 +1138,38 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="footer">
         <span>Cobrado por bracket se acumula desde que se activó el tracking (no retroactivo). Cada celda de bracket = cobrado vs meta.</span>
         <span style="margin-left:auto;color:var(--text3)" id="mTs">—</span>
+      </div>
+    </div>
+
+    <!-- ─ Sub-vista: RECAUDO (cobrado por bracket, por comercial o región, semana/mes) ─ -->
+    <div id="gerRecaudoWrap" class="hidden">
+      <div class="resumen" id="recKpis">
+        <div class="rcard g"><div class="rc-l">Recaudado</div><div class="rc-n" id="recTot">—</div><div class="rc-s" id="recTotS">—</div></div>
+        <div class="rcard b0"><div class="rc-l">De cartera al día</div><div class="rc-n" id="recCur">—</div><div class="rc-s">current (por vencer)</div></div>
+        <div class="rcard b60"><div class="rc-l">De cartera vencida</div><div class="rc-n" id="recVenc">—</div><div class="rc-s" id="recVencS">—</div></div>
+        <div class="rcard b90"><div class="rc-l">90+ días</div><div class="rc-n" id="rec90">—</div><div class="rc-s">lo más viejo cobrado</div></div>
+      </div>
+      <div class="ger-toolbar">
+        <span class="res-count" id="recLbl">Cobrado por bracket · semana pasada · por comercial</span>
+        <div class="ger-agg" style="margin-left:12px">
+          <button id="raCom" class="ger-agg-btn active" onclick="setRecAgg('comercial')">Por comercial</button>
+          <button id="raReg" class="ger-agg-btn" onclick="setRecAgg('region')">Por región</button>
+        </div>
+        <div class="ger-agg" style="margin-left:8px">
+          <button id="rpSem" class="ger-agg-btn active" onclick="setRecPeriod('semana')">Semana pasada</button>
+          <button id="rpMes" class="ger-agg-btn" onclick="setRecPeriod('mes')">Este mes</button>
+        </div>
+        <button class="btn-excel" onclick="exportRecaudoPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen</button>
+      </div>
+      <div class="table-wrap" id="twRec">
+        <table id="recTable">
+          <thead id="recHead"></thead>
+          <tbody id="recBody"></tbody>
+        </table>
+      </div>
+      <div class="footer">
+        <span>Recaudo = cobros cerrados en el periodo. El bracket es la antigüedad de la factura al momento de cobrarla (mismo dato que Metas). S/B = sin bracket registrado.</span>
+        <span style="margin-left:auto;color:var(--text3)" id="recTs">—</span>
       </div>
     </div>
 
@@ -2727,7 +2760,7 @@ async function cargarSeguimiento(){
       forecastsData = j.forecasts || [];
       if(cartLoaded){ mergeSeg(); aplicarCartera(); }
       if(activeTab==='historial') renderHistorial();
-      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='porvencer') renderPorVencer(); if(gerSubActive==='compromisos') renderCompromisos(); if(gerSubActive==='cashflow') renderCashflow(); }
+      if(activeTab==='gerencia' && sessionStorage.getItem('gerOK')==='1'){ renderGerencia(); if(gerSubActive==='metas') renderMetas(); if(gerSubActive==='recaudo') renderRecaudo(); if(gerSubActive==='porvencer') renderPorVencer(); if(gerSubActive==='compromisos') renderCompromisos(); if(gerSubActive==='cashflow') renderCashflow(); }
     }
   }catch(err){ console.warn('Seguimiento no disponible:', err); }
 }
@@ -3214,6 +3247,7 @@ function gerSub(which){
   $('gsRotacion').classList.toggle('active', which==='rotacion');
   $('gsCompromisos').classList.toggle('active', which==='compromisos');
   $('gsMetas').classList.toggle('active', which==='metas');
+  $('gsRecaudo').classList.toggle('active', which==='recaudo');
   $('gsCashflow').classList.toggle('active', which==='cashflow');
   $('gsComisiones').classList.toggle('active', which==='comisiones');
   $('gsPorVencer').classList.toggle('active', which==='porvencer');
@@ -3223,10 +3257,12 @@ function gerSub(which){
   $('gerRotacionWrap').style.display    = which==='rotacion'    ? '' : 'none';
   $('gerCompromisosWrap').style.display = which==='compromisos' ? '' : 'none';
   $('gerMetasWrap').style.display       = which==='metas'       ? '' : 'none';
+  $('gerRecaudoWrap').style.display     = which==='recaudo'     ? '' : 'none';
   $('gerCashflowWrap').style.display    = which==='cashflow'    ? '' : 'none';
   $('gerComisionesWrap').style.display  = which==='comisiones'  ? '' : 'none';
   $('gerPorVencerWrap').style.display   = which==='porvencer'   ? '' : 'none';
   if(which==='rotacion') renderRotacion();
+  else if(which==='recaudo') renderRecaudo();
   else if(which==='compromisos') renderCompromisos();
   else if(which==='metas') renderMetas();
   else if(which==='cashflow') renderCashflow();
@@ -4109,31 +4145,81 @@ function exportGerenciaPNG(){
   }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
 }
 
-// Recaudo de la SEMANA PASADA (lun–dom anterior) desglosado por región y bracket.
-// El bracket sale de diasAlPagar (los días de la factura al momento de cobrarla), igual que en Metas.
-function recaudoSemPasada(){
+// ═══════════════════════════════════════════════════
+// RECAUDO — cobrado por bracket, agrupado por comercial o región, en semana o mes
+// ═══════════════════════════════════════════════════
+let recAgg = 'comercial';   // 'comercial' | 'region'
+let recPeriod = 'semana';   // 'semana' (semana pasada lun–dom) | 'mes' (mes actual)
+function setRecAgg(v){ recAgg=v; $('raCom').classList.toggle('active',v==='comercial'); $('raReg').classList.toggle('active',v==='region'); renderRecaudo(); }
+function setRecPeriod(v){ recPeriod=v; $('rpSem').classList.toggle('active',v==='semana'); $('rpMes').classList.toggle('active',v==='mes'); renderRecaudo(); }
+// Ventana de fechas [desde, hasta) y etiqueta legible según el periodo.
+function recVentana(period){
   const now=new Date(), mon=new Date(now); mon.setDate(mon.getDate()-((mon.getDay()+6)%7)); mon.setHours(0,0,0,0);
-  const prevMon=new Date(mon); prevMon.setDate(prevMon.getDate()-7);   // lunes semana pasada
+  const _rng=d=>d.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+  if(period==='mes'){
+    const desde=new Date(now.getFullYear(),now.getMonth(),1);
+    const hasta=new Date(now.getFullYear(),now.getMonth()+1,1);
+    return {desde, hasta, rango: desde.toLocaleDateString('es-CO',{month:'long',year:'numeric'}), corto:'este mes'};
+  }
+  const desde=new Date(mon); desde.setDate(desde.getDate()-7);   // lunes semana pasada
+  const hasta=new Date(mon);                                     // lunes de esta semana (exclusivo)
+  const sun=new Date(mon.getTime()-86400000);
+  return {desde, hasta, rango:`${_rng(desde)}–${_rng(sun)} de ${sun.getFullYear()}`, corto:'semana pasada'};
+}
+// Recaudo desglosado por bracket, agrupado por comercial o región, en la ventana dada.
+// El bracket sale de diasAlPagar (los días de la factura al cobrarla), igual que en Metas.
+function recaudoRows(by, period){
+  by = by || 'comercial'; period = period || 'semana';
+  const {desde, hasta, rango, corto} = recVentana(period);
   const nuevo=()=>({current:0,b1:0,b2:0,b3:0,b4:0,unk:0,total:0,n:0});
-  const byReg={};
+  const grp={};
   cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d)) return;
-    if(!(d>=prevMon && d<mon)) return;                       // solo la semana pasada
+    if(!(d>=desde && d<hasta)) return;
     const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(!m) return;
-    const reg=normRegion(r.region)||'Sin región'; const g=byReg[reg]=byReg[reg]||nuevo();
+    const k = by==='region' ? (normRegion(r.region)||'Sin región') : normComercial(r.comercial||'Unassigned');
+    const g=grp[k]=grp[k]||nuevo();
     const bk=bracketKey(r.diasAlPagar)||'unk'; g[bk]+=m; g.total+=m; g.n++;
   });
-  const rows=Object.keys(byReg).map(reg=>Object.assign({reg},byReg[reg])).sort((a,b)=>b.total-a.total);
-  const tot=rows.reduce((t,r)=>{['current','b1','b2','b3','b4','unk','total','n'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{reg:'TOTAL'});
-  const prevSun=new Date(mon.getTime()-86400000);
-  return {rows, tot, prevMon, prevSun};
+  const rows=Object.keys(grp).map(k=>Object.assign({k},grp[k])).sort((a,b)=>b.total-a.total);
+  const tot=rows.reduce((t,r)=>{['current','b1','b2','b3','b4','unk','total','n'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{k:'TOTAL'});
+  return {rows, tot, rango, corto, by, period};
 }
-// ── Exportar el recaudo de la semana pasada por región y bracket como imagen PNG ──
-function exportRecaudoSemPasadaPNG(){
+// Vista en pantalla del Recaudo (respeta ambos toggles).
+function renderRecaudo(){
+  const {rows, tot, rango, corto, by} = recaudoRows(recAgg, recPeriod);
+  const showUnk = tot.unk>0;
+  const vencida = tot.b1+tot.b2+tot.b3+tot.b4;
+  const pctVenc = tot.total? Math.round(vencida/tot.total*100):0;
+  const col1 = by==='region' ? 'Región' : 'Sales rep';
+  $('recLbl').textContent = `Cobrado por bracket · ${corto} (${rango}) · por ${by==='region'?'región':'comercial'}`;
+  $('recTot').textContent = money(tot.total); $('recTotS').textContent = (tot.n||0)+' cobros · '+corto;
+  $('recCur').textContent = money(tot.current);
+  $('recVenc').textContent = money(vencida); $('recVencS').textContent = pctVenc+'% del recaudo';
+  $('rec90').textContent = money(tot.b4);
+  const money2=(v,accent)=>`<td class="c-num"${accent?` style="color:${accent};font-weight:700"`:(v>0?'':' style="color:var(--text3)"')}>${money(v)}</td>`;
+  const rowHtml=(r,isTot)=>`<tr${isTot?' class="ger-tot"':''}>`
+    +`<td class="${isTot?'':'c-cliente'}">${esc(r.k)}</td>`
+    +money2(r.current, r.current>0?'#2c7a2c':null)
+    +money2(r.b1)+money2(r.b2)+money2(r.b3)
+    +money2(r.b4, r.b4>0?'#a8351c':null)
+    +(showUnk?money2(r.unk):'')
+    +`<td class="c-num" style="font-weight:800">${money(r.total)}</td></tr>`;
+  $('recHead').innerHTML = `<tr><th id="recCol1">${col1}</th>`
+    +`<th style="text-align:right">Current</th><th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>`
+    +`<th style="text-align:right">61–90</th><th style="text-align:right">90+</th>${showUnk?'<th style="text-align:right">S/B</th>':''}`
+    +`<th style="text-align:right">Total</th></tr>`;
+  $('recBody').innerHTML = rows.length ? rows.map(r=>rowHtml(r,false)).join('')+rowHtml(tot,true)
+    : `<tr><td colspan="${showUnk?8:7}" style="text-align:center;color:var(--text3);padding:22px">No hay cobros registrados en ${corto}.</td></tr>`;
+  $('recTs').textContent='Updated: '+new Date().toLocaleString('en-US');
+}
+// ── Exportar el recaudo (respeta ambos toggles) como imagen PNG ──
+function exportRecaudoPNG(){
   if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
   if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
-  const {rows, tot, prevMon, prevSun} = recaudoSemPasada();
-  const _rng=d=>d.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
-  const rango=`${_rng(prevMon)}–${_rng(prevSun)} de ${prevSun.getFullYear()}`;
+  const {rows, tot, rango, corto, by} = recaudoRows(recAgg, recPeriod);
+  const col1 = by==='region' ? 'Región' : 'Sales rep';
+  const grpTxt = by==='region' ? 'región' : 'comercial';
+  const slug = `${recPeriod==='mes'?'Mes':'SemPasada'}_${by==='region'?'region':'comercial'}`;
   const showUnk = tot.unk>0;
   const vencida = tot.b1+tot.b2+tot.b3+tot.b4;
   const pctVenc = tot.total? Math.round(vencida/tot.total*100):0;
@@ -4142,7 +4228,7 @@ function exportRecaudoSemPasadaPNG(){
   const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
   const cell=(v,isTot,accent)=>`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'};color:${accent||(v>0?'#1f2430':'#c2c2bb')}">${money(v)}</td>`;
   const rowHtml=(r,isTot)=>`<tr style="background:${isTot?'#E9C400':'#fff'}">`
-    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${isTot?'800':'700'};color:#1B203D;border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.reg)}</td>`
+    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${isTot?'800':'700'};color:#1B203D;border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.k)}</td>`
     +cell(r.current,isTot,r.current>0?'#2c7a2c':null)
     +cell(r.b1,isTot)+cell(r.b2,isTot)+cell(r.b3,isTot)
     +cell(r.b4,isTot,r.b4>0?'#a8351c':null)
@@ -4155,24 +4241,24 @@ function exportRecaudoSemPasadaPNG(){
 
   const box=document.createElement('div');
   box.style.cssText='position:fixed;left:-10000px;top:0;width:1080px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
-  const emptyRow=`<tr><td colspan="${showUnk?8:7}" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">No hay cobros registrados en la semana pasada.</td></tr>`;
+  const emptyRow=`<tr><td colspan="${showUnk?8:7}" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">No hay cobros registrados en ${corto}.</td></tr>`;
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
       <div>
-        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Recaudo semana pasada</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">De dónde vino el cobro · por región y bracket · ${rango}</div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Recaudo ${corto}</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">De dónde vino el cobro · por ${grpTxt} y bracket · ${rango}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Metas de cobro</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Recaudo</div>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:16px">
-      ${kpi('Recaudado sem. pasada',money(tot.total),(tot.n||0)+' cobros','#2c7a2c')}
+      ${kpi('Recaudado '+corto,money(tot.total),(tot.n||0)+' cobros','#2c7a2c')}
       ${kpi('De cartera al día',money(tot.current),'current (por vencer)','#1B203D')}
       ${kpi('De cartera vencida',money(vencida),pctVenc+'% del recaudo','#a8351c')}
       ${kpi('90+ días',money(tot.b4),'lo más viejo cobrado','#8a2414')}
     </div>
     <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
       <thead><tr>
-        <th style="${th};text-align:left">Región</th>
+        <th style="${th};text-align:left">${col1}</th>
         <th style="${th}">Current</th><th style="${th}">1–30</th><th style="${th}">31–60</th>
         <th style="${th}">61–90</th><th style="${th}">90+</th>${showUnk?`<th style="${th}">S/B</th>`:''}
         <th style="${th}">Total</th>
@@ -4184,7 +4270,7 @@ function exportRecaudoSemPasadaPNG(){
   html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
-    a.download=`Forest_Recaudo_SemPasada_${new Date().toISOString().slice(0,10)}.png`;
+    a.download=`Forest_Recaudo_${slug}_${new Date().toISOString().slice(0,10)}.png`;
     a.href=canvas.toDataURL('image/png');
     a.click();
   }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
