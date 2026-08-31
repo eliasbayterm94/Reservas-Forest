@@ -482,12 +482,14 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .ger-subtab{flex:0 0 auto;white-space:nowrap;padding:9px 13px;font-size:12.5px}
 
   /* ── El sub-menú queda fijo arriba; el scroll vertical vive en cada sub-vista,
-       así en formularios largos (Metas) se puede bajar hasta el botón Guardar. ── */
+       así en formularios largos (Metas) se puede bajar hasta el botón Guardar.
+       overflow-x:hidden explícito evita que el contenedor se vuelva un scroll
+       horizontal que le robe el swipe a las tablas anchas (Cash Flow). ── */
   .gercontent{overflow:hidden}
   #gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,
-  #gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{overflow-y:auto;-webkit-overflow-scrolling:touch}
-  /* Las tablas fluyen a su alto natural; sólo hacen scroll horizontal */
-  .gercontent .table-wrap{flex:none;contain:layout paint;max-height:none;overflow-x:auto;overflow-y:hidden}
+  #gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* Las tablas fluyen a su alto natural; SOLO hacen scroll horizontal propio */
+  .gercontent .table-wrap{flex:none;contain:layout paint;max-height:none !important;overflow-x:auto;overflow-y:hidden}
 
   /* ── Barras de acción de Management: que nada se salga a la derecha ── */
   .ger-toolbar{gap:8px 6px}
