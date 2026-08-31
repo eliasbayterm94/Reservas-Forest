@@ -3233,32 +3233,37 @@ function gerSub(which){
 function gerenciaRows(by){
   by = by || 'comercial';
   const rep={};
-  const nuevo=()=>({ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0,cobS:0,cobM:0});
+  const nuevo=()=>({ab:0,ve:0,co:0,b1:0,b2:0,b3:0,b4:0,cobS:0,cobSPrev:0,cobM:0});
   cartData.forEach(o=>{ const c = by==='region' ? (normRegion(o.region)||'Sin región') : (o.comercial||'Unassigned');
     const g=rep[c]=rep[c]||nuevo();
     const s=o.saldoUsd; g.ab+=s;
     if(o.days>0){ g.ve+=s; if(o.days<=30)g.b1+=s; else if(o.days<=60)g.b2+=s; else if(o.days<=90)g.b3+=s; else g.b4+=s; }
     else g.co+=s;
   });
-  // Cobrado (semana/mes) desde las cerradas — agrupado igual que la vista
+  // Cobrado (semana actual / semana pasada / mes) desde las cerradas — agrupado igual que la vista
   const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
+  const wkPrev=new Date(wk); wkPrev.setDate(wkPrev.getDate()-7);   // lunes de la semana pasada
   const moStart=new Date(now.getFullYear(),now.getMonth(),1);
   cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return;
     const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
     const c = by==='region' ? (normRegion(r.region)||'Sin región') : normComercial(r.comercial||'Unassigned');
     const g=rep[c]=rep[c]||nuevo();
-    if(d>=moStart){ g.cobM+=m; if(d>=wk) g.cobS+=m; }
+    if(d>=moStart) g.cobM+=m;
+    if(d>=wk) g.cobS+=m;
+    else if(d>=wkPrev) g.cobSPrev+=m;         // lun–dom de la semana anterior
   });
   const rows=Object.keys(rep).map(c=>Object.assign({c},rep[c])).sort((a,b)=>b.ab-a.ab);
-  const tot=rows.reduce((t,r)=>{['ab','ve','co','b1','b2','b3','b4','cobS','cobM'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{c:'TOTAL'});
+  const tot=rows.reduce((t,r)=>{['ab','ve','co','b1','b2','b3','b4','cobS','cobSPrev','cobM'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{c:'TOTAL'});
   return {rows, tot};
 }
-function gerCobrado(){   // cobrado esta semana / este mes (desde cerradas)
+function gerCobrado(){   // cobrado esta semana / semana pasada / este mes (desde cerradas)
   const now=new Date(), wk=new Date(now); wk.setDate(wk.getDate()-((wk.getDay()+6)%7)); wk.setHours(0,0,0,0);
+  const wkPrev=new Date(wk); wkPrev.setDate(wkPrev.getDate()-7);
   const moStart=new Date(now.getFullYear(),now.getMonth(),1);
-  let cobS=0,cobM=0;
-  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(d>=wk)cobS+=m; if(d>=moStart)cobM+=m; });
-  return {cobS, cobM};
+  let cobS=0,cobSPrev=0,cobM=0;
+  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d))return; const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
+    if(d>=wk)cobS+=m; else if(d>=wkPrev)cobSPrev+=m; if(d>=moStart)cobM+=m; });
+  return {cobS, cobSPrev, cobM};
 }
 function renderGerencia(){
   const {rows, tot} = gerenciaRows(gerAgg);
@@ -4023,13 +4028,19 @@ function exportGerenciaPNG(){
   if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
   if(!cartLoaded || !cartData.length){ alert('Data is still loading, try again in a moment.'); return; }
   const {rows, tot} = gerenciaRows(gerAgg);
-  const {cobS, cobM} = gerCobrado();
+  const {cobS, cobSPrev, cobM} = gerCobrado();
   const porQ = gerAgg==='region' ? 'región' : 'comercial';
   const slug = gerAgg==='region' ? 'region' : 'comercial';
   const col1 = gerAgg==='region' ? 'Región' : 'Sales rep';
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const pctTot = tot.ab?Math.round(tot.ve/tot.ab*100):0;
   const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  // Rango de la semana pasada (lun–dom) para el comité del lunes
+  const _now=new Date(), _mon=new Date(_now); _mon.setDate(_mon.getDate()-((_mon.getDay()+6)%7)); _mon.setHours(0,0,0,0);
+  const _pMon=new Date(_mon); _pMon.setDate(_pMon.getDate()-7);
+  const _pSun=new Date(_mon); _pSun.setDate(_pSun.getDate()-1);
+  const _rng=d=>d.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+  const prevLabel=`${_rng(_pMon)}–${_rng(_pSun)}`;
 
   const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
   const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
@@ -4046,6 +4057,7 @@ function exportGerenciaPNG(){
       +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b2)}</td>`
       +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b3)}</td>`
       +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b4)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobSPrev>0?'#2c7a2c':'#9a9ea9'};font-weight:${(r.cobSPrev>0||isTot)?'700':'400'}">${money(r.cobSPrev)}</td>`
       +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobS>0?'#2c7a2c':'#9a9ea9'};font-weight:${r.cobS>0?'700':'400'}">${money(r.cobS)}</td>`
       +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobM>0?'#2c7a2c':'#9a9ea9'}">${money(r.cobM)}</td>`
       +`</tr>`;
@@ -4056,7 +4068,7 @@ function exportGerenciaPNG(){
     <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
 
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:1060px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1200px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
       <div>
@@ -4068,7 +4080,8 @@ function exportGerenciaPNG(){
     <div style="display:flex;gap:12px;margin-bottom:16px">
       ${kpi('Open AR',money(tot.ab),'USD','#1B203D')}
       ${kpi('Overdue',money(tot.ve),pctTot+'% of AR','#a8351c')}
-      ${kpi('Cobrado esta semana',money(cobS),'collected','#2c7a2c')}
+      ${kpi('Cobrado sem. pasada',money(cobSPrev),prevLabel,'#2c7a2c')}
+      ${kpi('Cobrado esta semana',money(cobS),'en curso','#2c7a2c')}
       ${kpi('Cobrado este mes',money(cobM),'collected','#2c7a2c')}
     </div>
     <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
@@ -4076,7 +4089,7 @@ function exportGerenciaPNG(){
         <th style="${th};text-align:left">${col1}</th><th style="${th}">Open</th><th style="${th}">Current</th>
         <th style="${th}">Overdue</th><th style="${th}">%O</th>
         <th style="${th}">1–30</th><th style="${th}">31–60</th><th style="${th}">61–90</th><th style="${th}">90+</th>
-        <th style="${th}">Cob. sem</th><th style="${th}">Cob. mes</th>
+        <th style="${th}">Cob. sem. ant.</th><th style="${th}">Cob. sem</th><th style="${th}">Cob. mes</th>
       </tr></thead>
       <tbody>${rows.map(r=>rowHtml(r,false)).join('')}${rowHtml(tot,true)}</tbody>
     </table>
