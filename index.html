@@ -477,9 +477,17 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
   /* ── Sub-menú de Management: scroll horizontal (igual que las tabs) ── */
   .gercontent,.gerlock{padding:0 4px}
-  .ger-subtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0}
+  .ger-subtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;position:sticky;top:0;z-index:6;background:var(--bg)}
   .ger-subtabs::-webkit-scrollbar{display:none}
   .ger-subtab{flex:0 0 auto;white-space:nowrap;padding:9px 13px;font-size:12.5px}
+
+  /* ── Contenido de Management: scroll vertical de página (formularios y tablas
+       largos ya no quedan cortados; el sub-menú queda fijo arriba) ── */
+  .gercontent{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #gerCarteraWrap,#gerRotacionWrap,#gerMetasWrap,#gerPorVencerWrap,
+  #gerCompromisosWrap,#gerCashflowWrap,#gerComisionesWrap{flex:none;min-height:0}
+  /* Las tablas fluyen a su alto natural; sólo hacen scroll horizontal */
+  .gercontent .table-wrap{flex:none;contain:layout paint;max-height:none;overflow-x:auto;overflow-y:hidden}
 
   /* ── Barras de acción de Management: que nada se salga a la derecha ── */
   .ger-toolbar{gap:8px 6px}
