@@ -1097,6 +1097,11 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <div class="rcard b90"><div class="rc-l">Cumplimiento</div><div class="rc-n" id="mPct">—</div><div class="rc-s" id="mWeekLbl">esta semana</div></div>
       </div>
 
+      <div class="ger-toolbar" style="margin-top:2px">
+        <span class="res-count">Detalle del recaudo de la <b>semana pasada</b> — por región y bracket (de dónde vino)</span>
+        <button class="btn-excel" onclick="exportRecaudoSemPasadaPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen recaudo (sem. pasada)</button>
+      </div>
+
       <div class="meta-form">
         <div class="meta-form-head">
           <span class="res-count">Compromiso de recolección — semana del</span>
@@ -4099,6 +4104,87 @@ function exportGerenciaPNG(){
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Cartera_${slug}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
+}
+
+// Recaudo de la SEMANA PASADA (lun–dom anterior) desglosado por región y bracket.
+// El bracket sale de diasAlPagar (los días de la factura al momento de cobrarla), igual que en Metas.
+function recaudoSemPasada(){
+  const now=new Date(), mon=new Date(now); mon.setDate(mon.getDate()-((mon.getDay()+6)%7)); mon.setHours(0,0,0,0);
+  const prevMon=new Date(mon); prevMon.setDate(prevMon.getDate()-7);   // lunes semana pasada
+  const nuevo=()=>({current:0,b1:0,b2:0,b3:0,b4:0,unk:0,total:0,n:0});
+  const byReg={};
+  cerradasData.forEach(r=>{ const d=new Date(r.fechaCierre); if(isNaN(d)) return;
+    if(!(d>=prevMon && d<mon)) return;                       // solo la semana pasada
+    const m=Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0; if(!m) return;
+    const reg=normRegion(r.region)||'Sin región'; const g=byReg[reg]=byReg[reg]||nuevo();
+    const bk=bracketKey(r.diasAlPagar)||'unk'; g[bk]+=m; g.total+=m; g.n++;
+  });
+  const rows=Object.keys(byReg).map(reg=>Object.assign({reg},byReg[reg])).sort((a,b)=>b.total-a.total);
+  const tot=rows.reduce((t,r)=>{['current','b1','b2','b3','b4','unk','total','n'].forEach(k=>t[k]=(t[k]||0)+r[k]);return t;},{reg:'TOTAL'});
+  const prevSun=new Date(mon.getTime()-86400000);
+  return {rows, tot, prevMon, prevSun};
+}
+// ── Exportar el recaudo de la semana pasada por región y bracket como imagen PNG ──
+function exportRecaudoSemPasadaPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const {rows, tot, prevMon, prevSun} = recaudoSemPasada();
+  const _rng=d=>d.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+  const rango=`${_rng(prevMon)}–${_rng(prevSun)} de ${prevSun.getFullYear()}`;
+  const showUnk = tot.unk>0;
+  const vencida = tot.b1+tot.b2+tot.b3+tot.b4;
+  const pctVenc = tot.total? Math.round(vencida/tot.total*100):0;
+
+  const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
+  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const cell=(v,isTot,accent)=>`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'};color:${accent||(v>0?'#1f2430':'#c2c2bb')}">${money(v)}</td>`;
+  const rowHtml=(r,isTot)=>`<tr style="background:${isTot?'#E9C400':'#fff'}">`
+    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${isTot?'800':'700'};color:#1B203D;border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.reg)}</td>`
+    +cell(r.current,isTot,r.current>0?'#2c7a2c':null)
+    +cell(r.b1,isTot)+cell(r.b2,isTot)+cell(r.b3,isTot)
+    +cell(r.b4,isTot,r.b4>0?'#a8351c':null)
+    +(showUnk?cell(r.unk,isTot):'')
+    +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:800;color:#1B203D">${money(r.total)}</td></tr>`;
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
+    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1080px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  const emptyRow=`<tr><td colspan="${showUnk?8:7}" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">No hay cobros registrados en la semana pasada.</td></tr>`;
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Recaudo semana pasada</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">De dónde vino el cobro · por región y bracket · ${rango}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Metas de cobro</div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      ${kpi('Recaudado sem. pasada',money(tot.total),(tot.n||0)+' cobros','#2c7a2c')}
+      ${kpi('De cartera al día',money(tot.current),'current (por vencer)','#1B203D')}
+      ${kpi('De cartera vencida',money(vencida),pctVenc+'% del recaudo','#a8351c')}
+      ${kpi('90+ días',money(tot.b4),'lo más viejo cobrado','#8a2414')}
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+      <thead><tr>
+        <th style="${th};text-align:left">Región</th>
+        <th style="${th}">Current</th><th style="${th}">1–30</th><th style="${th}">31–60</th>
+        <th style="${th}">61–90</th><th style="${th}">90+</th>${showUnk?`<th style="${th}">S/B</th>`:''}
+        <th style="${th}">Total</th>
+      </tr></thead>
+      <tbody>${rows.length? rows.map(r=>rowHtml(r,false)).join('')+rowHtml(tot,true) : emptyRow}</tbody>
+    </table>
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">El bracket es la antigüedad de la factura al momento de cobrarla.${showUnk?' S/B = cobros sin bracket registrado.':''} · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Recaudo_SemPasada_${new Date().toISOString().slice(0,10)}.png`;
     a.href=canvas.toDataURL('image/png');
     a.click();
   }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
