@@ -872,7 +872,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <table id="histTable">
       <thead><tr>
         <th>Close date</th><th>Customer</th><th>Sales rep</th><th>Invoice</th><th>Region</th>
-        <th>Committed</th><th>Last status</th><th>Commitment</th><th>Met?</th>
+        <th>Committed</th><th style="text-align:right">Collected (USD)</th><th>Last status</th><th>Commitment</th><th>Met?</th>
       </tr></thead>
       <tbody id="tbodyHist"></tbody>
     </table>
@@ -4471,7 +4471,9 @@ function renderHistorial(){
              : '<span class="mut2">—</span>';
     const estN = normEst(r.estado);
     const est = estN ? `<span class="est ${EST_CLASS[estN]||'e-sin'}">${esc(estN)}</span>` : '<span class="mut2">—</span>';
-    return `<tr><td class="c-mono">${esc(r.fechaCierre||'—')}</td><td class="c-cliente">${esc(r.cliente||'')}</td><td class="c-muted">${esc(r.comercial||'')}</td><td class="c-mono">${esc(r.factura||'')}</td><td class="c-bodega">${esc(r.region||'')}</td><td class="c-total">${esc(String(r.monto||'—'))}</td><td>${est}</td><td class="mut2">${esc(r.compromiso||'—')}</td><td>${cum}</td></tr>`;
+    const paid = Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
+    const paidCell = paid>0 ? `<td class="c-num" style="color:#2c7a2c;font-weight:700">${money(paid)}</td>` : '<td class="c-num" style="color:var(--text3)">—</td>';
+    return `<tr><td class="c-mono">${esc(r.fechaCierre||'—')}</td><td class="c-cliente">${esc(r.cliente||'')}</td><td class="c-muted">${esc(r.comercial||'')}</td><td class="c-mono">${esc(r.factura||'')}</td><td class="c-bodega">${esc(r.region||'')}</td><td class="c-total">${esc(String(r.monto||'—'))}</td>${paidCell}<td>${est}</td><td class="mut2">${esc(r.compromiso||'—')}</td><td>${cum}</td></tr>`;
   }).join('');
   $('hResCount').textContent=`${rows.length} closed`;
   $('hCount').textContent=rows.length;
@@ -4493,8 +4495,8 @@ function renderHistorial(){
 }
 function exportHistorial(){
   const wb=XLSX.utils.book_new();
-  const data=[['Close date','Customer','Sales rep','Invoice','Region','Committed amount','Last status','Commitment','Met']]
-    .concat(cerradasData.map(r=>[r.fechaCierre,r.cliente,r.comercial,r.factura,r.region,r.monto,normEst(r.estado),r.compromiso,r.cumplio==='SI'?'Yes':r.cumplio==='NO'?'No':'']));
+  const data=[['Close date','Customer','Sales rep','Invoice','Region','Committed amount','Collected (USD)','Last status','Commitment','Met']]
+    .concat(cerradasData.map(r=>[r.fechaCierre,r.cliente,r.comercial,r.factura,r.region,r.monto,Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0,normEst(r.estado),r.compromiso,r.cumplio==='SI'?'Yes':r.cumplio==='NO'?'No':'']));
   const ws=XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb,ws,'History');
   XLSX.writeFile(wb,`Forest_Receivables_History_${new Date().toISOString().slice(0,10)}.xlsx`);
