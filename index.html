@@ -892,7 +892,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <select id="rcSel" class="ger-sel" style="margin-left:auto;min-width:200px" onchange="renderCarteraComisiones()">
       <option value="">Elige tu nombre…</option>
     </select>
-    <button class="btn-excel" onclick="exportCarteraComisionPNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen del estado del comercial seleccionado para enviar por correo"><i data-lucide="image"></i> Imagen</button>
+    <button class="btn-excel" onclick="exportCarteraComisionPNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen del estado del comercial seleccionado"><i data-lucide="image"></i> Imagen</button>
+    <select id="rcMailReg" class="ger-sel" style="margin-left:8px" title="Adjuntar la rotación de esta región (opcional)"><option value="">+ rotación de… (opcional)</option></select>
+    <button class="btn-excel" onclick="emailRepRegionPNG()" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Genera la imagen (rep + región) y abre un correo con el resumen para enviarla"><i data-lucide="mail"></i> Enviar por correo</button>
   </div>
   <div id="rcCard" style="padding:4px 2px"></div>
   <div class="footer">
@@ -3801,6 +3803,10 @@ function renderCarteraComisiones(){
   const sel=$('rcSel'); const cur=sel.value;
   sel.innerHTML='<option value="">Elige tu nombre…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)}</option>`).join('');
   if(rows.some(r=>r.c===cur)) sel.value=cur;
+  // Selector de región para adjuntar la rotación (opcional). Usa las regiones con target definido.
+  { const rs=$('rcMailReg'); if(rs){ const rc=rs.value;
+    rs.innerHTML='<option value="">+ rotación de… (opcional)</option>'+Object.keys(ROT_TARGETS).map(rg=>`<option value="${escAttr(rg)}">+ rotación: ${esc(rg)}</option>`).join('');
+    if(Object.keys(ROT_TARGETS).includes(rc)) rs.value=rc; } }
   const box=$('rcCard'); const name=sel.value;
   const warn = (ventasLoaded && ventasError)
     ? `<div style="margin:8px 0;padding:10px 12px;border:1px solid #a8351c;border-radius:8px;background:rgba(168,53,28,.08);color:#a8351c;font-size:12.5px">⚠ Ventas no cargadas: ${esc(ventasError)}</div>` : '';
@@ -3810,19 +3816,12 @@ function renderCarteraComisiones(){
   $('rcTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
 }
-// ── Imagen del estado de comisiones del comercial seleccionado (para enviar por correo) ──
-function exportCarteraComisionPNG(){
-  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
-  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
-  const name=$('rcSel').value;
-  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
-  const r=comisionesRows().find(x=>x.c===name);
-  if(!r){ alert('No encontré el estado de ese comercial.'); return; }
+// Tarjeta (bloque blanco) del estado de comisiones de un comercial — reutilizable en imagen y correo.
+function _comisionCardHtml(r){
   const cl=diasAlCierre();
   const s=cmColor(r.pct);
   const accent = s.c==='var(--text3)' ? '#9a9ea9' : s.c;
   const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
-  const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
   const tope = r.ventas>0 ? CM_LIMIT*r.ventas : null;
   const brk=[['1–30',r.b1],['31–60',r.b2],['61–90',r.b3],['90+',r.b4]];
   const barMax=Math.max(r.b1,r.b2,r.b3,r.b4,1);
@@ -3835,18 +3834,7 @@ function exportCarteraComisionPNG(){
       <span style="width:170px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#1f2430">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
   }).join('');
   const statRow=(lab,val,bold,color)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}${bold?';font-size:15px':''}">${val}</b></div>`;
-
-  const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
-  box.innerHTML=`
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
-      <div>
-        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado de comisiones</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
-    </div>
-    <div style="border:1px solid #e3e0d7;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
+  return `<div style="border:1px solid #e3e0d7;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
       <div style="display:flex;gap:28px;flex-wrap:wrap">
         <div style="min-width:230px">
           <div style="font-size:17px;font-weight:800;color:#1B203D">${esc(r.c)}</div>
@@ -3865,7 +3853,40 @@ function exportCarteraComisionPNG(){
           ${brkHtml}
         </div>
       </div>
+    </div>`;
+}
+// Texto plano del estado de un comercial (para el cuerpo del correo).
+function _comisionResumenTxt(r){
+  const pctTxt = r.pct==null ? 's/ventas' : (r.pct*100).toFixed(1)+'%';
+  const est = cmColor(r.pct).lbl;
+  const L=[];
+  L.push(`Estado de cartera — ${r.c}`);
+  L.push(`• % vencida vs ventas 90d: ${pctTxt} (${est}; límite 8%)`);
+  L.push(`• Ventas 90d: ${r.ventas>0?money(r.ventas):'— sin dato'}`);
+  L.push(`• Cartera vencida: ${money(r.venc)}`);
+  L.push(`• A cobrar para no congelar: ${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 (va bien)')}`);
+  return L.join('\n');
+}
+// ── Imagen del estado de comisiones del comercial seleccionado (para enviar por correo) ──
+function exportCarteraComisionPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const name=$('rcSel').value;
+  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
+  const r=comisionesRows().find(x=>x.c===name);
+  if(!r){ alert('No encontré el estado de ese comercial.'); return; }
+  const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado de comisiones</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
     </div>
+    ${_comisionCardHtml(r)}
     <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Estado = cartera vencida ÷ ventas de los últimos 90 días. Si supera 8% al cierre (día 5) se congelan las comisiones. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
   html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
@@ -3875,6 +3896,54 @@ function exportCarteraComisionPNG(){
     a.href=canvas.toDataURL('image/png');
     a.click();
   }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
+}
+// ── Enviar por correo: imagen combinada (cartera del rep + rotación de la región) + correo prellenado ──
+async function emailRepRegionPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const name=$('rcSel').value;
+  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
+  const rep=comisionesRows().find(x=>x.c===name);
+  if(!rep){ alert('No encontré el estado de ese comercial.'); return; }
+  const region=($('rcMailReg')||{}).value||'';
+  const btn=window.event&&window.event.target ? window.event.target.closest('button') : null;
+  if(btn){ btn.disabled=true; }
+  try{
+    if(region){                                   // cargar rotación/vejez si hace falta
+      if(typeof cargarRotacion==='function' && !rotLoaded) await cargarRotacion();
+      if(typeof cargarVejez==='function' && !vejezLoaded) await cargarVejez();
+    }
+    const regRow = region ? (rotVejezRows().rows.find(x=>x.region===region)||null) : null;
+    const fecha=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    const dTxt=v=> v>0 ? Math.round(v)+' d' : '—';
+    const box=document.createElement('div');
+    box.style.cssText='position:fixed;left:-10000px;top:0;width:900px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+    box.innerHTML=`
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado del comercial</div>
+          <div style="font-size:12px;color:#9a9ea9;margin-top:2px">${esc(rep.c)}${region?(' · rotación de '+esc(region)):''} · ${fecha}</div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Forest Reservas</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:#1B203D;margin:0 0 8px">Cartera & comisiones</div>
+      ${_comisionCardHtml(rep)}
+      ${regRow?`<div style="font-size:13px;font-weight:700;color:#1B203D;margin:18px 0 8px">Rotación · ${esc(region)}</div>${_rotRegionCardHtml(regRow, dTxt)}`:''}
+      <div style="font-size:10.5px;color:#b7b3a8;margin-top:12px">Cartera: vencida ÷ ventas 90d (límite 8%). Rotación ajustada = actual + 2 d por lote disponible >150 d. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    document.body.appendChild(box);
+    let canvas;
+    try{ canvas=await html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}); }
+    finally{ try{document.body.removeChild(box);}catch(e){} }
+    const a=document.createElement('a');
+    a.download=`Forest_${name.replace(/[^A-Za-z0-9]+/g,'_')}${region?('_'+region.replace(/[^A-Za-z0-9]+/g,'_')):''}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png'); a.click();
+    // Abrir correo con asunto y resumen prellenados (sin destinatario; se adjunta la imagen descargada)
+    const subj=`Forest — Estado de cartera: ${name}${region?(' · rotación '+region):''}`;
+    const body=[ _comisionResumenTxt(rep), regRow?('\n'+_rotRegionResumenTxt(regRow)):'',
+      '\nAdjunto la imagen descargada con el detalle.', '— Forest Reservas' ].filter(Boolean).join('\n');
+    setTimeout(()=>{ try{ window.location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body); }catch(e){} }, 500);
+  }catch(err){ alert('No se pudo generar la imagen: '+(err&&err.message||err)); }
+  finally{ if(btn) btn.disabled=false; }
 }
 function exportComisionesExcel(){
   if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
@@ -3948,12 +4017,11 @@ function exportRotacion90Excel(){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion y Vejez');
   XLSX.writeFile(wb,`Forest_RotacionVejez_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
-// Imagen enfocada en UNA región (para enviar al comercial de esa región).
-function _rotRegionPNG(r, fecha, dTxt){
+// Contenido (KPIs + contexto + lotes) de la rotación de UNA región — reutilizable en imagen y correo.
+function _rotRegionCardHtml(r, dTxt){
   const tg=ROT_TARGETS[r.region]; const st=tg?rotStatus(r.rotBase,tg.tNum):null;
   const accent = st ? st.c : '#1B203D';
   const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#9a9ea9';
-  // Lotes que afectan (>150 días, disponibles) en esta región, del mayor al menor
   const lots=(vejezLots||[]).filter(l=>l.region===r.region && l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
   const th='padding:8px 11px;font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
   const td='padding:7px 11px;font-size:12.5px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
@@ -3969,17 +4037,7 @@ function _rotRegionPNG(r, fecha, dTxt){
       <td style="${td};font-weight:700;color:${l.dias>180?'#a8351c':'#8a6d00'}">${Math.round(l.dias)} d</td>
       <td style="${td}">${kgFmt?kgFmt(l.actual):Math.round(l.actual)}</td></tr>`).join('')
     : `<tr><td colspan="5" style="padding:16px;text-align:center;color:#2c7a2c;font-size:13px">No hay lotes disponibles con más de 150 días. 👍</td></tr>`;
-  const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:860px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
-  box.innerHTML=`
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
-      <div>
-        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación · ${esc(r.region)}</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada y lotes que afectan (>150 días) · ${fecha}</div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
-    </div>
-    <div style="display:flex;gap:12px;margin-bottom:14px">
+  return `<div style="display:flex;gap:12px;margin-bottom:14px">
       ${kpi('Rotación actual (90d)',dTxt(r.rotBase),'ponderada','#1B203D')}
       ${kpi('Rotación ajustada',dTxt(r.rotAdj),'con penalidad','#8a6d00')}
       ${kpi('Lotes que afectan',(r.oldCount||0)+'',(r.penalty>0?('penalidad +'+r.penalty+' d'):'sin penalidad'),'#a8351c')}
@@ -4005,7 +4063,30 @@ function _rotRegionPNG(r, fecha, dTxt){
       </tr></thead>
       <tbody>${lotRows}</tbody>
     </table>
-    ${lots.length>14?`<div style="font-size:11px;color:#9a9ea9;margin-top:6px">… y ${lots.length-14} lote(s) más (ver la lista completa en el dashboard).</div>`:''}
+    ${lots.length>14?`<div style="font-size:11px;color:#9a9ea9;margin-top:6px">… y ${lots.length-14} lote(s) más (ver la lista completa en el dashboard).</div>`:''}`;
+}
+// Texto plano de la rotación de una región (para el cuerpo del correo).
+function _rotRegionResumenTxt(r){
+  const L=[];
+  L.push(`Rotación — ${r.region}`);
+  L.push(`• Rotación actual (90d): ${r.rotBase>0?Math.round(r.rotBase)+' d':'—'}`);
+  L.push(`• Rotación ajustada: ${r.rotAdj>0?Math.round(r.rotAdj)+' d':'—'} (${r.oldCount||0} lote(s) >150d, +${r.penalty||0} d)`);
+  L.push(`• Vejez ponderada: ${r.vejez>0?Math.round(r.vejez)+' d':'—'} (target <${VEJEZ_TARGET})`);
+  return L.join('\n');
+}
+// Imagen enfocada en UNA región (para enviar al comercial de esa región).
+function _rotRegionPNG(r, fecha, dTxt){
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:860px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación · ${esc(r.region)}</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada y lotes que afectan (>150 días) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
+    </div>
+    ${_rotRegionCardHtml(r, dTxt)}
     <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Rotación ajustada = actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
   html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
