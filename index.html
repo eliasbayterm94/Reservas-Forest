@@ -892,6 +892,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <select id="rcSel" class="ger-sel" style="margin-left:auto;min-width:200px" onchange="renderCarteraComisiones()">
       <option value="">Elige tu nombre…</option>
     </select>
+    <button class="btn-excel" onclick="exportCarteraComisionPNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen del estado del comercial seleccionado para enviar por correo"><i data-lucide="image"></i> Imagen</button>
   </div>
   <div id="rcCard" style="padding:4px 2px"></div>
   <div class="footer">
@@ -3806,6 +3807,72 @@ function renderCarteraComisiones(){
   else { const r=rows.find(x=>x.c===name); box.innerHTML = warn + (r ? cmCardHtml(r) : ''); }
   $('rcTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
+}
+// ── Imagen del estado de comisiones del comercial seleccionado (para enviar por correo) ──
+function exportCarteraComisionPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const name=$('rcSel').value;
+  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
+  const r=comisionesRows().find(x=>x.c===name);
+  if(!r){ alert('No encontré el estado de ese comercial.'); return; }
+  const cl=diasAlCierre();
+  const s=cmColor(r.pct);
+  const accent = s.c==='var(--text3)' ? '#9a9ea9' : s.c;
+  const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
+  const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const tope = r.ventas>0 ? CM_LIMIT*r.ventas : null;
+  const brk=[['1–30',r.b1],['31–60',r.b2],['61–90',r.b3],['90+',r.b4]];
+  const barMax=Math.max(r.b1,r.b2,r.b3,r.b4,1);
+  const brkHtml=brk.map(([l,v])=>{
+    const p = r.ventas>0 ? (v/r.ventas*100) : 0;
+    const w = Math.round(v/barMax*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+      <span style="width:56px;color:#5b6170;font-size:12.5px">${l}</span>
+      <div style="flex:1;background:#eceae3;border-radius:5px;height:15px;overflow:hidden"><div style="width:${w}%;height:100%;background:${accent};opacity:.85"></div></div>
+      <span style="width:170px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#1f2430">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
+  }).join('');
+  const statRow=(lab,val,bold,color)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}${bold?';font-size:15px':''}">${val}</b></div>`;
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado de comisiones</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
+    </div>
+    <div style="border:1px solid #e3e0d7;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
+      <div style="display:flex;gap:28px;flex-wrap:wrap">
+        <div style="min-width:230px">
+          <div style="font-size:17px;font-weight:800;color:#1B203D">${esc(r.c)}</div>
+          <div style="font-size:44px;font-weight:800;color:${accent};line-height:1.05;margin-top:6px">${pctTxt}</div>
+          <div style="color:${accent};font-weight:700;font-size:14px;margin-top:2px">${s.lbl}${r.pct!=null&&r.pct>=CM_LIMIT?' — comisiones se congelan al cierre':''}</div>
+          <div style="margin-top:10px;color:#5b6170;font-size:12.5px">Límite: 8% · faltan <b>${cl.dias===0?'0 (hoy)':cl.dias}</b> día(s) para el cierre (día 5)</div>
+        </div>
+        <div style="flex:1;min-width:340px">
+          ${statRow('Ventas 90d', r.ventas>0?money(r.ventas):'— sin dato')}
+          ${statRow('Cartera vencida', money(r.venc), true)}
+          ${statRow('Tope 8% (vencida máx.)', tope!=null?money(tope):'—')}
+          <div style="border-top:1px solid #e3e0d7;margin:9px 0 10px;padding-top:9px">
+            ${statRow('A cobrar para no congelar', r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien'), true, r.aCobrar>0?'#a8351c':'#2c7a2c')}
+          </div>
+          <div style="font-size:12px;color:#5b6170;margin-bottom:2px">Desglose de la vencida por bracket:</div>
+          ${brkHtml}
+        </div>
+      </div>
+    </div>
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Estado = cartera vencida ÷ ventas de los últimos 90 días. Si supera 8% al cierre (día 5) se congelan las comisiones. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Comisiones_${name.replace(/[^A-Za-z0-9]+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
 }
 function exportComisionesExcel(){
   if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
