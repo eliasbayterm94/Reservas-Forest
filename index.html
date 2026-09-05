@@ -2448,7 +2448,7 @@ async function cargarVentas(){
 // Rotación ponderada por región (últimos 90 días). Lee la pestaña "Rotacion".
 let rotRaw = [];             // [{region, kg, days}]
 let rotCatByIco = {};        // categoría (Community/Microlot/…) por ICO, desde la pestaña Rotacion
-let rotLoaded = false, rotError = '', rotWh2Dbg = '';
+let rotLoaded = false, rotError = '', rotWh2Dbg = '', rotDbg = null;
 async function cargarRotacion(){
   try{
     const resp = await fetch(ROT_CSV_URL + '&_=' + Date.now());
@@ -2472,26 +2472,29 @@ async function cargarRotacion(){
     }
     const today=new Date(); today.setHours(0,0,0,0); const min=new Date(today.getTime()-90*86400000);
     const CANON=['USA','EU','UK','Australia','MENA']; const wh2dbg=new Set(); const catMap={};
-    const out=[];
+    const out=[]; const dbg={noKg:0,noDays:0,old90:0,byRegion:{}};   // diagnóstico
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
       if(iCatR>=0 && iIcoR>=0){ const ic=String(row[iIcoR]||'').trim(), ct=String(row[iCatR]||'').trim(); if(ic && ct) catMap[ic]=ct; }
       const rawReg=String(row[iReg]||'').trim();
       const rawWh=iWh2>=0 ? String(row[iWh2]||'').trim() : '';
       if(rawWh) wh2dbg.add(rawWh);
-      // Región: "Warehouse**" MANDA si da una región canónica (ahí viene UK); si no, usa "Region".
+      // Región: la columna "Region" MANDA si es canónica (la venta es por región de destino);
+      // "Warehouse**" solo se usa como respaldo cuando Region no es canónica (ej. UK viene ahí).
       const cReg=normRegion(rawReg), cWh=normRegion(rawWh);
-      const region = CANON.includes(cWh) ? cWh : (CANON.includes(cReg) ? cReg : (cReg||cWh));
+      const region = CANON.includes(cReg) ? cReg : (CANON.includes(cWh) ? cWh : (cReg||cWh));
       if(esFilaTotal_(region)) continue;   // descarta solo si no quedó región (ni en Region ni en Warehouse**) o es total
       const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
-      const kg=qty*size; if(!(kg>0)) continue;
-      const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
+      const kg=qty*size; if(!(kg>0)){ dbg.noKg++; continue; }
+      const rawDays=String(row[iRot]||'').trim(); if(!rawDays){ dbg.noDays++; continue; }   // requiere rotation days
       const days=cleanNum(rawDays);
       // Filtra a los últimos 90 días por Transaction Date (solo si la fecha es válida).
-      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }
+      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min){ dbg.old90++; continue; } }
+      dbg.byRegion[region]=(dbg.byRegion[region]||0)+1;
       out.push({region, kg, days});
     }
-    rotRaw=out; rotCatByIco=catMap; rotLoaded=true; rotError='';
+    rotRaw=out; rotCatByIco=catMap; rotLoaded=true; rotError=''; rotDbg=dbg;
+    console.log('[Rotación] filas por región:', dbg.byRegion, '· descartadas → sin kg:', dbg.noKg, 'sin rotation days:', dbg.noDays, '>90 días:', dbg.old90, '· Warehouse** vistos:', [...wh2dbg]);
     rotWh2Dbg = iWh2>=0 ? ('Wh**: '+([...wh2dbg].slice(0,10).join('/')||'(vacío)')) : 'sin col Warehouse**';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
@@ -3968,7 +3971,7 @@ function renderRotacion90(){
   if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="9" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
   const M=rotVejezRows(); const rows=M.rows;
   const src=[];
-  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos')); if(rotWh2Dbg) src.push(rotWh2Dbg); }
+  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ const bg=(rotDbg&&rotDbg.byRegion)||{}; src.push('Rot: '+(Object.keys(bg).length?Object.keys(bg).map(k=>`${k}(${bg[k]})`).join(' '):'sin datos')); if(rotDbg) src.push(`descartadas: ${rotDbg.noDays} sin rot.days · ${rotDbg.old90} >90d · ${rotDbg.noKg} sin kg`); if(rotWh2Dbg) src.push(rotWh2Dbg); }
   if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
   $('r90Src').textContent=src.join('  ·  ');
   // Selector de región para la imagen (preservando selección)
