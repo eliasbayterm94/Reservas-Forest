@@ -76,20 +76,53 @@ Los 31 ausentes corresponden a la "brecha de reconciliación" documentada en la
 sección 8 del manual. El dashboard ya los descarta con
 `if(!invIcoSetOnSpot.has(ico)) return;`.
 
-### Hipótesis abierta
+### CONFIRMADO: `API_URL` sirve `Drilldown Posiciones`
 
-`API_URL` (el Apps Script que alimenta Reservas Activas) podría **ya estar
-leyendo `Drilldown Posiciones`**. Evidencia:
+Revisado el código de `generarDrilldownPosiciones()` (v4), el script que genera
+la hoja. El layout que produce calza con el payload de `API_URL` en 17 de 18
+campos:
 
-| Campo que el dashboard necesita del Drilldown | Campo en `API_URL` |
-|---|---|
-| `Estado` (RESERVADO / FACTURADO SIN ROTAR) | `estado` — **valores idénticos** |
-| `ICO` / `Cliente` / `Cantidad` / `Bag Size` / `Bodega` | `ico` / `cliente` / `cantidad` / `bag_size` / `bodega` |
-| `Last Delivery` | `last_delivery` (123 de 389 filas con valor) |
-| `Fecha Reserva` | `dias_reserva` (días, no fecha) — derivable |
+| Col | Campo generado | Campo en `API_URL` |
+|---|---|---|
+| A | Bodega | `bodega` |
+| B | Cliente | `cliente` |
+| C | Cafe | `cafe` |
+| D | ICO | `ico` |
+| E | Cantidad | `cantidad` |
+| H | Spot/Contrato? | `tipo` (SPOT/CONTRACT) |
+| J | ICO ETA | `eta` |
+| K | Estado (fórmula) | `estado` |
+| L | Contrato | `contrato` |
+| M | Comercial | `comercial` |
+| O | Factura # | `factura` |
+| P | Serie | `serie` |
+| **Q** | **Fecha Reserva** | ⚠️ **no expuesta** (solo `dias_reserva`) |
+| R | Pallet Price | `pallet_price` |
+| S | Bag Size | `bag_size` |
+| T | Price Per KG | `precio_kg` |
+| U | First Delivery | `first_delivery` |
+| V | Last Delivery | `last_delivery` |
 
-Pendiente de confirmar leyendo el código del Apps Script. Si se confirma, no hay
-que construir un script para el Drilldown: basta con extender el existente.
+La fórmula de la columna K produce 4 estados (`RESERVADO`,
+`FACTURADO SIN ROTAR`, `DESPACHADO`, `INCONSISTENTE`) y `API_URL` solo devuelve
+los dos primeros (324 + 65 = 389 filas). El `doGet` ya aplica **el mismo filtro
+que el dashboard** (`['RESERVADO','FACTURADO SIN ROTAR']`).
+
+**Consecuencia:** no hay que construir un Apps Script para el Drilldown. Basta
+con extender el `doGet` existente para exponer `fecha_reserva` (columna Q).
+
+### Cadena de datos del Drilldown (contexto)
+
+`generarDrilldownPosiciones()` no lee del Drilldown: lo **escribe**. Su cadena es:
+
+```
+Offering Lists (OFFERING_LISTS_SPREADSHEET_ID)  ─┐
+CONSOLIDADO CONTRATOS (CONTRACTS_SPREADSHEET_ID)─┴─> Drilldown Posiciones (1UYRE…)
+                                                          └─> doGet (API_URL) ─> app
+```
+
+Implicación: la frescura del Drilldown depende de cuándo corre ese generador
+(trigger), no de cuándo la app pide los datos.
 
 ## Restricciones técnicas detectadas
 
@@ -119,15 +152,24 @@ Pendientes de detallar.
 
 > Debe quedar vacío antes de aprobar la spec.
 
-1. **Código del Apps Script existente** — la usuaria lo va a pegar. Define si se
-   extiende el script actual o se construye uno nuevo para el Drilldown.
-2. **`Fecha Reserva`** — ¿existe como fecha en el Drilldown? Necesaria para la
-   vista "Reservas Vencidas"; en `API_URL` solo hay `dias_reserva`.
-3. **Nombre exacto** de la pestaña en la UI.
-4. **Payload agregado** — definir el contrato JSON exacto que devolverá el script
-   de ventas, y verificar su tamaño real.
-5. **Dos rotaciones conviviendo** — ¿se señala de alguna forma al usuario final
+1. **Código del `doGet`** — pendiente. `generarDrilldownPosiciones()` (recibido)
+   es el generador de la hoja, no el Web App. Falta el archivo `.gs` que
+   contiene el `doGet` que responde en `API_URL`, para saber cómo extenderlo.
+2. **Nombre exacto** de la pestaña en la UI.
+3. **Payload agregado** — definir el contrato JSON exacto que devolverá el
+   endpoint de ventas, y verificar su tamaño real.
+4. **Dos rotaciones conviviendo** — ¿se señala de alguna forma al usuario final
    que la rotación de esta pestaña se calcula distinto a la de Rotación & Vejez?
+5. **Frecuencia del trigger** de `generarDrilldownPosiciones()` — determina qué
+   tan fresco puede estar el dato de reservas, sin importar que la app consulte
+   en vivo.
+
+### Resueltas
+
+- ~~**`Fecha Reserva`**~~ — ✅ existe como columna real (Q) en el Drilldown. No
+  está expuesta en `API_URL` todavía; se agrega al extender el `doGet`.
+- ~~**Script para el Drilldown**~~ — ✅ no hace falta construirlo: `API_URL` ya
+  lo sirve.
 
 ## Fases de implementación
 
