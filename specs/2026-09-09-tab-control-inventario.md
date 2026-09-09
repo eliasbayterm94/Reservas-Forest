@@ -1,6 +1,6 @@
 # Spec: Nueva pestaña "Control de Inventario"
 
-Estado: Draft
+Estado: Lista para aprobación
 Fecha: 2026-09-09
 Rama: feature/tab-control-inventario
 
@@ -41,8 +41,11 @@ funcionalidad existente.
 
 | Tema | Decisión |
 |---|---|
+| Nombre en la UI | **"Control Inventario"** |
 | Ubicación | Pestaña de primer nivel, **no** dentro de Management |
 | Acceso | Protegida con el **mismo código** que ya usa Management |
+| Frescura | Caché de **1 h** + botón "Actualizar" que fuerza `?refresh=1` |
+| Arquitectura | **Script B en proyecto aparte** (no se mezcla con Reservas) |
 | Carga de datos | **100% en vivo**, sin snapshot embebido |
 | Diseño | **Adaptado al design system Forest** |
 | Mecanismo de datos | **Apps Script Web App → JSON**, no `gviz` CSV directo |
@@ -181,27 +184,65 @@ Reparto de cálculo:
 
 ## Requisitos funcionales
 
-Pendientes de detallar una vez cierren las preguntas abiertas restantes.
+El comportamiento funcional de los 3 módulos es **el que ya describe
+`Manual_Dashboard_Control_Inventario.md`** (secciones 2 a 5). Ese documento es la
+referencia; aquí solo se listan los cambios respecto a él.
+
+| # | Requisito | Delta vs. el dashboard original |
+|---|---|---|
+| RF-1 | Pestaña "Control Inventario" de primer nivel, protegida con el código de Management | nuevo |
+| RF-2 | Datos siempre en vivo; no existe snapshot embebido | cambia: antes arrancaba de snapshot |
+| RF-3 | Carga perezosa: solo consulta al abrir la pestaña por primera vez | nuevo |
+| RF-4 | Botón "Actualizar" que fuerza `?refresh=1` en ambos scripts | equivalente al botón original |
+| RF-5 | Reservas y cruce cliente↔ICO desde `API_URL` (Script A) | cambia: antes leía el sheet por gviz |
+| RF-6 | Inventario y ventas desde Script B | cambia: antes gviz directo, ventas sin agregar |
+| RF-7 | Los 3 módulos conservan filtros, ordenamientos y clics del original | sin cambio |
+| RF-8 | Estética adaptada al design system Forest | cambia |
+| RF-9 | No se altera ninguna pestaña existente | restricción |
+
+### Nota sobre las dos rotaciones
+
+La app tendrá dos cifras de "rotación" calculadas distinto y desde archivos
+distintos: la de `Rotación & Vejez` (desde `19E-_Kj1…`, ponderada por región) y
+la de esta pestaña (`KG vendido 12m ÷ KG inventario hoy`, desde `15CQqV…`).
+
+**Decisión:** se añade una nota al pie visible en las tablas de rotación de la
+pestaña nueva, indicando la fórmula usada y que no es comparable con la de
+`Rotación & Vejez`. No se unifican las fuentes en esta spec.
 
 ## Criterios de aceptación
 
-Pendientes de detallar.
+| # | Criterio | Cómo se verifica |
+|---|---|---|
+| CA-1 | Las 6 pestañas existentes siguen funcionando igual | Recorrido manual de cada una, comparando contra producción |
+| CA-2 | No hay errores en consola al cargar la app ni al cambiar de pestaña | DevTools console limpia |
+| CA-3 | La pestaña pide el código de Management y solo entra con el correcto | Probar código válido e inválido |
+| CA-4 | Con la pestaña cerrada, la app no consulta Script A ni B | Pestaña Network: cero requests hasta abrir la tab |
+| CA-5 | Los KPIs y tablas del Módulo 1 cuadran con `CONSOLIDADO` | Contraste manual de totales KG y nº de lotes |
+| CA-6 | El Módulo 2 cuadra con `Informe Inventario 22+` | Contraste de KG vendidos de un mes contra el sheet |
+| CA-7 | "Reservas Vencidas" usa `last_delivery` real y muestra `fecha_reserva` | Contraste contra `API_URL` con el campo nuevo |
+| CA-8 | El payload de Script B pesa menos de 300 KB | Medición del response |
+| CA-9 | El botón "Actualizar" trae datos nuevos saltando el caché | Comparar `updated` antes y después |
+| CA-10 | Funciona en móvil: sin scroll horizontal de página, tablas con scroll propio | Prueba en viewport 375px |
+| CA-11 | Los colores de la pestaña nueva no se filtran a las demás | Inspección visual tras navegar entre tabs |
 
 ## Preguntas abiertas / supuestos
 
 > Debe quedar vacío antes de aprobar la spec.
 
-1. **Nombre exacto** de la pestaña en la UI.
-2. **Contrato JSON de Script B** — definir la forma exacta del payload agregado
-   de ventas y verificar su tamaño real una vez implementado.
-3. **TTL de caché de Script B** — qué tan fresco debe estar el inventario.
-4. **Dos rotaciones conviviendo** — ¿se señala de alguna forma al usuario final
-   que la rotación de esta pestaña se calcula distinto a la de Rotación & Vejez?
-5. **Frecuencia del trigger** de `generarDrilldownPosiciones()` — dato que falta
-   para poder documentar la frescura máxima real de la parte de reservas.
+Ninguna bloqueante. Queda un dato pendiente de documentar, que **no impide
+implementar**:
+
+- **Frecuencia del trigger** de `generarDrilldownPosiciones()` — necesario para
+  documentar la frescura máxima real de la parte de reservas. Se consulta en
+  Apps Script → Activadores.
 
 ### Resueltas
 
+- ~~**Nombre de la pestaña**~~ — ✅ "Control Inventario".
+- ~~**TTL de caché**~~ — ✅ 1 h + botón "Actualizar" con `?refresh=1`.
+- ~~**Arquitectura**~~ — ✅ Script B en proyecto aparte.
+- ~~**Dos rotaciones**~~ — ✅ nota al pie en las tablas de la pestaña nueva.
 - ~~**`Fecha Reserva`**~~ — ✅ existe como columna Q; el `doGet` ya la lee, solo
   falta emitirla (una línea).
 - ~~**Script para el Drilldown**~~ — ✅ no hace falta: `API_URL` ya lo sirve.
@@ -210,12 +251,54 @@ Pendientes de detallar.
 
 ## Fases de implementación
 
-Pendientes de definir una vez cierren las preguntas abiertas. Borrador tentativo:
+Cada fase es un commit independiente y verificable. Se cierra una antes de
+empezar la siguiente, mostrando el resultado.
 
-- [ ] Fase A: Apps Script — capa de datos (código + despliegue por la usuaria)
-- [ ] Fase B: Andamiaje de la pestaña en `index.html` (tab, gate de código, contenedor aislado)
-- [ ] Fase C: Módulo 1 — Estatus de Inventario Actual
-- [ ] Fase D: Módulo 2 — Movimiento Mensual
-- [ ] Fase E: Módulo 3 — Alertas de Vejez
-- [ ] Fase F: Adaptación al design system Forest
-- [ ] Fase G: Verificación móvil y exportaciones
+### Fase A1 — Script A: exponer `fecha_reserva`
+Agregar una línea al `rows.push({...})` del `doGet` y redesplegar.
+- **Hace Claude:** entrega la línea exacta y dónde va.
+- **Hace la usuaria:** pega y redespliega.
+- **Verificación:** `API_URL` devuelve `fecha_reserva` con formato ISO.
+
+### Fase A2 — Script B: inventario + ventas agregadas
+Proyecto nuevo de Apps Script: lee `CONSOLIDADO` (crudo) e
+`Informe Inventario 22+` (agregado), caché 1 h, soporta `?refresh=1`.
+- **Hace Claude:** escribe el `Code.gs` completo + instrucciones de despliegue.
+- **Hace la usuaria:** crea el proyecto, pega, despliega y entrega la URL.
+- **Verificación:** el endpoint responde JSON con la forma acordada y pesa <300 KB (CA-8).
+
+### Fase B — Andamiaje + design system
+Tab "Control Inventario", gate de código, contenedor aislado, carga perezosa, y
+**el mapeo de tokens Forest desde el inicio** (para no repintar después).
+- **Verificación:** CA-1, CA-2, CA-3, CA-4. La tab entra y muestra el nº de
+  registros cargados. Nada existente se rompe.
+
+### Fase C — Módulo 1: Estatus de Inventario Actual
+KPIs, filtro On Spot/On Float/Ambos, y las 6 secciones del manual.
+- **Verificación:** CA-5.
+
+### Fase D — Módulo 2: Movimiento Mensual
+Tabla mensual por categoría + Top 5.
+- **Verificación:** CA-6.
+
+### Fase E — Módulo 3: Alertas de Vejez
+Las 4 vistas (A, B, B2, C), criticidad, e ICOs por Grupo.
+- **Verificación:** CA-7.
+
+### Fase F — Pulido visual y consistencia
+Repaso de detalles contra el design system, nota al pie de rotación.
+- **Verificación:** CA-11.
+
+### Fase G — Móvil y cierre
+Viewport 375px, scroll de tablas, botón Actualizar.
+- **Verificación:** CA-9, CA-10, y repaso completo de CA-1 a CA-11.
+
+## Reparto de trabajo
+
+| | Claude | Usuaria |
+|---|---|---|
+| Código Apps Script | escribe | revisa |
+| **Despliegue Apps Script** | — | **despliega** (requiere su cuenta Google) |
+| Código `index.html` | escribe | revisa |
+| Verificación por fase | ejecuta y muestra | confirma antes de seguir |
+| Merge a producción | abre el PR | **aprueba** |
