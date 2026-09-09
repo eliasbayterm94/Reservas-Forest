@@ -56,11 +56,13 @@ funcionalidad existente.
 |---|---|---|---|
 | `CONSOLIDADO` | `15CQqV…` (público) | ✅ HTTP 200 | 355 filas · 63 KB |
 | `Informe Inventario 22+` | `15CQqV…` (público) | ✅ HTTP 200 | 11.644 filas · **3,67 MB** · ene-2025 → sep-2026 |
-| `Drilldown Posiciones` | `1UYRE…` (privado) | ❌ **HTTP 401** | no legible sin autenticación |
-| `API_URL` (Reservas, Apps Script) | — | ✅ HTTP 200 | 389 filas · 161 KB |
+| `Drilldown Posiciones` | `1UYRE…` gid `1973971668` (privado) | ❌ HTTP 401 vía gviz | — |
+| `API_URL` (Apps Script v11) | sirve ese mismo Drilldown | ✅ HTTP 200 | 389 filas · 161 KB |
 
-El 401 del Drilldown es lo que motiva la capa Apps Script: un Web App corre con
-los permisos del dueño y puede leer la hoja privada **sin volverla pública**.
+**El 401 no es un bloqueo.** Revisado el `doGet` (Forest Reservas API v11), sus
+constantes son `SHEET_ID = "1UYRE…"` y `SHEET_GID = "1973971668"` — exactamente
+la hoja privada. `API_URL` ya la sirve como JSON, corriendo con los permisos del
+dueño. No hay que cambiar permisos ni construir un script para el Drilldown.
 
 ### Reconciliación en vivo: API de Reservas vs CONSOLIDADO
 
@@ -111,18 +113,36 @@ que el dashboard** (`['RESERVADO','FACTURADO SIN ROTAR']`).
 **Consecuencia:** no hay que construir un Apps Script para el Drilldown. Basta
 con extender el `doGet` existente para exponer `fecha_reserva` (columna Q).
 
-### Cadena de datos del Drilldown (contexto)
-
-`generarDrilldownPosiciones()` no lee del Drilldown: lo **escribe**. Su cadena es:
+### Cadena de datos y frescura real
 
 ```
-Offering Lists (OFFERING_LISTS_SPREADSHEET_ID)  ─┐
-CONSOLIDADO CONTRATOS (CONTRACTS_SPREADSHEET_ID)─┴─> Drilldown Posiciones (1UYRE…)
-                                                          └─> doGet (API_URL) ─> app
+Offering Lists ─┐
+CONSOLIDADO     ├─[trigger: generarDrilldownPosiciones]─> Drilldown Posiciones
+CONTRATOS       ┘                                                │
+                                          [trigger: calentarCache cada 3 h]
+                                          [CacheService TTL: 4 h]
+                                                                 ▼
+                                                           API_URL ──> app
 ```
 
-Implicación: la frescura del Drilldown depende de cuándo corre ese generador
-(trigger), no de cuándo la app pide los datos.
+`API_URL` cachea en `CacheService` con TTL de 4 h (`CACHE_SECS = 60*60*4`) y un
+trigger `calentarCache` lo recalienta cada 3 h. `?refresh=1` salta ese caché,
+pero **no** vuelve a correr `generarDrilldownPosiciones()`.
+
+**Implicación:** la parte de reservas de la pestaña nueva puede mostrar datos de
+hasta 3–4 h atrás, más el desfase del generador del Drilldown. El inventario
+(CONSOLIDADO) sí puede ser al minuto, porque se lee directo.
+
+### `fecha_reserva`: cambio de una línea en Script A
+
+El `doGet` ya lee la columna Q (`C.fecha_reserva: 16`) y la usa para calcular
+`dias_reserva`, pero no la emite. Basta agregar al `rows.push({...})`:
+
+```js
+fecha_reserva:  toFechaISO(r[C.fecha_reserva]),
+```
+
+y redesplegar.
 
 ## Restricciones técnicas detectadas
 
@@ -140,9 +160,28 @@ Implicación: la frescura del Drilldown depende de cuándo corre ese generador
    **el despliegue lo hace la usuaria** en script.google.com — requiere su cuenta
    de Google.
 
+## Arquitectura de la capa de datos
+
+| | Rol | Cambio | Riesgo |
+|---|---|---|---|
+| **Script A** — existente (`API_URL`) | Reservas / Drilldown Posiciones | +1 línea (`fecha_reserva`) y redesplegar | Mínimo |
+| **Script B** — nuevo, proyecto aparte | CONSOLIDADO crudo + ventas agregadas | Código nuevo; despliegue por la usuaria | Cero sobre Reservas |
+
+Script B va en un **proyecto separado** para que un fallo suyo no pueda afectar
+la pestaña de Reservas, que es crítica y ya está en producción.
+
+Reparto de cálculo:
+
+- **En el servidor (Script B):** agregación de ventas — mensual por
+  región/categoría, top 5, vejez al vender, KG vendidos 12 m. Es aritmética
+  estable que casi nunca cambia, y es la que pesa (3,67 MB → ~150 KB).
+- **En el navegador (`index.html`):** lógica de inventario, alertas, criticidad
+  y cruce con reservas. Es la que más se va a ajustar con el uso, y conviene
+  poder cambiarla editando el HTML sin redesplegar nada.
+
 ## Requisitos funcionales
 
-Pendientes de detallar una vez se cierre la arquitectura de la capa de datos.
+Pendientes de detallar una vez cierren las preguntas abiertas restantes.
 
 ## Criterios de aceptación
 
@@ -152,24 +191,22 @@ Pendientes de detallar.
 
 > Debe quedar vacío antes de aprobar la spec.
 
-1. **Código del `doGet`** — pendiente. `generarDrilldownPosiciones()` (recibido)
-   es el generador de la hoja, no el Web App. Falta el archivo `.gs` que
-   contiene el `doGet` que responde en `API_URL`, para saber cómo extenderlo.
-2. **Nombre exacto** de la pestaña en la UI.
-3. **Payload agregado** — definir el contrato JSON exacto que devolverá el
-   endpoint de ventas, y verificar su tamaño real.
+1. **Nombre exacto** de la pestaña en la UI.
+2. **Contrato JSON de Script B** — definir la forma exacta del payload agregado
+   de ventas y verificar su tamaño real una vez implementado.
+3. **TTL de caché de Script B** — qué tan fresco debe estar el inventario.
 4. **Dos rotaciones conviviendo** — ¿se señala de alguna forma al usuario final
    que la rotación de esta pestaña se calcula distinto a la de Rotación & Vejez?
-5. **Frecuencia del trigger** de `generarDrilldownPosiciones()` — determina qué
-   tan fresco puede estar el dato de reservas, sin importar que la app consulte
-   en vivo.
+5. **Frecuencia del trigger** de `generarDrilldownPosiciones()` — dato que falta
+   para poder documentar la frescura máxima real de la parte de reservas.
 
 ### Resueltas
 
-- ~~**`Fecha Reserva`**~~ — ✅ existe como columna real (Q) en el Drilldown. No
-  está expuesta en `API_URL` todavía; se agrega al extender el `doGet`.
-- ~~**Script para el Drilldown**~~ — ✅ no hace falta construirlo: `API_URL` ya
-  lo sirve.
+- ~~**`Fecha Reserva`**~~ — ✅ existe como columna Q; el `doGet` ya la lee, solo
+  falta emitirla (una línea).
+- ~~**Script para el Drilldown**~~ — ✅ no hace falta: `API_URL` ya lo sirve.
+- ~~**El 401 del Drilldown**~~ — ✅ no es bloqueo; no hay que tocar permisos.
+- ~~**Código del `doGet`**~~ — ✅ recibido y analizado (Forest Reservas API v11).
 
 ## Fases de implementación
 
