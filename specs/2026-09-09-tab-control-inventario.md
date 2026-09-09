@@ -1,6 +1,6 @@
 # Spec: Nueva pestaña "Control de Inventario"
 
-Estado: Lista para aprobación
+Estado: Aprobada — en progreso (Fase A1)
 Fecha: 2026-09-09
 Rama: feature/tab-control-inventario
 
