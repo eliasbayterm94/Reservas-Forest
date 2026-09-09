@@ -892,6 +892,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <select id="rcSel" class="ger-sel" style="margin-left:auto;min-width:200px" onchange="renderCarteraComisiones()">
       <option value="">Elige tu nombre…</option>
     </select>
+    <button class="btn-excel" onclick="exportCarteraComisionPNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen del estado del comercial seleccionado"><i data-lucide="image"></i> Imagen</button>
+    <select id="rcMailReg" class="ger-sel" style="margin-left:8px" title="Adjuntar la rotación de esta región (opcional)"><option value="">+ rotación de… (opcional)</option></select>
+    <button class="btn-excel" onclick="emailRepRegionPNG()" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Genera la imagen (rep + región) y abre un correo con el resumen para enviarla"><i data-lucide="mail"></i> Enviar por correo</button>
   </div>
   <div id="rcCard" style="padding:4px 2px"></div>
   <div class="footer">
@@ -911,7 +914,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div class="ger-toolbar">
     <span class="res-count">Rotación (con penalidad) y vejez ponderada por región</span>
     <span id="r90Src" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
-    <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:auto"><i data-lucide="download"></i> Excel</button>
+    <select id="r90ImgReg" class="ger-sel" style="margin-left:auto" title="Región para la imagen"><option value="">Imagen: todas las regiones</option></select>
+    <button class="btn-excel" onclick="exportRotacion90PNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen de la rotación (de la región elegida) para enviar por correo"><i data-lucide="image"></i> Imagen</button>
+    <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="table-wrap" id="twR90" style="flex:0 0 auto;max-height:60vh;contain:layout paint">
     <table id="r90Table">
@@ -2443,7 +2448,7 @@ async function cargarVentas(){
 // Rotación ponderada por región (últimos 90 días). Lee la pestaña "Rotacion".
 let rotRaw = [];             // [{region, kg, days}]
 let rotCatByIco = {};        // categoría (Community/Microlot/…) por ICO, desde la pestaña Rotacion
-let rotLoaded = false, rotError = '', rotWh2Dbg = '';
+let rotLoaded = false, rotError = '', rotWh2Dbg = '', rotDbg = null;
 async function cargarRotacion(){
   try{
     const resp = await fetch(ROT_CSV_URL + '&_=' + Date.now());
@@ -2467,26 +2472,29 @@ async function cargarRotacion(){
     }
     const today=new Date(); today.setHours(0,0,0,0); const min=new Date(today.getTime()-90*86400000);
     const CANON=['USA','EU','UK','Australia','MENA']; const wh2dbg=new Set(); const catMap={};
-    const out=[];
+    const out=[]; const dbg={noKg:0,noDays:0,old90:0,byRegion:{}};   // diagnóstico
     for(let r=1;r<aoa.length;r++){
       const row=aoa[r]; if(!row||!row.length) continue;
       if(iCatR>=0 && iIcoR>=0){ const ic=String(row[iIcoR]||'').trim(), ct=String(row[iCatR]||'').trim(); if(ic && ct) catMap[ic]=ct; }
       const rawReg=String(row[iReg]||'').trim();
       const rawWh=iWh2>=0 ? String(row[iWh2]||'').trim() : '';
       if(rawWh) wh2dbg.add(rawWh);
-      // Región: "Warehouse**" MANDA si da una región canónica (ahí viene UK); si no, usa "Region".
+      // Región: la columna "Region" MANDA si es canónica (la venta es por región de destino);
+      // "Warehouse**" solo se usa como respaldo cuando Region no es canónica (ej. UK viene ahí).
       const cReg=normRegion(rawReg), cWh=normRegion(rawWh);
-      const region = CANON.includes(cWh) ? cWh : (CANON.includes(cReg) ? cReg : (cReg||cWh));
+      const region = CANON.includes(cReg) ? cReg : (CANON.includes(cWh) ? cWh : (cReg||cWh));
       if(esFilaTotal_(region)) continue;   // descarta solo si no quedó región (ni en Region ni en Warehouse**) o es total
       const qty=cleanNum(row[iQty]), size=cleanNum(row[iSize]);
-      const kg=qty*size; if(!(kg>0)) continue;
-      const rawDays=String(row[iRot]||'').trim(); if(!rawDays) continue;   // requiere rotation days
+      const kg=qty*size; if(!(kg>0)){ dbg.noKg++; continue; }
+      const rawDays=String(row[iRot]||'').trim(); if(!rawDays){ dbg.noDays++; continue; }   // requiere rotation days
       const days=cleanNum(rawDays);
       // Filtra a los últimos 90 días por Transaction Date (solo si la fecha es válida).
-      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min) continue; }
+      if(iDate>=0){ const iso=normalizeDate(row[iDate]); if(/^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(iso)<min){ dbg.old90++; continue; } }
+      dbg.byRegion[region]=(dbg.byRegion[region]||0)+1;
       out.push({region, kg, days});
     }
-    rotRaw=out; rotCatByIco=catMap; rotLoaded=true; rotError='';
+    rotRaw=out; rotCatByIco=catMap; rotLoaded=true; rotError=''; rotDbg=dbg;
+    console.log('[Rotación] filas por región:', dbg.byRegion, '· descartadas → sin kg:', dbg.noKg, 'sin rotation days:', dbg.noDays, '>90 días:', dbg.old90, '· Warehouse** vistos:', [...wh2dbg]);
     rotWh2Dbg = iWh2>=0 ? ('Wh**: '+([...wh2dbg].slice(0,10).join('/')||'(vacío)')) : 'sin col Warehouse**';
     if(activeTab==='rotacion90') renderRotacion90();
   }catch(err){
@@ -3798,6 +3806,10 @@ function renderCarteraComisiones(){
   const sel=$('rcSel'); const cur=sel.value;
   sel.innerHTML='<option value="">Elige tu nombre…</option>'+rows.map(r=>`<option value="${escAttr(r.c)}">${esc(r.c)}</option>`).join('');
   if(rows.some(r=>r.c===cur)) sel.value=cur;
+  // Selector de región para adjuntar la rotación (opcional). Usa las regiones con target definido.
+  { const rs=$('rcMailReg'); if(rs){ const rc=rs.value;
+    rs.innerHTML='<option value="">+ rotación de… (opcional)</option>'+Object.keys(ROT_TARGETS).map(rg=>`<option value="${escAttr(rg)}">+ rotación: ${esc(rg)}</option>`).join('');
+    if(Object.keys(ROT_TARGETS).includes(rc)) rs.value=rc; } }
   const box=$('rcCard'); const name=sel.value;
   const warn = (ventasLoaded && ventasError)
     ? `<div style="margin:8px 0;padding:10px 12px;border:1px solid #a8351c;border-radius:8px;background:rgba(168,53,28,.08);color:#a8351c;font-size:12.5px">⚠ Ventas no cargadas: ${esc(ventasError)}</div>` : '';
@@ -3806,6 +3818,135 @@ function renderCarteraComisiones(){
   else { const r=rows.find(x=>x.c===name); box.innerHTML = warn + (r ? cmCardHtml(r) : ''); }
   $('rcTs').textContent='Updated: '+new Date().toLocaleString('en-US');
   if(window.lucide) lucide.createIcons();
+}
+// Tarjeta (bloque blanco) del estado de comisiones de un comercial — reutilizable en imagen y correo.
+function _comisionCardHtml(r){
+  const cl=diasAlCierre();
+  const s=cmColor(r.pct);
+  const accent = s.c==='var(--text3)' ? '#9a9ea9' : s.c;
+  const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
+  const tope = r.ventas>0 ? CM_LIMIT*r.ventas : null;
+  const brk=[['1–30',r.b1],['31–60',r.b2],['61–90',r.b3],['90+',r.b4]];
+  const barMax=Math.max(r.b1,r.b2,r.b3,r.b4,1);
+  const brkHtml=brk.map(([l,v])=>{
+    const p = r.ventas>0 ? (v/r.ventas*100) : 0;
+    const w = Math.round(v/barMax*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+      <span style="width:56px;color:#5b6170;font-size:12.5px">${l}</span>
+      <div style="flex:1;background:#eceae3;border-radius:5px;height:15px;overflow:hidden"><div style="width:${w}%;height:100%;background:${accent};opacity:.85"></div></div>
+      <span style="width:170px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#1f2430">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
+  }).join('');
+  const statRow=(lab,val,bold,color)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}${bold?';font-size:15px':''}">${val}</b></div>`;
+  return `<div style="border:1px solid #e3e0d7;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
+      <div style="display:flex;gap:28px;flex-wrap:wrap">
+        <div style="min-width:230px">
+          <div style="font-size:17px;font-weight:800;color:#1B203D">${esc(r.c)}</div>
+          <div style="font-size:44px;font-weight:800;color:${accent};line-height:1.05;margin-top:6px">${pctTxt}</div>
+          <div style="color:${accent};font-weight:700;font-size:14px;margin-top:2px">${s.lbl}${r.pct!=null&&r.pct>=CM_LIMIT?' — comisiones se congelan al cierre':''}</div>
+          <div style="margin-top:10px;color:#5b6170;font-size:12.5px">Límite: 8% · faltan <b>${cl.dias===0?'0 (hoy)':cl.dias}</b> día(s) para el cierre (día 5)</div>
+        </div>
+        <div style="flex:1;min-width:340px">
+          ${statRow('Ventas 90d', r.ventas>0?money(r.ventas):'— sin dato')}
+          ${statRow('Cartera vencida', money(r.venc), true)}
+          ${statRow('Tope 8% (vencida máx.)', tope!=null?money(tope):'—')}
+          <div style="border-top:1px solid #e3e0d7;margin:9px 0 10px;padding-top:9px">
+            ${statRow('A cobrar para no congelar', r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien'), true, r.aCobrar>0?'#a8351c':'#2c7a2c')}
+          </div>
+          <div style="font-size:12px;color:#5b6170;margin-bottom:2px">Desglose de la vencida por bracket:</div>
+          ${brkHtml}
+        </div>
+      </div>
+    </div>`;
+}
+// Texto plano del estado de un comercial (para el cuerpo del correo).
+function _comisionResumenTxt(r){
+  const pctTxt = r.pct==null ? 's/ventas' : (r.pct*100).toFixed(1)+'%';
+  const est = cmColor(r.pct).lbl;
+  const L=[];
+  L.push(`Estado de cartera — ${r.c}`);
+  L.push(`• % vencida vs ventas 90d: ${pctTxt} (${est}; límite 8%)`);
+  L.push(`• Ventas 90d: ${r.ventas>0?money(r.ventas):'— sin dato'}`);
+  L.push(`• Cartera vencida: ${money(r.venc)}`);
+  L.push(`• A cobrar para no congelar: ${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 (va bien)')}`);
+  return L.join('\n');
+}
+// ── Imagen del estado de comisiones del comercial seleccionado (para enviar por correo) ──
+function exportCarteraComisionPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const name=$('rcSel').value;
+  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
+  const r=comisionesRows().find(x=>x.c===name);
+  if(!r){ alert('No encontré el estado de ese comercial.'); return; }
+  const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado de comisiones</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
+    </div>
+    ${_comisionCardHtml(r)}
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Estado = cartera vencida ÷ ventas de los últimos 90 días. Si supera 8% al cierre (día 5) se congelan las comisiones. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Comisiones_${name.replace(/[^A-Za-z0-9]+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
+}
+// ── Enviar por correo: imagen combinada (cartera del rep + rotación de la región) + correo prellenado ──
+async function emailRepRegionPNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!cartLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const name=$('rcSel').value;
+  if(!name){ alert('Primero elige un comercial en el selector.'); return; }
+  const rep=comisionesRows().find(x=>x.c===name);
+  if(!rep){ alert('No encontré el estado de ese comercial.'); return; }
+  const region=($('rcMailReg')||{}).value||'';
+  const btn=window.event&&window.event.target ? window.event.target.closest('button') : null;
+  if(btn){ btn.disabled=true; }
+  try{
+    if(region){                                   // cargar rotación/vejez si hace falta
+      if(typeof cargarRotacion==='function' && !rotLoaded) await cargarRotacion();
+      if(typeof cargarVejez==='function' && !vejezLoaded) await cargarVejez();
+    }
+    const regRow = region ? (rotVejezRows().rows.find(x=>x.region===region)||null) : null;
+    const fecha=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    const dTxt=v=> v>0 ? Math.round(v)+' d' : '—';
+    const box=document.createElement('div');
+    box.style.cssText='position:fixed;left:-10000px;top:0;width:900px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+    box.innerHTML=`
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado del comercial</div>
+          <div style="font-size:12px;color:#9a9ea9;margin-top:2px">${esc(rep.c)}${region?(' · rotación de '+esc(region)):''} · ${fecha}</div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Forest Reservas</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:#1B203D;margin:0 0 8px">Cartera & comisiones</div>
+      ${_comisionCardHtml(rep)}
+      ${regRow?`<div style="font-size:13px;font-weight:700;color:#1B203D;margin:18px 0 8px">Rotación · ${esc(region)}</div>${_rotRegionCardHtml(regRow, dTxt)}`:''}
+      <div style="font-size:10.5px;color:#b7b3a8;margin-top:12px">Cartera: vencida ÷ ventas 90d (límite 8%). Rotación ajustada = actual + 2 d por lote disponible >150 d. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    document.body.appendChild(box);
+    let canvas;
+    try{ canvas=await html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}); }
+    finally{ try{document.body.removeChild(box);}catch(e){} }
+    const a=document.createElement('a');
+    a.download=`Forest_${name.replace(/[^A-Za-z0-9]+/g,'_')}${region?('_'+region.replace(/[^A-Za-z0-9]+/g,'_')):''}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png'); a.click();
+    // Abrir correo con asunto y resumen prellenados (sin destinatario; se adjunta la imagen descargada)
+    const subj=`Forest — Estado de cartera: ${name}${region?(' · rotación '+region):''}`;
+    const body=[ _comisionResumenTxt(rep), regRow?('\n'+_rotRegionResumenTxt(regRow)):'',
+      '\nAdjunto la imagen descargada con el detalle.', '— Forest Reservas' ].filter(Boolean).join('\n');
+    setTimeout(()=>{ try{ window.location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body); }catch(e){} }, 500);
+  }catch(err){ alert('No se pudo generar la imagen: '+(err&&err.message||err)); }
+  finally{ if(btn) btn.disabled=false; }
 }
 function exportComisionesExcel(){
   if(!cartLoaded){ alert('Data is still loading, try again in a moment.'); return; }
@@ -3830,9 +3971,13 @@ function renderRotacion90(){
   if(!rotLoaded && !vejezLoaded){ body.innerHTML='<tr><td colspan="9" style="padding:20px;color:var(--text3)">Cargando…</td></tr>'; $('r90Src').textContent='cargando…'; return; }
   const M=rotVejezRows(); const rows=M.rows;
   const src=[];
-  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ src.push('Rot: '+([...new Set(rotRaw.map(x=>x.region))].join('/')||'sin datos')); if(rotWh2Dbg) src.push(rotWh2Dbg); }
+  if(rotError) src.push('⚠ Rotacion: '+rotError); else if(rotLoaded){ const bg=(rotDbg&&rotDbg.byRegion)||{}; src.push('Rot: '+(Object.keys(bg).length?Object.keys(bg).map(k=>`${k}(${bg[k]})`).join(' '):'sin datos')); if(rotDbg) src.push(`descartadas: ${rotDbg.noDays} sin rot.days · ${rotDbg.old90} >90d · ${rotDbg.noKg} sin kg`); if(rotWh2Dbg) src.push(rotWh2Dbg); }
   if(vejezError) src.push('⚠ vejez: '+vejezError); else if(vejezLoaded) src.push('Vejez: '+(Object.keys(vejezByRegion).join('/')||'sin datos'));
   $('r90Src').textContent=src.join('  ·  ');
+  // Selector de región para la imagen (preservando selección)
+  { const sel=$('r90ImgReg'); if(sel){ const cur=sel.value;
+    sel.innerHTML='<option value="">Imagen: todas las regiones</option>'+M.rows.map(r=>`<option value="${escAttr(r.region)}">Imagen: ${esc(r.region)}</option>`).join('');
+    if(M.rows.some(r=>r.region===cur)) sel.value=cur; } }
   renderRotLotes();   // filtros + cards + lista de lotes por mover
   if(!rows.length){ body.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:22px">Sin datos de rotación ni vejez (ver avisos arriba).</td></tr>`;
     ['r90Vejez','r90Global','r90Old','r90Slow','r90SlowD','r90OldD'].forEach(id=>$(id).textContent='—');
@@ -3874,6 +4019,161 @@ function exportRotacion90Excel(){
   ws['!cols']=[{wch:14},{wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:11},{wch:13},{wch:12},{wch:12}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Rotacion y Vejez');
   XLSX.writeFile(wb,`Forest_RotacionVejez_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+// Contenido (KPIs + contexto + lotes) de la rotación de UNA región — reutilizable en imagen y correo.
+function _rotRegionCardHtml(r, dTxt){
+  const tg=ROT_TARGETS[r.region]; const st=tg?rotStatus(r.rotBase,tg.tNum):null;
+  const accent = st ? st.c : '#1B203D';
+  const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#9a9ea9';
+  const lots=(vejezLots||[]).filter(l=>l.region===r.region && l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
+  const th='padding:8px 11px;font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
+  const td='padding:7px 11px;font-size:12.5px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const kpi=(lab,val,sub,ac)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${ac};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
+    <div style="font-size:26px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
+    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+  const stat=(lab,val,color)=>`<div style="display:flex;justify-content:space-between;font-size:13px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}">${val}</b></div>`;
+  const lotRows = lots.length ? lots.slice(0,14).map(l=>`<tr>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;font-family:ui-monospace,Menlo,monospace;border-bottom:1px solid #ececec;color:#1B203D">${esc(l.ico||'—')}</td>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #ececec">${esc(l.name||'')}</td>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #ececec;color:#5b6170">${esc(l.warehouse||'')}</td>
+      <td style="${td};font-weight:700;color:${l.dias>180?'#a8351c':'#8a6d00'}">${Math.round(l.dias)} d</td>
+      <td style="${td}">${kgFmt?kgFmt(l.actual):Math.round(l.actual)}</td></tr>`).join('')
+    : `<tr><td colspan="5" style="padding:16px;text-align:center;color:#2c7a2c;font-size:13px">No hay lotes disponibles con más de 150 días. 👍</td></tr>`;
+  return `<div style="display:flex;gap:12px;margin-bottom:14px">
+      ${kpi('Rotación actual (90d)',dTxt(r.rotBase),'ponderada','#1B203D')}
+      ${kpi('Rotación ajustada',dTxt(r.rotAdj),'con penalidad','#8a6d00')}
+      ${kpi('Lotes que afectan',(r.oldCount||0)+'',(r.penalty>0?('penalidad +'+r.penalty+' d'):'sin penalidad'),'#a8351c')}
+      ${kpi('Vejez pond.',dTxt(r.vejez),'target < '+VEJEZ_TARGET+' d',vjC)}
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid #e3e0d7;border-radius:10px;padding:14px 16px">
+      <div style="flex:1;min-width:240px">
+        ${stat('Target 6-meses', tg?tg.t6+' d':'—')}
+        ${stat('Destino', tg&&tg.dest?tg.dest+' d':'—')}
+        ${stat('Estado vs target', st?st.lbl:'—', accent)}
+      </div>
+      <div style="flex:1;min-width:240px">
+        ${stat('Lotes disponibles >150 d', (r.oldCount||0)+'', r.oldCount>0?'#a8351c':'#2c7a2c')}
+        ${stat('Penalidad aplicada', r.penalty>0?('+'+r.penalty+' d'):'0 d', r.penalty>0?'#a8351c':'#2c7a2c')}
+        ${stat('kg disponibles', r.availKg>0?(kgFmt?kgFmt(r.availKg):Math.round(r.availKg))+' kg':'—')}
+      </div>
+    </div>
+    <div style="font-size:12.5px;font-weight:700;color:#1B203D;margin:0 0 6px">Lotes que afectan la rotación (>150 días)</div>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+      <thead><tr>
+        <th style="${th};text-align:left">ICO</th><th style="${th};text-align:left">Nombre</th>
+        <th style="${th};text-align:left">Bodega</th><th style="${th}">Días</th><th style="${th}">Actual</th>
+      </tr></thead>
+      <tbody>${lotRows}</tbody>
+    </table>
+    ${lots.length>14?`<div style="font-size:11px;color:#9a9ea9;margin-top:6px">… y ${lots.length-14} lote(s) más (ver la lista completa en el dashboard).</div>`:''}`;
+}
+// Texto plano de la rotación de una región (para el cuerpo del correo).
+function _rotRegionResumenTxt(r){
+  const L=[];
+  L.push(`Rotación — ${r.region}`);
+  L.push(`• Rotación actual (90d): ${r.rotBase>0?Math.round(r.rotBase)+' d':'—'}`);
+  L.push(`• Rotación ajustada: ${r.rotAdj>0?Math.round(r.rotAdj)+' d':'—'} (${r.oldCount||0} lote(s) >150d, +${r.penalty||0} d)`);
+  L.push(`• Vejez ponderada: ${r.vejez>0?Math.round(r.vejez)+' d':'—'} (target <${VEJEZ_TARGET})`);
+  return L.join('\n');
+}
+// Imagen enfocada en UNA región (para enviar al comercial de esa región).
+function _rotRegionPNG(r, fecha, dTxt){
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:860px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación · ${esc(r.region)}</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada y lotes que afectan (>150 días) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
+    </div>
+    ${_rotRegionCardHtml(r, dTxt)}
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Rotación ajustada = actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Rotacion_${String(r.region).replace(/[^A-Za-z0-9]+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
+}
+// ── Imagen de la rotación por región (actual, ajustada, lotes que afectan) para el correo ──
+function exportRotacion90PNG(){
+  if(typeof html2canvas!=='function'){ alert('El generador de imagen aún está cargando, intenta de nuevo en un momento.'); return; }
+  if(!rotLoaded && !vejezLoaded){ alert('Los datos aún están cargando, intenta de nuevo en un momento.'); return; }
+  const M=rotVejezRows();
+  const fecha=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const dTxt=v=> v>0 ? Math.round(v)+' d' : '—';
+  const selReg=($('r90ImgReg')||{}).value||'';
+  if(selReg){ const r=M.rows.find(x=>x.region===selReg); if(!r){ alert('No hay datos para esa región.'); return; } _rotRegionPNG(r, fecha, dTxt); return; }
+
+  const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
+  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const rowHtml=(r)=>{ const tg=ROT_TARGETS[r.region]; const st=tg?rotStatus(r.rotBase,tg.tNum):null;
+    const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#c2c2bb';
+    return `<tr style="background:#fff">`
+      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:700;color:#1B203D;border-bottom:1px solid #ececec">${esc(r.region)}</td>`
+      +`<td style="${td};font-weight:700">${dTxt(r.rotBase)}</td>`
+      +`<td style="${td};color:#5b6170">${tg?esc(tg.t6):'—'}</td>`
+      +`<td style="${td};text-align:left;padding-left:20px">${st?`<span style="display:inline-block;min-width:52px;text-align:center;padding:2px 8px;border-radius:10px;font-weight:700;color:#fff;background:${st.c}">${st.lbl}</span>`:'<span style="color:#c2c2bb">—</span>'}</td>`
+      +`<td style="${td};font-weight:700;color:${r.oldCount>0?'#a8351c':'#c2c2bb'}">${r.oldCount||0}</td>`
+      +`<td style="${td};color:${r.penalty>0?'#a8351c':'#c2c2bb'}">${r.penalty>0?('+'+r.penalty+' d'):'—'}</td>`
+      +`<td style="${td};font-weight:800;color:#1B203D">${dTxt(r.rotAdj)}</td>`
+      +`<td style="${td};font-weight:700;color:${vjC}">${dTxt(r.vejez)}</td></tr>`;
+  };
+  const totRow=`<tr style="background:#E9C400">`
+    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:800;color:#1B203D;border-bottom:1px solid #E9C400">GLOBAL</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.rotGlobalBase)}</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400">—</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400">—</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800;color:#1B203D">${M.totOld||0}</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800;color:#1B203D">${M.totPenalty>0?('+'+M.totPenalty+' d'):'—'}</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.rotGlobalAdj)}</td>`
+    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.globalVejez)}</td></tr>`;
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
+    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+  const vjGlobalC = M.globalVejez>0 ? (M.globalVejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#9a9ea9';
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1040px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.innerHTML=`
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación por región</div>
+        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada · lotes que afectan (>150 días) · ${fecha}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      ${kpi('Rotación actual (global)',dTxt(M.rotGlobalBase),'ponderada 90d','#1B203D')}
+      ${kpi('Rotación ajustada (global)',dTxt(M.rotGlobalAdj),'con penalidad','#8a6d00')}
+      ${kpi('Lotes que afectan',(M.totOld||0)+'',' > 150 días (penalidad +2 d c/u)','#a8351c')}
+      ${kpi('Vejez global',dTxt(M.globalVejez),'target < '+VEJEZ_TARGET+' días',vjGlobalC)}
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+      <thead><tr>
+        <th style="${th};text-align:left">Región</th>
+        <th style="${th}">Rot. actual (90d)</th><th style="${th}">Target 6-mo</th>
+        <th style="${th};text-align:left;padding-left:20px">vs Target</th>
+        <th style="${th}">Lotes >150d</th><th style="${th}">Penalidad</th>
+        <th style="${th}">Rot. ajustada</th><th style="${th}">Vejez pond.</th>
+      </tr></thead>
+      <tbody>${M.rows.length? M.rows.map(rowHtml).join('')+totRow : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">Sin datos de rotación ni vejez.</td></tr>`}</tbody>
+    </table>
+    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Rotación ajustada = rotación actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+  document.body.appendChild(box);
+  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+    document.body.removeChild(box);
+    const a=document.createElement('a');
+    a.download=`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.png`;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }).catch(err=>{ try{document.body.removeChild(box);}catch(e){} alert('No se pudo generar la imagen: '+err.message); });
 }
 
 // Lista de lotes por mover (>150 días) + cards por bracket, con filtros región/categoría.
