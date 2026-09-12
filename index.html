@@ -281,8 +281,11 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .ci-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0}
 /* El rótulo cede espacio y se recorta con … antes que empujar los botones a otra fila */
 .ci-bar .ci-lbl{flex:1 1 auto;min-width:60px;overflow:hidden;text-overflow:ellipsis}
-.ci-hint{padding:10px 16px;font-size:12px;color:var(--text2);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.ci-hint{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:12px;color:var(--text2);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
 .ci-hint.hidden{display:none}
+.ci-hint b{font-family:'DM Mono',monospace;color:var(--fc-navy)}
+/* Spinner pequeño: el dashboard tarda y sin señal de vida parece colgado */
+.ci-spin{width:15px;height:15px;flex-shrink:0;border:2px solid var(--border2);border-top-color:var(--fc-navy);border-radius:50%;animation:spin .8s linear infinite}
 .ci-frame{flex:1;width:100%;min-height:0;border:0;background:var(--bg)}
 
 /* ══ AGING BADGES (cartera) ══ */
@@ -3290,8 +3293,7 @@ function switchTab(tab){
 // o el navegador se niega a mostrarlo embebido.
 // ═══════════════════════════════════════════════════
 const CTRLINV_URL = 'https://script.google.com/a/macros/forestcol.com/s/AKfycbxSvIiyHD1gVGRHyN0SGIRXonCu1ckyIN2qBJ_qX2qD_k0mbJp4KNuNfErc0Aqxd3nhaw/exec';
-const CI_MSG_CARGA = 'Abriendo el dashboard… Si el panel queda en blanco o dice «refused to connect», el despliegue del script no permite mostrarse embebido — ábrelo aparte mientras tanto.';
-let ctrlInvLoaded = false;
+let ctrlInvLoaded = false, ctrlInvTimer = null;
 
 // Gate de acceso: reutiliza GERENCIA_CODE y la misma marca de sesión que
 // Management (gerOK), así el equipo maneja un solo código.
@@ -3311,11 +3313,21 @@ function mostrarControlInv(){
 function cargarControlInv(forzar){
   const f=$('ciFrame'); if(!f) return;
   if(ctrlInvLoaded && !forzar) return;
+  // Contador visible: el dashboard tarda ~30 s mientras el script no tenga
+  // caché, y un panel en blanco sin señal de vida invita a pulsar Actualizar,
+  // que solo reinicia la espera.
   $('ciHint').classList.remove('hidden');
-  $('ciHint').textContent = forzar
-    ? 'Recalculando desde las hojas… esto sí tarda (~40 s): se está saltando el caché a propósito.'
-    : CI_MSG_CARGA;
   $('ciTs').textContent = forzar ? 'Recalculando…' : 'Cargando…';
+  const base = forzar
+    ? 'Recalculando desde las hojas, saltando el caché a propósito — tarda ~30 s.'
+    : 'Generando el dashboard… La primera vez tarda ~30 s porque el script lo recalcula desde las hojas.';
+  const t0 = Date.now();
+  const pintar = () => {
+    const s = Math.round((Date.now()-t0)/1000);
+    $('ciHint').innerHTML = `<span class="ci-spin"></span><span>${base} <b>${s}s</b>`
+      + (s>=50 ? ' · ¿sigue en blanco? Prueba «Abrir aparte».' : '') + '</span>';
+  };
+  clearInterval(ctrlInvTimer); pintar(); ctrlInvTimer = setInterval(pintar, 1000);
   // El listener se engancha aquí y no como atributo onload= en el HTML: así no
   // se dispara con el about:blank inicial, que ocurre antes de que este script
   // exista y lanzaría un ReferenceError en consola.
@@ -3326,6 +3338,7 @@ function cargarControlInv(forzar){
   ctrlInvLoaded = true;
 }
 function ctrlInvCargado(){
+  clearInterval(ctrlInvTimer);
   $('ciHint').classList.add('hidden');
   $('ciTs').textContent = 'Generado: '+new Date().toLocaleString('es-CO');
 }
