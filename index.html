@@ -275,6 +275,16 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
 .view.hidden{display:none}
 .tst.hidden{display:none}
 
+/* ══ CONTROL INVENTARIO (dashboard embebido) ══ */
+/* El dashboard vive en su propio Apps Script y se muestra dentro de un iframe,
+   así conserva su estética y su lógica sin mezclarse con la app. */
+.ci-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0}
+/* El rótulo cede espacio y se recorta con … antes que empujar los botones a otra fila */
+.ci-bar .ci-lbl{flex:1 1 auto;min-width:60px;overflow:hidden;text-overflow:ellipsis}
+.ci-hint{padding:10px 16px;font-size:12px;color:var(--text2);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.ci-hint.hidden{display:none}
+.ci-frame{flex:1;width:100%;min-height:0;border:0;background:var(--bg)}
+
 /* ══ AGING BADGES (cartera) ══ */
 .age{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;white-space:nowrap}
 .age.fut{background:var(--ok-bg);color:var(--ok-fg)}
@@ -456,6 +466,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .fi select{max-width:none;width:100%}
   .btn-excel{height:32px;padding:0 12px}
 
+  /* Control Inventario: la etiqueta toma su propia fila y los botones no se salen */
+  .ci-bar{padding:8px 10px;gap:8px 6px}
+  .ci-bar .res-count{flex-basis:100%;white-space:normal}
+  .ci-bar .btn-excel{margin-left:0 !important}
+  .ci-hint{padding:10px}
+
   /* Filtros colapsables (cerrados por defecto en móvil) — Reservas y Cartera */
   .filter-toggle{display:inline-flex}
   #fbReservas .fi,#fbReservas .pill,#fbReservas .fsep,
@@ -542,6 +558,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
   <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
+  <button class="tab" id="tabCtrlInv" onclick="switchTab('ctrlinv')"><i data-lucide="boxes"></i> Control Inventario</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
@@ -957,6 +974,18 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span style="margin-left:auto;color:var(--text3)" id="r90Ts">—</span>
   </div>
 </div><!-- /viewRotacion90 -->
+
+<!-- ══════════ VISTA: CONTROL INVENTARIO (dashboard embebido) ══════════ -->
+<div id="viewControlInv" class="view hidden">
+  <div class="ci-bar">
+    <span class="res-count ci-lbl" title="Se genera desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones">Control de Inventario · café verde — se genera en vivo desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones</span>
+    <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
+    <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar el dashboard con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
+    <button class="btn-excel" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
+  </div>
+  <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
+  <iframe id="ciFrame" class="ci-frame" title="Control de Inventario — Café Verde" referrerpolicy="no-referrer"></iframe>
+</div><!-- /viewControlInv -->
 
 <!-- ══════════ VISTA: GERENCIA (con código) ══════════ -->
 <div id="viewGerencia" class="view hidden">
@@ -3201,28 +3230,31 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom', isR90=tab==='rotacion90';
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom', isR90=tab==='rotacion90', isCI=tab==='ctrlinv';
   $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
   $('viewHistorial').classList.toggle('hidden', !isH);
   $('viewGerencia').classList.toggle('hidden', !isG);
   $('viewRepcom').classList.toggle('hidden', !isRC);
   $('viewRotacion90').classList.toggle('hidden', !isR90);
+  $('viewControlInv').classList.toggle('hidden', !isCI);
   $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
   $('tabHistorial').classList.toggle('active', isH);
   $('tabGerencia').classList.toggle('active', isG);
   $('tabRepcom').classList.toggle('active', isRC);
   $('tabRot90').classList.toggle('active', isR90);
+  $('tabCtrlInv').classList.toggle('active', isCI);
   // En móvil, desliza la pestaña activa a la vista (la barra tiene scroll horizontal)
   try{ const at=document.querySelector('.tab.active'); if(at&&at.scrollIntoView) at.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){}
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : `Posiciones activas · ${DATA.length} registros`;
-  { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = isR ? 'Actualizar' : 'Refresh'; }
+  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : isCI ? 'Control de inventario · café verde' : `Posiciones activas · ${DATA.length} registros`;
+  { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = (isR||isCI) ? 'Actualizar' : 'Refresh'; }
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
   if(isR90){ if(!rotLoaded) cargarRotacion(); if(!vejezLoaded) cargarVejez(); renderRotacion90(); }
+  if(isCI) cargarControlInv(false);   // carga perezosa: el iframe solo pide datos al abrir la pestaña
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -3230,6 +3262,47 @@ function switchTab(tab){
     else { $('gerLock').classList.remove('hidden'); $('gerContent').classList.add('hidden'); $('gerCode').value=''; $('gerErr').textContent=''; setTimeout(()=>{try{$('gerCode').focus();}catch(e){}},60); }
   }
 }
+
+// ═══════════════════════════════════════════════════
+// CONTROL INVENTARIO — dashboard embebido (Apps Script aparte)
+// El dashboard se genera del lado del servidor leyendo CONSOLIDADO,
+// Informe Inventario 22+ y Drilldown Posiciones, y se muestra tal cual
+// dentro de un iframe: conserva su propia lógica y estilos, y no comparte
+// variables globales con esta app (el dashboard también declara DATA).
+// Requiere que su doGet se despliegue con
+//   .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+// o el navegador se niega a mostrarlo embebido.
+// ═══════════════════════════════════════════════════
+const CTRLINV_URL = 'https://script.google.com/a/macros/forestcol.com/s/AKfycbxSvIiyHD1gVGRHyN0SGIRXonCu1ckyIN2qBJ_qX2qD_k0mbJp4KNuNfErc0Aqxd3nhaw/exec';
+const CI_MSG_CARGA = 'Abriendo el dashboard… Si el panel queda en blanco o dice «refused to connect», el despliegue del script no permite mostrarse embebido — ábrelo aparte mientras tanto.';
+let ctrlInvLoaded = false;
+
+// Carga perezosa: el iframe no pide nada hasta que se abre la pestaña.
+// Abrir usa el caché del script (rápido); "Actualizar" manda ?refresh=1 para
+// que recalcule desde las hojas, que es lento pero solo cuando se pide.
+function cargarControlInv(forzar){
+  const f=$('ciFrame'); if(!f) return;
+  if(ctrlInvLoaded && !forzar) return;
+  $('ciHint').classList.remove('hidden');
+  $('ciHint').textContent = forzar
+    ? 'Recalculando desde las hojas… esto sí tarda (~40 s): se está saltando el caché a propósito.'
+    : CI_MSG_CARGA;
+  $('ciTs').textContent = forzar ? 'Recalculando…' : 'Cargando…';
+  // El listener se engancha aquí y no como atributo onload= en el HTML: así no
+  // se dispara con el about:blank inicial, que ocurre antes de que este script
+  // exista y lanzaría un ReferenceError en consola.
+  f.onload = ctrlInvCargado;
+  // refresh=1 le dice al script que ignore su caché y recalcule; el parámetro
+  // con la hora evita además que el navegador reutilice su propia copia.
+  f.src = CTRLINV_URL + (forzar ? ('?refresh=1&_='+Date.now()) : '');
+  ctrlInvLoaded = true;
+}
+function ctrlInvCargado(){
+  $('ciHint').classList.add('hidden');
+  $('ciTs').textContent = 'Generado: '+new Date().toLocaleString('es-CO');
+}
+function recargarControlInv(){ cargarControlInv(true); }
+function abrirControlInv(){ window.open(CTRLINV_URL, '_blank', 'noopener'); }
 
 // ── Vista Gerencia (con código) ──
 const GERENCIA_CODE = 'forest2026';   // ← cámbialo por el código que quieras
@@ -4749,7 +4822,7 @@ function exportRotacionPDF(){
   });
   doc.save(`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.pdf`);
 }
-function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : cargarDatos(true); }
+function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : activeTab==='ctrlinv' ? cargarControlInv(true) : cargarDatos(true); }
 
 // ── Historial (facturas cerradas / pagadas) ──
 let cerradasData = [];
