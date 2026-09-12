@@ -977,6 +977,17 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
 <!-- ══════════ VISTA: CONTROL INVENTARIO (dashboard embebido) ══════════ -->
 <div id="viewControlInv" class="view hidden">
+  <div id="ciLock" class="gerlock">
+    <div class="gerlock-card">
+      <div class="gerlock-ico"><i data-lucide="lock"></i></div>
+      <div class="gerlock-title">Control Inventario</div>
+      <div class="gerlock-sub">Ingresa el código de acceso</div>
+      <input id="ciCode" type="password" class="gerlock-inp" placeholder="Código" onkeydown="if(event.key==='Enter')ciUnlock()">
+      <button class="gerlock-btn" onclick="ciUnlock()">Entrar</button>
+      <div id="ciErr" class="gerlock-err"></div>
+    </div>
+  </div>
+  <div id="ciContent" class="gercontent hidden">
   <div class="ci-bar">
     <span class="res-count ci-lbl" title="Se genera desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones">Control de Inventario · café verde — se genera en vivo desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones</span>
     <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
@@ -985,6 +996,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   </div>
   <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
   <iframe id="ciFrame" class="ci-frame" title="Control de Inventario — Café Verde" referrerpolicy="no-referrer"></iframe>
+  </div><!-- /ciContent -->
 </div><!-- /viewControlInv -->
 
 <!-- ══════════ VISTA: GERENCIA (con código) ══════════ -->
@@ -3254,7 +3266,11 @@ function switchTab(tab){
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
   if(isR90){ if(!rotLoaded) cargarRotacion(); if(!vejezLoaded) cargarVejez(); renderRotacion90(); }
-  if(isCI) cargarControlInv(false);   // carga perezosa: el iframe solo pide datos al abrir la pestaña
+  if(isCI){
+    // Mismo código y misma sesión que Management: desbloquear una abre la otra.
+    if(sessionStorage.getItem('gerOK')==='1') mostrarControlInv();
+    else { $('ciLock').classList.remove('hidden'); $('ciContent').classList.add('hidden'); $('ciCode').value=''; $('ciErr').textContent=''; setTimeout(()=>{try{$('ciCode').focus();}catch(e){}},60); }
+  }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -3276,6 +3292,18 @@ function switchTab(tab){
 const CTRLINV_URL = 'https://script.google.com/a/macros/forestcol.com/s/AKfycbxSvIiyHD1gVGRHyN0SGIRXonCu1ckyIN2qBJ_qX2qD_k0mbJp4KNuNfErc0Aqxd3nhaw/exec';
 const CI_MSG_CARGA = 'Abriendo el dashboard… Si el panel queda en blanco o dice «refused to connect», el despliegue del script no permite mostrarse embebido — ábrelo aparte mientras tanto.';
 let ctrlInvLoaded = false;
+
+// Gate de acceso: reutiliza GERENCIA_CODE y la misma marca de sesión que
+// Management (gerOK), así el equipo maneja un solo código.
+function ciUnlock(){
+  const v=($('ciCode').value||'').trim();
+  if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarControlInv(); }
+  else { $('ciErr').textContent='Código incorrecto'; $('ciCode').select(); }
+}
+function mostrarControlInv(){
+  $('ciLock').classList.add('hidden'); $('ciContent').classList.remove('hidden');
+  cargarControlInv(false);
+}
 
 // Carga perezosa: el iframe no pide nada hasta que se abre la pestaña.
 // Abrir usa el caché del script (rápido); "Actualizar" manda ?refresh=1 para
