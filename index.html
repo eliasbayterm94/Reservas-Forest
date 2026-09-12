@@ -1421,6 +1421,28 @@ const DOM = {};
 // ═══════════════════════════════════════════════════
 // CARGA
 // ═══════════════════════════════════════════════════
+// ── Reintento para los endpoints de Apps Script ──
+// Sus scripts cachean 4 h. Cuando el caché se enfría, la primera llamada relee
+// la hoja entera (40-50 s) y Google la corta con un 404; la siguiente encuentra
+// el caché ya caliente y responde en ~1 s. Rendirse al primer fallo dejaba la
+// pestaña en "Error de conexión" cuando bastaba con volver a pedir.
+const FETCH_INTENTOS = 3, FETCH_ESPERA = 2500;
+async function fetchReintentando(url, alReintentar){
+  let ultimoError;
+  for(let intento=1; intento<=FETCH_INTENTOS; intento++){
+    try{
+      const resp = await fetch(url);
+      if(resp.ok) return resp;
+      ultimoError = new Error(`HTTP ${resp.status}`);
+    }catch(err){ ultimoError = err; }
+    if(intento < FETCH_INTENTOS){
+      if(alReintentar) alReintentar(intento+1, FETCH_INTENTOS);
+      await new Promise(r=>setTimeout(r, FETCH_ESPERA));
+    }
+  }
+  throw ultimoError;
+}
+
 async function cargarDatos(forzar=false){
   if(!forzar){
     const last=localStorage.getItem(LAST_LOAD_KEY);
@@ -1430,10 +1452,13 @@ async function cargarDatos(forzar=false){
     }
   }
   setLoading(true); showOverlay('loading');
+  const ovSub = DOM.ovLoading && DOM.ovLoading.querySelector('.overlay-sub');
+  if(ovSub) ovSub.textContent = 'Conectando con Google Sheets';
   try{
     const url = forzar ? API_URL+'?refresh=1' : API_URL;
-    const resp = await fetch(url);
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await fetchReintentando(url, (n,total)=>{
+      if(ovSub) ovSub.textContent = `El servidor tardó en responder — reintento ${n} de ${total}…`;
+    });
     const json = await resp.json();
     if(json.error) throw new Error(json.error);
     DATA = json.rows||[];
@@ -1724,7 +1749,7 @@ function mergeResSeg(){
 async function cargarResSeg(){
   if(!SEG_API_URL) return;
   try{
-    const resp = await fetch(SEG_API_URL);
+    const resp = await fetchReintentando(SEG_API_URL);
     const j = await resp.json();
     if(j && j.ok){
       resSegData={}; (j.reservas||[]).forEach(row=>{ resSegData[String(row.key)]=row; });
@@ -2804,7 +2829,7 @@ function mergeSeg(){
 async function cargarSeguimiento(){
   if(!SEG_API_URL){ return; }
   try{
-    const resp = await fetch(SEG_API_URL);
+    const resp = await fetchReintentando(SEG_API_URL);
     const j = await resp.json();
     if(j && j.ok){
       segData={}; (j.rows||[]).forEach(row=>{ segData[row.key]=row; });
