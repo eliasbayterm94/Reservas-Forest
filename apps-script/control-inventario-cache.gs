@@ -2,7 +2,7 @@
 // CONTROL DE INVENTARIO — caché del dashboard
 //
 // Problema que resuelve: hoy cada visita al /exec vuelve a leer las tres
-// hojas y a recalcular todo el payload. Son ~40 s de espera para quien abre
+// hojas y a recalcular todo el payload. Son ~30 s de espera para quien abre
 // la pestaña, cada vez, aunque los datos no hayan cambiado.
 //
 // Qué hace: guarda el payload ya calculado en CacheService y lo reutiliza.
