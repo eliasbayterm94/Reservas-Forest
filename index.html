@@ -996,6 +996,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
     <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar el dashboard con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
     <button class="btn-excel" onclick="exportControlInvPDF(this)" style="margin-left:8px;background:#a8351c;color:#fff" title="Descarga un resumen ejecutivo en PDF: inventario on spot / on float por región y % reservado vs libre (kg)"><i data-lucide="file-text"></i> Resumen PDF</button>
+    <button class="btn-excel" onclick="exportInventarioValorPDF(this)" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Descarga la valorización del inventario en USD por región (total / reservado / libre)"><i data-lucide="dollar-sign"></i> Valor $ (PDF)</button>
     <button class="btn-excel" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
   </div>
   <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
@@ -3443,6 +3444,75 @@ function ctrlInvResumen(j){
   lots.forEach(x=>{ if(!/float/i.test(String(x.status||''))){ const bs=Number(x.bag_size)||0; spotTot+=Number(x.total_kg)||0; spotRes+=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs; } });
   return { rows, tot:T, lotes:lots.length, spotTot, spotRes };
 }
+// Valoriza el inventario en USD (price = USD/kg): por región total / reservado / libre.
+function ctrlInvValor(j){
+  const lots=(j && j.master_ico_full)||[];
+  const nuevo=()=>({kg:0, val:0, res:0, free:0, n:0});
+  const byReg={}; const T=nuevo(); let sinPrecio=0, kgSinPrecio=0;
+  lots.forEach(x=>{
+    const bs=Number(x.bag_size)||0, p=Number(x.price)||0, kg=Number(x.total_kg)||0;
+    const resKg=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs;
+    const freeKg=(Number(x.free_bags)||0)*bs;
+    const rg=normRegion(x.region||'—')||'—';
+    const g=byReg[rg]=byReg[rg]||nuevo();
+    g.kg+=kg; g.val+=kg*p; g.res+=resKg*p; g.free+=freeKg*p; g.n++;
+    T.kg+=kg; T.val+=kg*p; T.res+=resKg*p; T.free+=freeKg*p; T.n++;
+    if(!(p>0)){ sinPrecio++; kgSinPrecio+=kg; }
+  });
+  const rows=Object.keys(byReg).map(rg=>Object.assign({region:rg}, byReg[rg])).sort((a,b)=>b.val-a.val);
+  return { rows, tot:T, lotes:lots.length, sinPrecio, kgSinPrecio };
+}
+async function exportInventarioValorPDF(btn){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
+  const old = btn ? btn.innerHTML : ''; if(btn){ btn.disabled=true; btn.innerHTML='Generando…'; }
+  try{
+    const resp = await fetchConTiempo(CTRLINV_URL + '?format=json&_=' + Date.now(), 20000, 2);
+    const j = JSON.parse(await resp.text());
+    const R = ctrlInvValor(j);
+    if(!R.rows.length){ alert('El inventario no trae datos (master_ico_full vacío).'); return; }
+    const usd = n => '$'+Math.round(Number(n)||0).toLocaleString('es-CO');
+    const pc = (part,whole) => whole>0 ? Math.round(part/whole*100)+'%' : '—';
+    const ppk = (v,kg) => kg>0 ? '$'+(v/kg).toFixed(2) : '—';
+    const fecha = (j.meta && j.meta.generated_for_date) || new Date().toLocaleDateString('es-CO');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const NAVY=[27,32,61], YEL=[233,196,0], RED=[168,53,28], GRN=[44,122,44];
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+    doc.text('Forest — Valorización de inventario', 40, 42);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+    doc.text('Café verde · USD · corte '+fecha+' · '+R.lotes+' lotes', W-40, 42, {align:'right'});
+    const T=R.tot;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...NAVY);
+    doc.text(`Valor total del inventario: ${usd(T.val)}   ·   precio prom. ${ppk(T.val,T.kg)}/kg`, 40, 68);
+    doc.setFontSize(10.5); doc.setTextColor(...RED); doc.text(`Reservado: ${usd(T.res)} (${pc(T.res,T.val)})`, 40, 85);
+    doc.setTextColor(...GRN); doc.text(`Libre: ${usd(T.free)} (${pc(T.free,T.val)})`, 340, 85);
+    const body = R.rows.map(r=>[ r.region, kgFmtLocal(r.kg), ppk(r.val,r.kg), usd(r.val),
+      `${usd(r.res)}  (${pc(r.res,r.val)})`, `${usd(r.free)}  (${pc(r.free,r.val)})` ]);
+    doc.autoTable({
+      startY: 100,
+      head: [['Región','Inventario (kg)','$/kg prom.','Valor total','Reservado ($ · %)','Libre ($ · %)']],
+      body,
+      foot: [['TOTAL', kgFmtLocal(T.kg), ppk(T.val,T.kg), usd(T.val), `${usd(T.res)}  (${pc(T.res,T.val)})`, `${usd(T.free)}  (${pc(T.free,T.val)})`]],
+      styles:{fontSize:10, cellPadding:6, halign:'right', lineColor:[221,217,207], lineWidth:.5},
+      headStyles:{fillColor:NAVY, textColor:[231,226,68], halign:'right', fontStyle:'bold'},
+      footStyles:{fillColor:YEL, textColor:NAVY, fontStyle:'bold', halign:'right'},
+      alternateRowStyles:{fillColor:[245,244,238]},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}, 4:{textColor:RED}, 5:{textColor:GRN}},
+      margin:{left:40, right:40}
+    });
+    let y = doc.lastAutoTable.finalY + 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+    doc.text('Valor = kg × precio (price del lote, en USD/kg). Reservado = órdenes + contratos. % sobre el valor total de cada región.', 40, y);
+    if(R.sinPrecio>0) doc.text(`Nota: ${R.sinPrecio} lote(s) sin precio (${kgFmtLocal(R.kgSinPrecio)} kg) cuentan como $0 — no valorizados.`, 40, y+12);
+    doc.text('Forest Reservas — Valorización de Inventario · generado '+new Date().toLocaleString('es-CO'), 40, H-18);
+    doc.save(`Forest_Inventario_Valor_${new Date().toISOString().slice(0,10)}.pdf`);
+  }catch(err){
+    alert('No se pudo generar el PDF: '+(err&&err.message||err)+'. Revisa que el dashboard de inventario esté disponible e intenta de nuevo.');
+  }finally{ if(btn){ btn.disabled=false; btn.innerHTML=old; if(window.lucide) lucide.createIcons(); } }
+}
+// kg con separador de miles local (es-CO)
+function kgFmtLocal(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
 // Descarga el resumen ejecutivo de inventario en PDF (lee el mismo ?format=json del dashboard).
 async function exportControlInvPDF(btn){
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
