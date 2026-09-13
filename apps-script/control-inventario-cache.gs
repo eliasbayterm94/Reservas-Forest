@@ -94,6 +94,45 @@ function ciServeEmbed_(forzar) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// LO MISMO, PERO EN DOS PIEZAS — es lo que usa la app.
+//
+// ?format=embed resultó pesado: por cada visita el script junta el payload
+// (358 KB), lee la plantilla (122 KB), los fusiona (480 KB) y los vuelve a
+// escapar dentro de un JSON (531 KB). Más de 1 MB de texto manipulado cada vez.
+// Medido: entre 1,3 s y 67 s, y a ratos moría con 404.
+//
+// Estas dos entregan lo que ya está guardado, sin tocarlo:
+//   ?format=tpl   → la plantilla tal cual (≈122 KB)
+//   ?format=json  → el payload tal cual, que YA es un string JSON (≈358 KB)
+// La fusión la hace el navegador. Es el mismo patrón del API de Reservas, que
+// responde en ~1 s de forma estable.
+// ─────────────────────────────────────────────────────────────
+function ciServeTpl_() {
+  try {
+    return ContentService
+      .createTextOutput(HtmlService.createHtmlOutputFromFile('Dashboard').getContent())
+      .setMimeType(ContentService.MimeType.TEXT);
+  } catch (err) {
+    return ContentService
+      .createTextOutput('ERROR: ' + String(err.message || err))
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+function ciServeJson_(forzar) {
+  try {
+    let json = forzar ? null : ciLeerCache_();
+    if (!json) { json = ciPayloadJson_(); ciGuardarCache_(json); }
+    // Se devuelve el string tal cual: ya es JSON válido, no hay que re-serializar.
+    return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: String(err.message || err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // RECALENTADO — lo llama el trigger cada 4 h para que nadie pague la espera.
 // ─────────────────────────────────────────────────────────────
 function calentarCacheControlInv() {

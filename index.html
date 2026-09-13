@@ -3336,6 +3336,24 @@ function mostrarControlInv(){
 // Carga perezosa: el iframe no pide nada hasta que se abre la pestaña.
 // Abrir usa el caché del script (rápido); "Actualizar" manda ?refresh=1 para
 // que recalcule desde las hojas, que es lento pero solo cuando se pide.
+// fetch con límite de espera. Para lo que puede colgarse largo rato: más vale
+// rendirse pronto y tomar el camino alterno que dejar al usuario mirando.
+async function fetchConTiempo(url, ms, intentos){
+  let ultimoError;
+  for(let i=0; i<(intentos||1); i++){
+    const ctrl = new AbortController();
+    const reloj = setTimeout(()=>ctrl.abort(), ms);
+    try{
+      const resp = await fetch(url, {signal: ctrl.signal});
+      if(resp.ok) return resp;
+      ultimoError = new Error(`HTTP ${resp.status}`);
+    }catch(err){
+      ultimoError = err.name==='AbortError' ? new Error(`sin respuesta en ${ms/1000}s`) : err;
+    }finally{ clearTimeout(reloj); }
+  }
+  throw ultimoError;
+}
+
 async function cargarControlInv(forzar){
   const f=$('ciFrame'); if(!f) return;
   if(ctrlInvLoaded && !forzar) return;
@@ -3366,16 +3384,24 @@ async function cargarControlInv(forzar){
   // "No se puede abrir el archivo". Un fetch entre orígenes no manda cookies, así
   // que por esta vía Google nunca ve esa sesión y funciona con cualquier cuenta.
   try{
-    const url = CTRLINV_URL + '?format=embed' + (forzar ? '&refresh=1' : '') + '&_=' + Date.now();
-    // Dos intentos, no tres: si el endpoint aún no está desplegado el fallo es
-    // determinista (CORS) y no tiene sentido hacer esperar antes de caer al
-    // iframe. Dos cubren el caso de que el script esté recalculando.
-    const resp = await fetchReintentando(url, null, 2);
-    const j = await resp.json();
-    if(!j || !j.html) throw new Error((j && j.error) || 'respuesta sin html');
+    // Se piden por separado y en paralelo: la plantilla (≈122 KB) y los datos
+    // (≈358 KB). Cada una sale del script tal cual está guardada, sin fusionar
+    // ni re-escapar nada, que era lo que volvía lento a ?format=embed. La unión
+    // la hacemos aquí, que es instantáneo.
+    const sello = '&_=' + Date.now();
+    const ref = forzar ? '&refresh=1' : '';
+    const espera = forzar ? 60000 : 15000;
+    const [tpl, datos] = await Promise.all([
+      fetchConTiempo(CTRLINV_URL + '?format=tpl' + sello, espera).then(r=>r.text()),
+      fetchConTiempo(CTRLINV_URL + '?format=json' + ref + sello, espera).then(r=>r.text())
+    ]);
+    if(!tpl || tpl.indexOf('__DATA_JSON__')<0) throw new Error('la plantilla no trae el marcador');
+    if(!datos || datos[0]!=='{') throw new Error('los datos no vinieron en JSON');
     f.removeAttribute('src');
     f.setAttribute('sandbox', 'allow-scripts');   // el dashboard no necesita más
-    f.srcdoc = j.html;
+    // Reemplazo con función, para que un "$&" dentro de los datos no se
+    // interprete como patrón de reemplazo.
+    f.srcdoc = tpl.replace('__DATA_JSON__', () => datos.replace(/<\/script/g, '<\\/script'));
     return;
   }catch(err){
     // Si el endpoint aún no está desplegado, o falla, se cae al iframe directo:
