@@ -24,8 +24,11 @@ function doGet(e){
   try {
     const forzar = !!(e && e.parameter && e.parameter.refresh === '1');
 
-    // La app pide el HTML por aquí: ContentService sí manda cabeceras CORS.
-    if (e && e.parameter && e.parameter.format === 'embed') return ciServeEmbed_(forzar);
+    // La app pide las piezas por aquí: ContentService sí manda cabeceras CORS.
+    const formato = e && e.parameter ? e.parameter.format : '';
+    if (formato === 'tpl')   return ciServeTpl_();           // plantilla sola
+    if (formato === 'json')  return ciServeJson_(forzar);    // datos solos
+    if (formato === 'embed') return ciServeEmbed_(forzar);   // ambos juntos (pesado)
 
     const html = ciDashboardHtml_(forzar);
     return HtmlService.createHtmlOutput(html)
