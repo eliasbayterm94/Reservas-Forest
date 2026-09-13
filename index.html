@@ -3444,19 +3444,34 @@ function ctrlInvResumen(j){
   lots.forEach(x=>{ if(!/float/i.test(String(x.status||''))){ const bs=Number(x.bag_size)||0; spotTot+=Number(x.total_kg)||0; spotRes+=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs; } });
   return { rows, tot:T, lotes:lots.length, spotTot, spotRes };
 }
-// Valoriza el inventario en USD (price = USD/kg): por región total / reservado / libre.
+// ── Valorización: la moneda del 'price' depende de la región ──
+// USA = USD/lb  ·  MENA = USD/kg  ·  EU = EUR/kg  ·  UK = GBP/kg  ·  AU = AUD/kg.
+// Tasas a USD fijas (edítalas aquí cuando cambien):
+const INV_FX = { EUR:1.14, GBP:1.32, AUD:0.70 };
+const INV_LB_KG = 2.20462;   // 1 kg = 2.20462 lb (para USA que viene en USD/lb)
+// Devuelve el precio del lote convertido a USD por kg, según la región.
+function invUsdPerKg(region, price){
+  const r = normRegion(region); const p = Number(price)||0;
+  if(r==='USA')       return p*INV_LB_KG;   // USD/lb → USD/kg
+  if(r==='EU')        return p*INV_FX.EUR;  // EUR/kg → USD/kg
+  if(r==='UK')        return p*INV_FX.GBP;  // GBP/kg → USD/kg
+  if(r==='Australia') return p*INV_FX.AUD;  // AUD/kg → USD/kg
+  return p;                                  // MENA y otras: ya en USD/kg
+}
+// Valoriza el inventario en USD por región: total / reservado / libre.
 function ctrlInvValor(j){
   const lots=(j && j.master_ico_full)||[];
   const nuevo=()=>({kg:0, val:0, res:0, free:0, n:0});
   const byReg={}; const T=nuevo(); let sinPrecio=0, kgSinPrecio=0;
   lots.forEach(x=>{
     const bs=Number(x.bag_size)||0, p=Number(x.price)||0, kg=Number(x.total_kg)||0;
+    const upk=invUsdPerKg(x.region, p);   // USD por kg ya convertido
     const resKg=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs;
     const freeKg=(Number(x.free_bags)||0)*bs;
     const rg=normRegion(x.region||'—')||'—';
     const g=byReg[rg]=byReg[rg]||nuevo();
-    g.kg+=kg; g.val+=kg*p; g.res+=resKg*p; g.free+=freeKg*p; g.n++;
-    T.kg+=kg; T.val+=kg*p; T.res+=resKg*p; T.free+=freeKg*p; T.n++;
+    g.kg+=kg; g.val+=kg*upk; g.res+=resKg*upk; g.free+=freeKg*upk; g.n++;
+    T.kg+=kg; T.val+=kg*upk; T.res+=resKg*upk; T.free+=freeKg*upk; T.n++;
     if(!(p>0)){ sinPrecio++; kgSinPrecio+=kg; }
   });
   const rows=Object.keys(byReg).map(rg=>Object.assign({region:rg}, byReg[rg])).sort((a,b)=>b.val-a.val);
@@ -3503,7 +3518,7 @@ async function exportInventarioValorPDF(btn){
     });
     let y = doc.lastAutoTable.finalY + 16;
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
-    doc.text('Valor = kg × precio (price del lote, en USD/kg). Reservado = órdenes + contratos. % sobre el valor total de cada región.', 40, y);
+    doc.text(`Precio por región: USA USD/lb (×${INV_LB_KG}) · MENA USD/kg · EU EUR/kg (×${INV_FX.EUR}) · UK GBP/kg (×${INV_FX.GBP}) · AU AUD/kg (×${INV_FX.AUD}). Reservado = órdenes + contratos. % sobre el valor de cada región.`, 40, y);
     if(R.sinPrecio>0) doc.text(`Nota: ${R.sinPrecio} lote(s) sin precio (${kgFmtLocal(R.kgSinPrecio)} kg) cuentan como $0 — no valorizados.`, 40, y+12);
     doc.text('Forest Reservas — Valorización de Inventario · generado '+new Date().toLocaleString('es-CO'), 40, H-18);
     doc.save(`Forest_Inventario_Valor_${new Date().toISOString().slice(0,10)}.pdf`);
