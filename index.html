@@ -995,6 +995,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="res-count ci-lbl" title="Se genera desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones">Control de Inventario · café verde — se genera en vivo desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones</span>
     <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
     <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar el dashboard con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
+    <button class="btn-excel" onclick="exportControlInvPDF(this)" style="margin-left:8px;background:#a8351c;color:#fff" title="Descarga un resumen ejecutivo en PDF: inventario on spot / on float por región y % reservado vs libre (kg)"><i data-lucide="file-text"></i> Resumen PDF</button>
     <button class="btn-excel" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
   </div>
   <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
@@ -3419,6 +3420,81 @@ function ctrlInvCargado(){
 }
 function recargarControlInv(){ cargarControlInv(true); }
 function abrirControlInv(){ window.open(CTRLINV_URL, '_blank', 'noopener'); }
+
+// Agrega el inventario (master_ico_full del JSON) por región: on spot / on float / reservado / libre en kg.
+function ctrlInvResumen(j){
+  const lots = (j && j.master_ico_full) || [];
+  const nuevo = () => ({spot:0, float:0, tot:0, res:0, free:0, n:0});
+  const byReg = {}; const T = nuevo();
+  lots.forEach(x=>{
+    const bs = Number(x.bag_size)||0;
+    const tkg = Number(x.total_kg)||0;
+    const rkg = ((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs;
+    const fkg = (Number(x.free_bags)||0)*bs;
+    const isFloat = /float/i.test(String(x.status||''));
+    const rg = normRegion(x.region||'—')||'—';
+    const g = byReg[rg]=byReg[rg]||nuevo();
+    g.tot+=tkg; g.res+=rkg; g.free+=fkg; g.n++; if(isFloat) g.float+=tkg; else g.spot+=tkg;
+    T.tot+=tkg; T.res+=rkg; T.free+=fkg; T.n++; if(isFloat) T.float+=tkg; else T.spot+=tkg;
+  });
+  const rows = Object.keys(byReg).map(rg=>Object.assign({region:rg}, byReg[rg])).sort((a,b)=>b.tot-a.tot);
+  // Reservado on-spot (base del dashboard) para reconciliar el 73%
+  let spotTot=0, spotRes=0;
+  lots.forEach(x=>{ if(!/float/i.test(String(x.status||''))){ const bs=Number(x.bag_size)||0; spotTot+=Number(x.total_kg)||0; spotRes+=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs; } });
+  return { rows, tot:T, lotes:lots.length, spotTot, spotRes };
+}
+// Descarga el resumen ejecutivo de inventario en PDF (lee el mismo ?format=json del dashboard).
+async function exportControlInvPDF(btn){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
+  const old = btn ? btn.innerHTML : ''; if(btn){ btn.disabled=true; btn.innerHTML='Generando…'; }
+  try{
+    const resp = await fetchConTiempo(CTRLINV_URL + '?format=json&_=' + Date.now(), 20000, 2);
+    const j = JSON.parse(await resp.text());
+    const R = ctrlInvResumen(j);
+    if(!R.rows.length){ alert('El inventario no trae datos (master_ico_full vacío).'); return; }
+    const kgf = n => Math.round(Number(n)||0).toLocaleString('es-CO');
+    const pc = (part,whole) => whole>0 ? Math.round(part/whole*100)+'%' : '—';
+    const fecha = (j.meta && j.meta.generated_for_date) || new Date().toLocaleDateString('es-CO');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const NAVY=[27,32,61], YEL=[233,196,0], RED=[168,53,28], GRN=[44,122,44];
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+    doc.text('Forest — Resumen ejecutivo de inventario', 40, 42);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
+    doc.text('Café verde · corte '+fecha+' · '+R.lotes+' lotes', W-40, 42, {align:'right'});
+    // KPIs
+    const T=R.tot;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...NAVY);
+    doc.text(`On spot: ${kgf(T.spot)} kg      ·      On float: ${kgf(T.float)} kg      ·      Total: ${kgf(T.tot)} kg`, 40, 66);
+    doc.setTextColor(...RED); doc.text(`Reservado: ${kgf(T.res)} kg (${pc(T.res,T.tot)} del total)`, 40, 82);
+    doc.setTextColor(...GRN); doc.text(`Libre: ${kgf(T.free)} kg (${pc(T.free,T.tot)} del total)`, 340, 82);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(`On spot (en bodega) reservado: ${kgf(R.spotRes)} kg (${pc(R.spotRes,R.spotTot)}) — así lo muestra el dashboard.`, 40, 97);
+
+    const body = R.rows.map(r=>[ r.region, kgf(r.spot), kgf(r.float), kgf(r.tot),
+      `${kgf(r.res)}  (${pc(r.res,r.tot)})`, `${kgf(r.free)}  (${pc(r.free,r.tot)})` ]);
+    doc.autoTable({
+      startY: 110,
+      head: [['Región','On spot (kg)','On float (kg)','Total (kg)','Reservado (kg · %)','Libre (kg · %)']],
+      body,
+      foot: [['TOTAL', kgf(T.spot), kgf(T.float), kgf(T.tot), `${kgf(T.res)}  (${pc(T.res,T.tot)})`, `${kgf(T.free)}  (${pc(T.free,T.tot)})`]],
+      styles:{fontSize:10, cellPadding:6, halign:'right', lineColor:[221,217,207], lineWidth:.5},
+      headStyles:{fillColor:NAVY, textColor:[231,226,68], halign:'right', fontStyle:'bold'},
+      footStyles:{fillColor:YEL, textColor:NAVY, fontStyle:'bold', halign:'right'},
+      alternateRowStyles:{fillColor:[245,244,238]},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}, 4:{textColor:RED}, 5:{textColor:GRN}},
+      margin:{left:40, right:40}
+    });
+    let y = doc.lastAutoTable.finalY + 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+    doc.text('Reservado = órdenes + contratos (kg). % calculado sobre el total (on spot + on float) de cada región. On spot = en bodega · On float = en tránsito.', 40, y);
+    doc.text('Forest Reservas — Control de Inventario · generado '+new Date().toLocaleString('es-CO'), 40, H-18);
+    doc.save(`Forest_Inventario_${new Date().toISOString().slice(0,10)}.pdf`);
+  }catch(err){
+    alert('No se pudo generar el PDF: '+(err&&err.message||err)+'. Revisa que el dashboard de inventario esté disponible e intenta de nuevo.');
+  }finally{ if(btn){ btn.disabled=false; btn.innerHTML=old; if(window.lucide) lucide.createIcons(); } }
+}
 
 // ── Vista Gerencia (con código) ──
 const GERENCIA_CODE = 'forest2026';   // ← cámbialo por el código que quieras
