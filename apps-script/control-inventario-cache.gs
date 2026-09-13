@@ -68,6 +68,32 @@ function ciDashboardHtml_(forzar) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// MISMO HTML, ENVUELTO EN JSON — para que la app lo pueda incrustar.
+//
+// Por qué hace falta: si el iframe de la app apunta a este /exec, la página se
+// carga bajo la sesión de Google del visitante. A quien tenga abierta una cuenta
+// que no sea de Forest, Google le devuelve "No se puede abrir el archivo".
+//
+// HtmlService no manda cabeceras CORS, así que la app no puede traerse el HTML
+// con fetch. ContentService sí las manda. Devolviendo el mismo HTML dentro de un
+// JSON, la app se lo trae (fetch no envía cookies entre orígenes: Google nunca
+// ve la sesión) y lo pinta en un iframe con srcdoc.
+//
+// El /exec de siempre no cambia: quien lo abra directo sigue viendo el dashboard.
+// ─────────────────────────────────────────────────────────────
+function ciServeEmbed_(forzar) {
+  try {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true, html: ciDashboardHtml_(forzar) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: String(err.message || err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // RECALENTADO — lo llama el trigger cada 4 h para que nadie pague la espera.
 // ─────────────────────────────────────────────────────────────
 function calentarCacheControlInv() {

@@ -1427,16 +1427,17 @@ const DOM = {};
 // el caché ya caliente y responde en ~1 s. Rendirse al primer fallo dejaba la
 // pestaña en "Error de conexión" cuando bastaba con volver a pedir.
 const FETCH_INTENTOS = 3, FETCH_ESPERA = 2500;
-async function fetchReintentando(url, alReintentar){
+async function fetchReintentando(url, alReintentar, intentos){
+  const total = intentos || FETCH_INTENTOS;
   let ultimoError;
-  for(let intento=1; intento<=FETCH_INTENTOS; intento++){
+  for(let intento=1; intento<=total; intento++){
     try{
       const resp = await fetch(url);
       if(resp.ok) return resp;
       ultimoError = new Error(`HTTP ${resp.status}`);
     }catch(err){ ultimoError = err; }
-    if(intento < FETCH_INTENTOS){
-      if(alReintentar) alReintentar(intento+1, FETCH_INTENTOS);
+    if(intento < total){
+      if(alReintentar) alReintentar(intento+1, total);
       await new Promise(r=>setTimeout(r, FETCH_ESPERA));
     }
   }
@@ -3335,7 +3336,7 @@ function mostrarControlInv(){
 // Carga perezosa: el iframe no pide nada hasta que se abre la pestaña.
 // Abrir usa el caché del script (rápido); "Actualizar" manda ?refresh=1 para
 // que recalcule desde las hojas, que es lento pero solo cuando se pide.
-function cargarControlInv(forzar){
+async function cargarControlInv(forzar){
   const f=$('ciFrame'); if(!f) return;
   if(ctrlInvLoaded && !forzar) return;
   // Contador visible: el dashboard tarda ~30 s mientras el script no tenga
@@ -3357,10 +3358,33 @@ function cargarControlInv(forzar){
   // se dispara con el about:blank inicial, que ocurre antes de que este script
   // exista y lanzaría un ReferenceError en consola.
   f.onload = ctrlInvCargado;
-  // refresh=1 le dice al script que ignore su caché y recalcule; el parámetro
-  // con la hora evita además que el navegador reutilice su propia copia.
-  f.src = CTRLINV_URL + (forzar ? ('?refresh=1&_='+Date.now()) : '');
   ctrlInvLoaded = true;
+
+  // Camino preferido: traer el HTML por el endpoint JSON y pintarlo aquí.
+  // Apuntar el iframe directamente a Google hace que la página se cargue bajo la
+  // sesión del visitante, y a quien tenga abierta otra cuenta le sale el error
+  // "No se puede abrir el archivo". Un fetch entre orígenes no manda cookies, así
+  // que por esta vía Google nunca ve esa sesión y funciona con cualquier cuenta.
+  try{
+    const url = CTRLINV_URL + '?format=embed' + (forzar ? '&refresh=1' : '') + '&_=' + Date.now();
+    // Dos intentos, no tres: si el endpoint aún no está desplegado el fallo es
+    // determinista (CORS) y no tiene sentido hacer esperar antes de caer al
+    // iframe. Dos cubren el caso de que el script esté recalculando.
+    const resp = await fetchReintentando(url, null, 2);
+    const j = await resp.json();
+    if(!j || !j.html) throw new Error((j && j.error) || 'respuesta sin html');
+    f.removeAttribute('src');
+    f.setAttribute('sandbox', 'allow-scripts');   // el dashboard no necesita más
+    f.srcdoc = j.html;
+    return;
+  }catch(err){
+    // Si el endpoint aún no está desplegado, o falla, se cae al iframe directo:
+    // sigue funcionando como hasta ahora para quien no tenga el choque de cuentas.
+    console.warn('Control Inventario: no se pudo incrustar, se usa el iframe directo:', err);
+    f.removeAttribute('srcdoc');
+    f.removeAttribute('sandbox');
+    f.src = CTRLINV_URL + (forzar ? ('?refresh=1&_='+Date.now()) : '');
+  }
 }
 function ctrlInvCargado(){
   clearInterval(ctrlInvTimer);
