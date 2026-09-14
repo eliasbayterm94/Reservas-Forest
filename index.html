@@ -772,7 +772,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="pill fsr off" id="cVencidos" onclick="toggleVencidos(this)"><i data-lucide="alert-triangle"></i> Overdue only</span>
     <span class="pill fsr off" id="cPorVencer" onclick="togglePorVencer(this)"><i data-lucide="clock"></i> Due soon (10d)</span>
     <span class="res-count" id="cResCount">—</span>
-    <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:auto;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+    <select id="v90Rep" class="ger-sel" style="margin-left:auto" title="Comercial para el correo de cartera vencida +90 días"><option value="">Comercial +90d…</option></select>
+    <button class="btn-excel" onclick="emailVencidas90()" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Abre un correo con los clientes +90 días de ese comercial (saldo en moneda de factura y USD)"><i data-lucide="mail"></i> Correo +90d</button>
+    <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:8px;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
   </div>
 
@@ -2672,6 +2674,9 @@ function llenarFiltrosCartera(){
   fill($('cComercial'), uniq(cartData.map(r=>r.comercial)), 'Sales rep');
   fill($('cRegion'),    uniq(cartData.map(r=>r.region)),    'Region');
   fill($('cMoneda'),    uniq(cartData.map(r=>r.currency)),  'Currency');
+  // Selector de comercial para el correo de cartera +90d (solo comerciales con vencidas +90)
+  { const sel=$('v90Rep'); if(sel){ const reps=uniq(cartData.filter(r=>r.days>90).map(r=>r.comercial||'Sin asignar'));
+    fill(sel, reps, 'Comercial +90d…'); } }
   llenarClientes();
 }
 
@@ -3133,6 +3138,43 @@ function hideCartOverlays(){
   $('ovCartEmpty').classList.add('hidden');
 }
 
+// Arma el asunto y cuerpo del correo de cartera +90d de un comercial (agrupado por cliente).
+function vencidas90Payload(rep){
+  const rows = cartData.filter(r => r.days>90 && (r.comercial||'Sin asignar')===rep);
+  if(!rows.length) return null;
+  const porCliente = {};
+  rows.forEach(r=>{ const c=r.cliente||'(sin cliente)'; const g=porCliente[c]=porCliente[c]||{region:normRegion(r.region)||'—', facturas:[], usd:0, porMoneda:{}};
+    g.facturas.push(r); g.usd+=Number(r.saldoUsd)||0;
+    const cur=(r.currency||'USD').toUpperCase(); g.porMoneda[cur]=(g.porMoneda[cur]||0)+(Number(r.saldo)||0);
+  });
+  const clientes = Object.keys(porCliente).sort((a,b)=>porCliente[b].usd-porCliente[a].usd);
+  const totUsd = rows.reduce((a,r)=>a+(Number(r.saldoUsd)||0),0);
+  const L = [];
+  L.push(`Cartera vencida a más de 90 días — ${rep}`);
+  L.push(`Corte: ${new Date().toLocaleDateString('es-CO')} · ${clientes.length} cliente(s) · ${rows.length} factura(s) · Total ≈ ${money(totUsd)} USD`);
+  L.push('');
+  clientes.forEach(c=>{
+    const g = porCliente[c];
+    const monTxt = Object.entries(g.porMoneda).map(([cur,v])=>fmtCur(v,cur)).join(' · ');
+    L.push(`• ${c}  (${g.region})  —  ${monTxt}  ≈ ${money(g.usd)}`);
+    g.facturas.sort((a,b)=>b.days-a.days).forEach(r=>{
+      L.push(`     - Factura ${r.factura||'—'} · ${r.days} días · ${fmtCur(r.saldo, r.currency)} (≈ ${money(r.saldoUsd)})`);
+    });
+  });
+  L.push('');
+  L.push('Por favor gestionar el cobro de estas cuentas. Gracias.');
+  L.push('— Forest Reservas');
+  return { subject:`Forest — Cartera vencida +90 días · ${rep} (${new Date().toLocaleDateString('es-CO')})`, body:L.join('\n'), totUsd, nClientes:clientes.length, nFact:rows.length };
+}
+// Correo por comercial con sus clientes de cartera vencida +90 días (saldo en moneda de factura y USD).
+function emailVencidas90(){
+  if(!cartLoaded){ alert('La cartera aún está cargando, intenta de nuevo en un momento.'); return; }
+  const rep = ($('v90Rep')||{}).value || '';
+  if(!rep){ alert('Elige un comercial en el selector "Comercial +90d…".'); return; }
+  const p = vencidas90Payload(rep);
+  if(!p){ alert('Ese comercial no tiene facturas vencidas de más de 90 días.'); return; }
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(p.subject) + '&body=' + encodeURIComponent(p.body);
+}
 function exportCartera(){
   const GREEN='1E4D18',WHITE='FFFFFF',BORDER_C='DDD9CF',ROW_ALT='F8F6F0';
   const thin=c=>({style:'thin',color:{rgb:c||BORDER_C}});
