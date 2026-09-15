@@ -1347,6 +1347,9 @@ const COLS = [
   { key:'contrato',     label:'Contrato',          w:125, cls:'c-mono' },
   { key:'tipo',         label:'Tipo',              w:90,  cls:'',         badge:true },
   { key:'factura',      label:'Factura',           w:90,  cls:'',         factura:true },
+  // El contenedor real de la hoja (columna AB). Va como 'contenedor' y no como
+  // 'container' porque esa clave ya la usa la columna de Spot / On float.
+  { key:'contenedor',   label:'Contenedor #',      w:100, cls:'c-mono' },
   { key:'serie',        label:'Categoría',         w:120, cls:'c-mono' },
   { key:'pallet_price', label:'Pallet Price',      w:100, cls:'c-num',    align:'right', precio:true },
   { key:'eta',          label:'ETA Bodega',        w:100, cls:'c-mono' },
@@ -1375,7 +1378,9 @@ const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contr
 
 // Vista compacta: oculta las columnas de detalle/finanzas para dejar visibles
 // los compromisos sin tanto scroll. Se alternan con el botón "Ver detalle".
-const DETAIL_COLS = new Set(['tipo','factura','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
+// Factura y Contenedor # salen de aquí: se piden visibles también en la vista
+// compacta, no solo al pulsar "Ver detalle".
+const DETAIL_COLS = new Set(['tipo','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
 COLS.forEach((c,i)=>{ c._idx=i; if(DETAIL_COLS.has(c.key)) c.detail=true; });
 let resVista = localStorage.getItem('forest_res_vista') || 'compacto';   // 'compacto' | 'completo'
 // Columnas visibles según la vista: en compacto se ocultan las de detalle/finanzas
@@ -2085,9 +2090,13 @@ function aplicarFiltros(){
 
 // Fila de totales fija al final de la tabla (refleja TODO lo filtrado)
 function renderTotales(n, totalBags, whStr, finStr){
+  // Recorre solo las columnas visibles: el thead y las filas usan visCols(), y
+  // recorrer COLS entero emitía más celdas que columnas, así que en vista
+  // compacta la fila de totales quedaba corrida.
+  const cols = visCols();
   let cells='';
-  for(let ci=0;ci<COLS.length;ci++){
-    const col=COLS[ci];
+  for(let ci=0;ci<cols.length;ci++){
+    const col=cols[ci];
     let v='', cls='', title='';
     if(ci===0){ v='TOTALES'; cls=' class="tot-label"'; }
     else if(col.key==='cliente'){ v=`${n} posicion${n!==1?'es':''}`; cls=' class="tot-label"'; }
