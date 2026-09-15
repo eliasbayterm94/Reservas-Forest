@@ -22,7 +22,7 @@
 // así que se guarda partido en trozos.
 const CI_CACHE_PREFIX = 'ci_pay_chunk_';
 const CI_CACHE_META   = 'ci_pay_meta';
-const CI_CACHE_SECS   = 60 * 60 * 6;   // 6 h de vida; el trigger lo renueva cada 4
+const CI_CACHE_SECS   = 60 * 60 * 6;   // 6 h: es el máximo que permite CacheService
 const CI_CHUNK_SIZE   = 90000;
 
 // ─────────────────────────────────────────────────────────────
@@ -143,12 +143,18 @@ function calentarCacheControlInv() {
 }
 
 // Ejecútala UNA vez a mano para dejar el trigger creado.
+//
+// Cada 2 h y no cada 4: el caché dura 6 h (el máximo que permite Google), así que
+// con 2 h hay tres oportunidades de renovarlo antes de que expire. Importa porque
+// cuando el caché se vacía, NADIE puede repoblarlo desde el navegador: el
+// recálculo tarda ~32 s y Google corta las peticiones web antes de que termine.
+// Quedaría muerto hasta la siguiente corrida del activador.
 function crearTriggerCacheControlInv() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'calentarCacheControlInv') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('calentarCacheControlInv').timeBased().everyHours(4).create();
-  Logger.log('✅ Trigger creado: calentarCacheControlInv cada 4 h');
+  ScriptApp.newTrigger('calentarCacheControlInv').timeBased().everyHours(2).create();
+  Logger.log('✅ Trigger creado: calentarCacheControlInv cada 2 h');
 }
 
 // ─────────────────────────────────────────────────────────────
