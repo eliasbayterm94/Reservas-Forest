@@ -596,7 +596,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   </div>
   <div class="fi"><span class="fi-icon"><i data-lucide="ship"></i></span>
     <select id="fContainer" onchange="onFilter()">
-      <option value="">Contenedor</option>
+      <option value="">Status</option>
       <option value="Spot">Spot · en bodega</option>
       <option value="On float">On float · en tránsito</option>
     </select>
@@ -1351,13 +1351,15 @@ const COLS = [
   { key:'contrato',     label:'Contrato',          w:125, cls:'c-mono' },
   { key:'tipo',         label:'Tipo',              w:90,  cls:'',         badge:true },
   { key:'factura',      label:'Factura',           w:90,  cls:'',         factura:true },
-  // El contenedor real de la hoja (columna AB). Va como 'contenedor' y no como
-  // 'container' porque esa clave ya la usa la columna de Spot / On float.
-  { key:'contenedor',   label:'Contenedor #',      w:100, cls:'c-mono' },
+  // El contenedor real de la hoja (columna AB). La clave es 'contenedor' y no
+  // 'container' porque esa última ya la ocupa la columna de Status (Spot / On float).
+  { key:'contenedor',   label:'Contenedor',        w:100, cls:'c-mono' },
   { key:'serie',        label:'Categoría',         w:120, cls:'c-mono' },
   { key:'pallet_price', label:'Pallet Price',      w:100, cls:'c-num',    align:'right', precio:true },
   { key:'eta',          label:'ETA Bodega',        w:100, cls:'c-mono' },
-  { key:'container',    label:'Contenedor',        w:85,  cls:'',         containerBadge:true },
+  // Status: si el café ya está en bodega (Spot) o viene en tránsito (On float).
+  // La clave sigue siendo 'container' por compatibilidad con el resto del código.
+  { key:'container',    label:'Status',            w:85,  cls:'',         containerBadge:true },
   { key:'dias',         label:'Vejez',             w:85,  cls:'',         diasBadge:true },
   { key:'dias_reserva', label:'Días Reserv.',      w:85,  cls:'',         diasBadge:true },
   { key:'warehouse_fee',label:'Storage Fee',       w:110, cls:'',         feecell:true, secFee:true },
@@ -1382,7 +1384,7 @@ const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contr
 
 // Vista compacta: oculta las columnas de detalle/finanzas para dejar visibles
 // los compromisos sin tanto scroll. Se alternan con el botón "Ver detalle".
-// Factura y Contenedor # salen de aquí: se piden visibles también en la vista
+// Factura y Contenedor salen de aquí: se piden visibles también en la vista
 // compacta, no solo al pulsar "Ver detalle".
 const DETAIL_COLS = new Set(['tipo','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
 COLS.forEach((c,i)=>{ c._idx=i; if(DETAIL_COLS.has(c.key)) c.detail=true; });
