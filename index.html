@@ -1964,9 +1964,9 @@ function fmtFee(val, bodega){
   return `$${n}`;
 }
 function fmtNum(v){ return Math.round(Number(v)).toLocaleString('en-US'); }
-// Los precios van con 3 decimales: fmtNum redondea a entero y se usa para bags,
+// Los precios van con 2 decimales: fmtNum redondea a entero y se usa para bags,
 // donde los decimales no tienen sentido.
-function fmtPrecio(v){ return Number(v).toLocaleString('en-US',{minimumFractionDigits:3, maximumFractionDigits:3}); }
+function fmtPrecio(v){ return Number(v).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function setLoading(on){
   DOM.btnRefresh.disabled=on;
   DOM.refreshIcon.className=on?'spin':'';
