@@ -3333,7 +3333,12 @@ function switchTab(tab){
 // o el navegador se niega a mostrarlo embebido.
 // ═══════════════════════════════════════════════════
 const CTRLINV_URL = 'https://script.google.com/macros/s/AKfycbztojL2jnqEOecJgi4Vg4YhZHpWRq45xIXeSS7h_IzJBbEhroS9jZI26LO0o0_6mIEjWw/exec';
-let ctrlInvLoaded = false, ctrlInvTimer = null;
+let ctrlInvLoaded = false, ctrlInvTimer = null, ctrlInvCargadoEn = 0;
+// Al volver a la pestaña, si la carga ya tiene esta edad se rehace. Sin esto la
+// página se quedaba con la foto del momento en que se abrió: dejando la app
+// abierta toda la mañana, a las 6 seguías viendo lo de las 8. Media hora es el
+// punto medio entre no quedarse viejo y no repetir 480 KB en cada cambio de tab.
+const CI_FRESCURA_MS = 30 * 60 * 1000;
 
 // Gate de acceso: reutiliza GERENCIA_CODE y la misma marca de sesión que
 // Management (gerOK), así el equipo maneja un solo código.
@@ -3370,7 +3375,7 @@ async function fetchConTiempo(url, ms, intentos){
 
 async function cargarControlInv(forzar){
   const f=$('ciFrame'); if(!f) return;
-  if(ctrlInvLoaded && !forzar) return;
+  if(ctrlInvLoaded && !forzar && (Date.now() - ctrlInvCargadoEn) < CI_FRESCURA_MS) return;
   // Contador visible: el dashboard tarda ~30 s mientras el script no tenga
   // caché, y un panel en blanco sin señal de vida invita a pulsar Actualizar,
   // que solo reinicia la espera.
@@ -3391,6 +3396,7 @@ async function cargarControlInv(forzar){
   // exista y lanzaría un ReferenceError en consola.
   f.onload = ctrlInvCargado;
   ctrlInvLoaded = true;
+  ctrlInvCargadoEn = Date.now();
 
   // Camino preferido: traer el HTML por el endpoint JSON y pintarlo aquí.
   // Apuntar el iframe directamente a Google hace que la página se cargue bajo la
