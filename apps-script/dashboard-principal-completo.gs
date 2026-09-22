@@ -177,6 +177,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
     const freeBags = toNum(row['ACTUAL (Free)']);
     const resOrders = toNum(row['Reserved Orders']);
     const resContracts = toNum(row['Reserved Contracts']);
+    const initialBags = toNum(row['Initial Bags']);   // ← NUEVA (columna R de CONSOLIDADO)
     inv.push({
       ico, status, region: toStr(row['Region']), warehouse: toStr(row['Warehouse']),
       product: toStr(row['NAME']), series: toStr(row['Series']),
@@ -187,6 +188,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
       free_bags: freeBags, free_kg: freeBags*bagSize,
       reserved_orders_bags: resOrders, reserved_contracts_bags: resContracts,
       reserved_kg: (resOrders+resContracts)*bagSize,
+      initial_bags: initialBags,                                              // ← NUEVA
     });
   });
   if(inv.filter(r=>r.status==='On Spot').length===0){
@@ -260,6 +262,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
       bag_size:r.bag_size, price:r.price, vejez_dias:r.vejez_dias, vejez_grupo:r.vejez_grupo,
       total_bags:r.total_bags, total_kg:r.total_kg, free_bags:r.free_bags,
       reserved_orders_bags:r.reserved_orders_bags, reserved_contracts_bags:r.reserved_contracts_bags,
+      initial_bags:r.initial_bags,                                           // ← NUEVA
       clients, n_clients:clients.length,
     };
   });

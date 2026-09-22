@@ -3462,7 +3462,9 @@ async function cargarControlInv(forzar){
     if(!tpl || tpl.indexOf('__DATA_JSON__')<0) throw new Error('la plantilla no trae el marcador');
     if(!datos || datos[0]!=='{') throw new Error('los datos no vinieron en JSON');
     f.removeAttribute('src');
-    f.setAttribute('sandbox', 'allow-scripts');   // el dashboard no necesita más
+    // allow-downloads es lo que deja bajar el Excel del detalle: sin ese permiso
+    // Chrome bloquea la descarga en silencio, sin error en consola.
+    f.setAttribute('sandbox', 'allow-scripts allow-downloads');
     // Reemplazo con función, para que un "$&" dentro de los datos no se
     // interprete como patrón de reemplazo.
     f.srcdoc = tpl.replace('__DATA_JSON__', () => datos.replace(/<\/script/g, '<\\/script'));
