@@ -1,9 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
-// FOREST RESERVAS — Apps Script API v12
+// FOREST RESERVAS — Apps Script API v13
 // Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container).
 // Calcula W, X, Y, Z, AA directamente en JavaScript.
 //
-// CAMBIOS RESPECTO A v11:
+// CAMBIOS RESPECTO A v12:
+//   Storage y Finance Fee siguen la política por bodega (ver "Política de
+//   fees" más abajo): tarifas por bodega con tramos, cobro por día mes vencido, inicio
+//   según SPOT / CONTRACT, y cada fee con su moneda (wh_cur / fin_cur).
+//   Ya no coinciden con las columnas Y / Z de la hoja.
+//
+// CAMBIOS DE v12 RESPECTO A v11:
 //   1. Se expone "contenedor" (columna AB, índice 27). W..AA son las columnas
 //      calculadas, así que AB queda justo después del rango de datos.
 //      → 3 puntos marcados con "NUEVA" más abajo.
@@ -48,9 +54,50 @@ const CACHE_META   = 'fv11_meta';
 const CACHE_SECS   = 60 * 60 * 6; // 6 horas — máximo que permite CacheService  MARGEN
 const CHUNK_SIZE   = 90000;
 
-// Tasas por bodega
-const WH_RATE   = { EU:1.4, UK:1.4, AU:2.5, MENA:4, DEFAULT:1.05 };
-const FIN_RATE  = { EU:0.0062, UK:0.0054, AU:0.0103, MENA:0.0072*3.6725, DEFAULT:2.2046*0.0072 };
+// ── Política de fees (v13) ──────────────────────────────────────
+// Inicio del cobro (storage y finance usan la misma fecha):
+//   SPOT:     60 días libres tras la reserva (sin fecha de reserva no se cobra)
+//   CONTRACT: con Last Delivery → día siguiente a V
+//             sin Last Delivery → 180 días libres tras la llegada (ETA)
+//             (la fecha de reserva no cuenta en CONTRACT)
+//   SPOT: si la reserva es anterior a la llegada, se cuenta desde la llegada.
+// Tarifas mensuales, cobradas por día (tarifa / 30). Solo se cobra si el café
+// sigue en bodega el día 1 siguiente al inicio (aviso): ver fee_estado.
+const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180 };
+// Tasa mensual del finance fee sobre el valor del contrato (AU tiene la suya)
+const FIN_RATE    = { AU: 0.0103, DEFAULT: 0.0072 };
+const LB_POR_KG   = 2.2046;
+
+// Moneda del precio del contrato (Pallet Price) por región:
+// USA = USD/lb · MENA = USD/kg · EU = EUR/kg · UK = GBP/kg · AU = AUD/kg
+const PRECIO_MONEDA = { USA:'USD', EU:'EUR', UK:'GBP', AU:'AUD', MENA:'USD' };
+
+// Columna A → bodega. Lo que no se reconoce se trata como Annex (USA, 1.05).
+function bodegaInfo(raw) {
+  const s = String(raw || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (s.includes('DUP'))                                      return { wh:'DUPUY',       region:'USA' };
+  if (s.includes('ANNEX'))                                    return { wh:'ANNEX',       region:'USA' };
+  if (s === 'NJ' || s.includes('CONTINENTAL'))                return { wh:'CONTINENTAL', region:'USA' };
+  if (s.includes('CANAD'))                                    return { wh:'CANADA',      region:'USA' };
+  if (s === 'EU' || s.includes('ROTTERDAM') || s.includes('BARCELONA')) return { wh:'EU', region:'EU' };
+  if (s === 'UK')                                             return { wh:'UK',          region:'UK' };
+  if (s === 'AU' || s.includes('AUSTRAL') || s.includes('MELBOURNE'))   return { wh:'AU', region:'AU' };
+  if (s === 'MENA' || s.includes('DUBAI') || s === 'DXB')     return { wh:'MENA',        region:'MENA' };
+  return { wh:'OTRA', region:'USA' };
+}
+
+// Storage de UN mes para la fila → { monto, moneda }
+function storageMensual(wh, sacos, bagKg) {
+  switch (wh) {
+    case 'DUPUY':  return { monto: sacos * (sacos <= 10 ? 10 : 1.00), moneda:'USD' };
+    case 'CANADA': return { monto: sacos <= 8 ? sacos * bagKg * LB_POR_KG * 0.132 : sacos * 1.72, moneda:'USD' };
+    case 'EU':     return { monto: sacos * (bagKg >= 60 ? 1.37 : 1.05), moneda:'EUR' }; // 70 kg vs 35 kg / caja 24 kg
+    case 'UK':     return { monto: sacos * (sacos < 7 ? 1.40 : 0.70),   moneda:'GBP' };
+    case 'AU':     return { monto: sacos * 2.5, moneda:'AUD' };
+    case 'MENA':   return { monto: sacos * 4,   moneda:'AED' };
+    default:       return { monto: sacos * (sacos <= 10 ? 10 : 1.05), moneda:'USD' }; // ANNEX, CONTINENTAL, OTRA
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 function doGet(e) {
@@ -115,8 +162,7 @@ function leerSheet() {
 
     const estado = esFact ? "FACTURADO SIN ROTAR" : "RESERVADO";
     const tipo   = String(r[C.tipo] || '').toUpperCase().trim() === "SPOT" ? "SPOT" : "CONTRACT";
-    const bodega = String(r[C.bodega] || '').trim().toUpperCase();
-    const bod    = WH_RATE[bodega] ? bodega : 'DEFAULT'; // clave normalizada
+    const info   = bodegaInfo(r[C.bodega]);
 
     // Cantidad
     const cantidad = toInt(r[C.cantidad]);
@@ -146,73 +192,58 @@ function leerSheet() {
       diasReserva = Math.floor((todayMs - fechaReservaDate.getTime()) / 86400000);
     }
 
-    // ── Y: Warehouse Storage Fee
-    // Lógica: si V<>"" (tiene last_delivery):
-    //   si X<0 → ""  else E * tasa_bodega
-    // si no:
-    //   si Q="" → ""
-    //   si SPOT: si X>=60 → E*tasa else ""
-    //   si CONTRACT: si X>=180 → E*tasa else ""
-    const tasaWH = WH_RATE[bod] || WH_RATE.DEFAULT;
-    let warehouseFee = 0;
-    if (lastDeliveryDate) {
-      if (diasReserva !== null && diasReserva >= 0) {
-        warehouseFee = cantidad * tasaWH;
-      }
-    } else {
-      if (fechaReservaDate) {
-        const umbral = tipo === "SPOT" ? 60 : 180;
-        if (diasReserva !== null && diasReserva >= umbral) {
-          warehouseFee = cantidad * tasaWH;
-        }
-      }
+    // ── Y, Z, AA: fees según la política v13 (ver DIAS_LIBRES arriba)
+    const precioKg    = toNum(r[C.precio_kg]);    // T (solo se expone)
+    const palletPrice = toNum(r[C.pallet_price]);  // R — precio del contrato
+    const bagSize     = toNum(r[C.bag_size]);       // S — kg por saco
+
+    // Primer día cobrado: los días libres se cuentan completos después de la
+    // fecha base (reserva 22 jul + 60 → libre hasta 20 sep, cobra desde 21 sep)
+    const baseReserva = (fechaReservaDate && etaDate && fechaReservaDate < etaDate) ? etaDate : fechaReservaDate;
+    let inicioMs = null;
+    if (tipo === "SPOT") {
+      if (baseReserva) inicioMs = diaMs(baseReserva) + (DIAS_LIBRES.SPOT + 1) * 86400000;
+    } else if (lastDeliveryDate) {
+      inicioMs = diaMs(lastDeliveryDate) + 86400000;              // día siguiente a V
+      if (etaDate) inicioMs = Math.max(inicioMs, diaMs(etaDate));  // no antes de llegar a bodega
+    } else if (etaDate) {                                          // CONTRACT: la reserva no cuenta
+      inicioMs = diaMs(etaDate) + (DIAS_LIBRES.CONTRACT + 1) * 86400000;
     }
 
-    // ── Z: Finance Fee
-    // Usa T (precio_kg) si existe, sino R (pallet_price); × S (bag_size) × E × tasa_fin
-    // si V<>"": si X<0 → "" else (T||R)*E*tasa
-    // si no: misma lógica de umbrales SPOT/CONTRACT
-    const tasaFIN = FIN_RATE[bod] || FIN_RATE.DEFAULT;
-    const precioKg    = toNum(r[C.precio_kg]);    // T
-    const palletPrice = toNum(r[C.pallet_price]);  // R
-    const bagSize     = toNum(r[C.bag_size]);       // S
-    const precioBase  = precioKg > 0 ? precioKg : palletPrice;
-
-    let financeFee = 0;
-    if (lastDeliveryDate) {
-      if (diasReserva !== null && diasReserva >= 0) {
-        financeFee = precioBase * cantidad * tasaFIN;
-      }
-    } else {
-      if (fechaReservaDate) {
-        const umbral = tipo === "SPOT" ? 60 : 180;
-        if (diasReserva !== null && diasReserva >= umbral) {
-          // Con last_delivery: usa T o R; sin last_delivery: usa R*S*E
-          financeFee = palletPrice * bagSize * cantidad * tasaFIN;
-        }
-      }
-    }
-
-    // ── AA: Fee en (días hasta que aplica el fee, negativo = ya aplica)
-    // si V<>"": SI(J>V, (J+30)-HOY(), V-HOY())
-    // si no:    SI(Q="","", SI(SPOT, 60-X, 180-X))
-    let feeEn = null;
-    if (lastDeliveryDate) {
-      if (etaDate) {
-        if (etaDate > lastDeliveryDate) {
-          // (J+30) - HOY()
-          feeEn = Math.floor((etaDate.getTime() + 30*86400000 - todayMs) / 86400000);
-        } else {
-          // V - HOY()
-          feeEn = Math.floor((lastDeliveryDate.getTime() - todayMs) / 86400000);
-        }
-      }
-    } else {
-      if (fechaReservaDate && diasReserva !== null) {
-        const umbral = tipo === "SPOT" ? 60 : 180;
-        feeEn = umbral - diasReserva;
+    // Aviso el día 1 siguiente al inicio. Si el café sale antes, no paga nada;
+    // si sigue ahí, paga TODOS los días desde el inicio (tarifa mensual / 30).
+    //   GRATIS  → aún en periodo libre
+    //   ACUMULA → ya corren días; sin cobro si sale antes del aviso
+    //   COBRA   → pasó el aviso; paga todos los días acumulados
+    // fee_mes_dias    = días del último mes calendario cerrado (factura del día 1).
+    // fee_salida_dias = días del mes en curso: se cobran con la factura del café al sacarlo.
+    let feeEstado = null, feeEn = null, diasAcum = 0, notifMs = null, diasMes = 0, diasSalida = 0;
+    if (inicioMs !== null) {
+      const ini = new Date(inicioMs);
+      notifMs  = new Date(ini.getFullYear(), ini.getMonth() + 1, 1).getTime();
+      feeEn    = Math.round((notifMs - todayMs) / 86400000);    // días hasta el aviso (<= 0 = cobra)
+      diasAcum = Math.max(0, Math.round((todayMs - inicioMs) / 86400000));
+      feeEstado = todayMs < inicioMs ? 'GRATIS'
+                : todayMs < notifMs  ? 'ACUMULA'
+                :                      'COBRA';
+      if (feeEstado === 'COBRA') {
+        const mesIni = new Date(today.getFullYear(), today.getMonth() - 1, 1).getTime();
+        const mesFin = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+        diasMes = Math.max(0, Math.round((mesFin - Math.max(mesIni, inicioMs)) / 86400000));
+        // Mes en curso: si el café sale hoy, estos días van en la factura del café
+        diasSalida = Math.max(0, Math.round((todayMs - Math.max(mesFin, inicioMs)) / 86400000));
       }
     }
+    const diasCobro = feeEstado === 'COBRA' ? diasAcum : 0;
+
+    const st = storageMensual(info.wh, cantidad, bagSize);
+    // Facturación mensual: el monto a facturar es el del último mes cerrado;
+    // el acumulado (todos los días desde el inicio) va aparte.
+    const whDia  = st.monto / 30;
+
+    const valorContrato = palletPrice * bagSize * cantidad * (info.region === 'USA' ? LB_POR_KG : 1);
+    const finDia = valorContrato * (FIN_RATE[info.region] || FIN_RATE.DEFAULT) / 30;
+    const r2     = x => x > 0 ? Math.round(x * 100) / 100 : null;
 
     // Factura (ignorar booleanos)
     let factura = String(r[C.factura] || '').trim();
@@ -239,9 +270,21 @@ function leerSheet() {
       eta:            toFechaISO(r[C.eta]),
       dias:           diasVejez,
       dias_reserva:   diasReserva,
-      warehouse_fee:  warehouseFee > 0 ? Math.round(warehouseFee) : null,
-      finance_fee:    financeFee  > 0 ? Math.round(financeFee)    : null,
-      fee_en:         feeEn,
+      warehouse_fee:  r2(whDia  * diasMes),             // storage a facturar (último mes cerrado)
+      finance_fee:    r2(finDia * diasMes),             // finance a facturar (último mes cerrado)
+      warehouse_acum: r2(whDia  * diasCobro),           // storage acumulado desde el inicio
+      finance_acum:   r2(finDia * diasCobro),           // finance acumulado desde el inicio
+      warehouse_salida: r2(whDia  * diasSalida),        // storage a sumar a la factura del café si sale hoy
+      finance_salida:   r2(finDia * diasSalida),        // finance a sumar a la factura del café si sale hoy
+      wh_cur:         st.moneda,                        // moneda del storage fee
+      fin_cur:        PRECIO_MONEDA[info.region],       // moneda del finance fee
+      fee_estado:     feeEstado,                        // GRATIS / ACUMULA / COBRA
+      fee_dias:       diasAcum,                         // días acumulados desde el inicio
+      fee_mes_dias:   diasMes,                          // días del último mes cerrado
+      fee_salida_dias: diasSalida,                      // días del mes en curso (van con la factura del café)
+      fee_inicio:     inicioMs !== null ? isoLocal(inicioMs) : null,
+      fee_notif:      notifMs  !== null ? isoLocal(notifMs) : null,
+      fee_en:         feeEn,                            // días hasta el aviso (<= 0 = cobra)
     });
   }
 
@@ -266,6 +309,18 @@ function toNum(v) {
   if (typeof v === 'number') return v;
   const n = parseFloat(String(v).replace(/,/g, '').trim());
   return isNaN(n) ? 0 : n;
+}
+
+// ms (medianoche local) → "yyyy-MM-dd" en la zona del script
+function isoLocal(ms) {
+  return Utilities.formatDate(new Date(ms), Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+
+// Medianoche local del día de la fecha, en ms
+function diaMs(d) {
+  const x = new Date(d.getTime());
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
 }
 
 function toInt(v) {
