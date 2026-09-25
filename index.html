@@ -686,7 +686,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <div class="footer">
   <span><strong id="fBags">—</strong> bags en vista</span>
   <span><strong id="fClientes">—</strong> clientes</span>
-  <span><strong id="fWH">—</strong> en storage fees</span>
+  <span><strong id="fWH">—</strong> storage a facturar del mes</span>
   <span style="margin-left:auto;color:var(--text3)" id="footerTs">—</span>
 </div>
 
@@ -1362,9 +1362,9 @@ const COLS = [
   { key:'container',    label:'Status',            w:85,  cls:'',         containerBadge:true },
   { key:'dias',         label:'Vejez',             w:85,  cls:'',         diasBadge:true },
   { key:'dias_reserva', label:'Días Reserv.',      w:85,  cls:'',         diasBadge:true },
-  { key:'warehouse_fee',label:'Storage Fee',       w:110, cls:'',         feecell:true, secFee:true },
-  { key:'finance_fee',  label:'Finance Fee',       w:110, cls:'',         feecell:true, secFee:true },
-  { key:'fee_en',       label:'Fee en',            w:100, cls:'',         feeBadge:true, secFee:true },
+  { key:'warehouse_fee',label:'Storage (mes)',     w:110, cls:'',         feecell:true, secFee:true },
+  { key:'finance_fee',  label:'Finance (mes)',     w:110, cls:'',         feecell:true, secFee:true },
+  { key:'fee_en',       label:'Estado fee',        w:150, cls:'',         feeBadge:true, secFee:true },
   { key:'comercial',    label:'Comercial',         w:95,  cls:'c-muted' },
   { key:'rAccion',      label:'Acción',            w:118, resAccion:true },
   { key:'rEstado',      label:'Seguimiento',       w:118, resEstado:true },
@@ -1484,6 +1484,12 @@ async function cargarDatos(forzar=false){
       r.finance_fee  = Number(r.finance_fee)||0;
       r.pallet_price = Number(r.pallet_price)||0;
       r.fee_en       = r.fee_en!=null ? Number(r.fee_en) : null;
+      r.warehouse_acum = Number(r.warehouse_acum)||0;
+      r.finance_acum   = Number(r.finance_acum)||0;
+      r.warehouse_salida = Number(r.warehouse_salida)||0;
+      r.finance_salida   = Number(r.finance_salida)||0;
+      r.wh_cur       = r.wh_cur  || curPorBodega(r.bodega);
+      r.fin_cur      = r.fin_cur || curPorBodega(r.bodega);
       r.container    = containerStatus(r.eta);   // Spot / On float, derivado de la ETA
       r.comercial    = normComercial(r.comercial);// unifica variantes (ej. los 3 "Sebastian")
       r._rkey        = resKey(r);                 // llave para el seguimiento de reservas
@@ -1612,6 +1618,20 @@ function paginasBotones(cur,total){
 // RENDER FILAS — optimizado
 // ═══════════════════════════════════════════════════
 // Strings de HTML para badges (evita createElement en bucle interno)
+// Estado del fee (cobro mes vencido): etiqueta, clase del badge y tooltip.
+// Si el API aún no manda fee_estado, cae al comportamiento anterior con fee_en.
+function feeEstado(r){
+  const fd=s=>{ if(!s) return ''; const [y,m,d]=s.split('-'); return `${+d} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][m-1]}`; };
+  const v=r.fee_en;
+  switch(r.fee_estado){
+    case 'GRATIS':     return { c:'lejos',  l:`Días corren desde ${fd(r.fee_inicio)}`, t:'En periodo libre de fees' };
+    case 'ACUMULA':    return { c:'pronto', l:`Notificar ${fd(r.fee_notif)}`, t:`${r.fee_dias} días acumulados. Sin cobro si sale antes del ${fd(r.fee_notif)}` };
+    case 'COBRA':      return { c:'aplica', l:`⚠ Cobra ${r.fee_dias} d`, t:`${r.fee_dias} días desde el ${fd(r.fee_inicio)} · ${r.fee_mes_dias} del último mes cerrado` };
+  }
+  if(v===null||v===undefined) return { c:'na', l:'Sin fecha', t:'Sin fecha para calcular el fee' };
+  if(v<=0)  return { c:'aplica', l:'⚠ Aplica ya', t:`Fee activo hace ${Math.abs(v)} días` };
+  return { c:v<=30?'pronto':'lejos', l:`en ${v}d`, t:`Fee en ${v} días` };
+}
 function badgeHTML(col, r){
   if(col.badge){
     const val=r[col.key];
@@ -1634,11 +1654,8 @@ function badgeHTML(col, r){
     return    `<span class="dias-badge alert" title="${d} días">${d}d</span>`;
   }
   if(col.feeBadge){
-    const v=r[col.key];
-    if(v===null||v===undefined) return '<span class="fee-badge-na">Sin fecha</span>';
-    if(v<=0)  return `<span class="fee-badge-aplica" title="Fee activo hace ${Math.abs(v)} días">⚠ Aplica ya</span>`;
-    if(v<=30) return `<span class="fee-badge-pronto" title="Fee en ${v} días">en ${v}d</span>`;
-    return     `<span class="fee-badge-lejos" title="Fee en ${v} días">en ${v}d</span>`;
+    const e=feeEstado(r);
+    return `<span class="fee-badge-${e.c}" title="${e.t}">${e.l}</span>`;
   }
   if(col.containerBadge){
     return r.container==='On float'
@@ -1673,8 +1690,13 @@ function renderFilas(rows, fromIdx){
       } else if(col.feecell){
         const val=r[col.key];
         if(val>0 && feeAplica){
-          inner = fmtFee(val, r.bodega);
-          extra = ' class="fee-cell"';
+          const esWH = col.key==='warehouse_fee', cur = esWH ? r.wh_cur : r.fin_cur;
+          const acum = esWH ? r.warehouse_acum : r.finance_acum;
+          const sal  = esWH ? r.warehouse_salida : r.finance_salida;
+          inner = fmtFee(val, cur);
+          extra = ` class="fee-cell" title="Factura del día 1: ${r.fee_mes_dias} días del último mes`
+                + `${sal>0?` · Si sale hoy, sumar a la factura del café: ${r.fee_salida_dias} días = ${fmtFee(sal, cur)}`:''}`
+                + `${acum>0?` · Acumulado: ${r.fee_dias} días = ${fmtFee(acum, cur)}`:''}"`;
         }else{
           inner='—';
           extra=' style="color:var(--text3)"';
@@ -1958,14 +1980,16 @@ const esc=(s)=>{
   if(!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 };
-function fmtFee(val, bodega){
+// Símbolo de moneda de los fees (el API manda wh_cur / fin_cur por fila)
+const CUR_SYM = { USD:'$', EUR:'€', GBP:'£', AUD:'A$', AED:'AED ' };
+// Respaldo si el API aún no manda la moneda: la deduce de la región
+function curPorBodega(bodega){
   const b=(bodega||'').toUpperCase().trim();
+  return b==='EU'?'EUR':b==='UK'?'GBP':b==='AU'?'AUD':b==='MENA'?'AED':'USD';
+}
+function fmtFee(val, cur){
   const n=Math.round(Number(val)).toLocaleString('en-US');
-  if(b==='EU')   return `€${n}`;
-  if(b==='UK')   return `£${n}`;
-  if(b==='AU')   return `A$${n}`;
-  if(b==='MENA') return `AED ${n}`;
-  return `$${n}`;
+  return `${CUR_SYM[cur]??'$'}${n}`;
 }
 function fmtNum(v){ return Math.round(Number(v)).toLocaleString('en-US'); }
 // Los precios van con 2 decimales: fmtNum redondea a entero y se usa para bags,
@@ -2074,10 +2098,9 @@ function aplicarFiltros(){
     clienteSet.add(r.cliente);
     const feeAplica = r.fee_en===null||r.fee_en<=0;
     if(feeAplica){
-      const b=(r.bodega||'').toUpperCase().trim();
-      const sym=b==='EU'?'€':b==='UK'?'£':b==='AU'?'A$':b==='MENA'?'AED ':'$';
-      if(r.warehouse_fee>0) whPorMoneda[sym]=(whPorMoneda[sym]||0)+Math.round(r.warehouse_fee);
-      if(r.finance_fee>0)   finPorMoneda[sym]=(finPorMoneda[sym]||0)+Math.round(r.finance_fee);
+      const whSym=CUR_SYM[r.wh_cur]??'$', finSym=CUR_SYM[r.fin_cur]??'$';
+      if(r.warehouse_fee>0) whPorMoneda[whSym]=(whPorMoneda[whSym]||0)+Math.round(r.warehouse_fee);
+      if(r.finance_fee>0)   finPorMoneda[finSym]=(finPorMoneda[finSym]||0)+Math.round(r.finance_fee);
     }
   }
   const uniqC=clienteSet.size;
@@ -2164,7 +2187,7 @@ function exportExcel(){
         case 'dias_reserva':{ const dr=r.dias_reserva; setCell(c,dr!=null?`${dr}d`:'—',dr!=null?badge(dr>180?WARN_BG:dr>90?'FFF4E0':OK_BG,dr>180?WARN_FG:dr>90?'B86000':OK_FG):base(ev)); break; }
         case 'warehouse_fee':setCell(c,r.warehouse_fee>0?r.warehouse_fee:0,r.warehouse_fee>0?feeS(ev):base(ev)); break;
         case 'finance_fee':  setCell(c,r.finance_fee>0?r.finance_fee:0,r.finance_fee>0?feeS(ev):base(ev)); break;
-        case 'fee_en':     { const fv=r.fee_en; setCell(c, fv==null?'Sin fecha':(fv<=0?'Aplica ya':`en ${fv}d`), base(ev)); break; }
+        case 'fee_en':       setCell(c, feeEstado(r).l.replace('⚠ ',''), base(ev)); break;
         case 'comercial':    setCell(c,r.comercial||'—',base(ev)); break;
         case '_sel':         setCell(c,'',base(ev)); break;
         case 'rAccion':      setCell(c, r.rAccion?r.rAccion.l:'', base(ev,'left')); break;
