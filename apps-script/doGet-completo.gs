@@ -15,6 +15,8 @@
 //                                 cada visita. Con ?refresh=1 recalcula a la
 //                                 fuerza (~30 s).
 //   4. ALLOWALL                 → permite que la app lo muestre embebido.
+//   5. ?format=consumo          → datos de la vista "Consumo clientes" de la app.
+//                                 Requiere el archivo consumo-clientes.gs.
 //
 // Lo que NO cambia: construirDashboardHtml_, generarReporteDashboard y el menú
 // dentro de Sheets siguen exactamente igual.
@@ -29,6 +31,7 @@ function doGet(e){
     if (formato === 'tpl')   return ciServeTpl_();           // plantilla sola
     if (formato === 'json')  return ciServeJson_(forzar);    // datos solos
     if (formato === 'embed') return ciServeEmbed_(forzar);   // ambos juntos (pesado)
+    if (formato === 'consumo') return ccServeJson_(forzar);  // consumo por cliente (consumo-clientes.gs)
 
     const html = ciDashboardHtml_(forzar);
     return HtmlService.createHtmlOutput(html)
