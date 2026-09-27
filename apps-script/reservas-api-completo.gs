@@ -279,6 +279,8 @@ function leerSheet() {
       finance_fee:    r2(finDia * diasMes),             // finance a facturar (último mes cerrado)
       warehouse_acum: r2(whDia  * diasCobro),           // storage acumulado desde el inicio
       finance_acum:   r2(finDia * diasCobro),           // finance acumulado desde el inicio
+      wh_mensual:     r2(whDia  * 30),                  // tarifa mensual de storage de la fila
+      fin_mensual:    r2(finDia * 30),                  // finance de un mes completo (valor × tasa)
       warehouse_salida: r2(whDia  * diasSalida),        // storage a sumar a la factura del café si sale hoy
       finance_salida:   r2(finDia * diasSalida),        // finance a sumar a la factura del café si sale hoy
       wh_cur:         st.moneda,                        // moneda del storage fee
