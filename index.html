@@ -225,6 +225,7 @@ td:last-child{border-right:none}
 .fee-badge-lejos{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;background:var(--ok-bg);color:var(--ok-fg);border:1px solid #80c880}
 .fee-badge-na{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;background:var(--surface2);color:var(--text3)}
 .fee-cell{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--fee-fg);background:rgba(253,246,227,.4)}
+.fee-cell .fee-d{font-size:9.5px;font-weight:500;color:var(--text3);margin-left:4px}
 .fee-cell.zero{color:var(--text3);font-weight:400;background:none}
 
 /* ══ TOTALS ROW (tfoot, fijo abajo) ══ */
@@ -1626,7 +1627,7 @@ function feeEstado(r){
   switch(r.fee_estado){
     case 'GRATIS':     return { c:'lejos',  l:`Días corren desde ${fd(r.fee_inicio)}`, t:'En periodo libre de fees' };
     case 'ACUMULA':    return { c:'pronto', l:`Notificar ${fd(r.fee_notif)}`, t:`${r.fee_dias} días acumulados. Sin cobro si sale antes del ${fd(r.fee_notif)}` };
-    case 'COBRA':      return { c:'aplica', l:`⚠ Cobra ${r.fee_dias} d`, t:`${r.fee_dias} días desde el ${fd(r.fee_inicio)} · ${r.fee_mes_dias} del último mes cerrado` };
+    case 'COBRA':      return { c:'aplica', l:`⚠ Cobra desde ${fd(r.fee_inicio)}`, t:`${r.fee_dias} días acumulados desde el ${fd(r.fee_inicio)}` };
   }
   if(v===null||v===undefined) return { c:'na', l:'Sin fecha', t:'Sin fecha para calcular el fee' };
   if(v<=0)  return { c:'aplica', l:'⚠ Aplica ya', t:`Fee activo hace ${Math.abs(v)} días` };
@@ -1690,13 +1691,9 @@ function renderFilas(rows, fromIdx){
       } else if(col.feecell){
         const val=r[col.key];
         if(val>0 && feeAplica){
-          const esWH = col.key==='warehouse_fee', cur = esWH ? r.wh_cur : r.fin_cur;
-          const acum = esWH ? r.warehouse_acum : r.finance_acum;
-          const sal  = esWH ? r.warehouse_salida : r.finance_salida;
-          inner = fmtFee(val, cur);
-          extra = ` class="fee-cell" title="Factura del día 1: ${r.fee_mes_dias} días del último mes`
-                + `${sal>0?` · Si sale hoy, sumar a la factura del café: ${r.fee_salida_dias} días = ${fmtFee(sal, cur)}`:''}`
-                + `${acum>0?` · Acumulado: ${r.fee_dias} días = ${fmtFee(acum, cur)}`:''}"`;
+          const esWH = col.key==='warehouse_fee';
+          inner = `${fmtFee(val, esWH ? r.wh_cur : r.fin_cur)}<span class="fee-d">${r.fee_mes_dias}d</span>`;
+          extra = ` class="fee-cell" title="${feeTooltip(r, esWH)}"`;
         }else{
           inner='—';
           extra=' style="color:var(--text3)"';
@@ -1986,6 +1983,25 @@ const CUR_SYM = { USD:'$', EUR:'€', GBP:'£', AUD:'A$', AED:'AED ' };
 function curPorBodega(bodega){
   const b=(bodega||'').toUpperCase().trim();
   return b==='EU'?'EUR':b==='UK'?'GBP':b==='AU'?'AUD':b==='MENA'?'AED':'USD';
+}
+// Tooltip de una celda de fee: explica la cuenta del mes, lo que se suma si
+// sale hoy y el acumulado. Montos con 2 decimales para que la cuenta cuadre.
+function feeTooltip(r, esWH){
+  const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const cur=esWH?r.wh_cur:r.fin_cur, sym=CUR_SYM[cur]??'$';
+  const f2=v=>`${sym}${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const mes=esWH?r.warehouse_fee:r.finance_fee, sal=esWH?r.warehouse_salida:r.finance_salida, acum=esWH?r.warehouse_acum:r.finance_acum;
+  const mensual=(esWH?r.wh_mensual:r.fin_mensual) || (r.fee_mes_dias ? mes/r.fee_mes_dias*30 : 0);
+  const hoy=new Date(), ini=r.fee_inicio?new Date(r.fee_inicio+'T00:00:00'):null;
+  const m0=new Date(hoy.getFullYear(),hoy.getMonth()-1,1), m1=new Date(hoy.getFullYear(),hoy.getMonth(),0);
+  const desde=ini&&ini>m0?ini:m0;
+  const base = esWH ? `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`
+                    : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato)`;
+  const L=[`${esWH?'Storage':'Finance'} de ${MES[m0.getMonth()]} (${desde.getDate()}–${m1.getDate()} ${MES[m0.getMonth()]}): `
+         + `${base} ÷ 30 × ${r.fee_mes_dias} d = ${f2(mes)}`];
+  if(sal>0)  L.push(`Si sale hoy, sumar a la factura del café: ${r.fee_salida_dias} d = ${f2(sal)}`);
+  if(acum>0) L.push(`Acumulado desde el ${ini?`${ini.getDate()} ${MES[ini.getMonth()]}`:'inicio'}: ${r.fee_dias} d = ${f2(acum)}`);
+  return L.join('&#10;');
 }
 function fmtFee(val, cur){
   const n=Math.round(Number(val)).toLocaleString('en-US');

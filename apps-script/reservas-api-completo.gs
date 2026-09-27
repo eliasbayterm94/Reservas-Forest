@@ -57,13 +57,14 @@ const CHUNK_SIZE   = 90000;
 // ── Política de fees (v13) ──────────────────────────────────────
 // Inicio del cobro (storage y finance usan la misma fecha):
 //   SPOT:     60 días libres tras la reserva (sin fecha de reserva no se cobra)
-//   CONTRACT: con Last Delivery → día siguiente a V
+//   CONTRACT: con Last Delivery → día siguiente a V; si U y V están a 30 días
+//             o menos (entrega única), 60 días libres tras V
 //             sin Last Delivery → 180 días libres tras la llegada (ETA)
 //             (la fecha de reserva no cuenta en CONTRACT)
 //   SPOT: si la reserva es anterior a la llegada, se cuenta desde la llegada.
 // Tarifas mensuales, cobradas por día (tarifa / 30). Solo se cobra si el café
 // sigue en bodega el día 1 siguiente al inicio (aviso): ver fee_estado.
-const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180 };
+const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60 };
 // Tasa mensual del finance fee sobre el valor del contrato (AU tiene la suya)
 const FIN_RATE    = { AU: 0.0103, DEFAULT: 0.0072 };
 const LB_POR_KG   = 2.2046;
@@ -171,6 +172,7 @@ function leerSheet() {
     const etaDate            = toDate(r[C.eta]);           // J - ETA Bodega
     const fechaReservaDate   = toDate(r[C.fecha_reserva]); // Q
     const lastDeliveryDate   = toDate(r[C.last_delivery]); // V
+    const firstDeliveryDate  = toDate(r[C.first_delivery]); // U
 
     // ── W: Días de Vejez = HOY() - J (ETA)
     // =SI(estado activo, SI(J="","", HOY()-J), "")
@@ -204,7 +206,10 @@ function leerSheet() {
     if (tipo === "SPOT") {
       if (baseReserva) inicioMs = diaMs(baseReserva) + (DIAS_LIBRES.SPOT + 1) * 86400000;
     } else if (lastDeliveryDate) {
-      inicioMs = diaMs(lastDeliveryDate) + 86400000;              // día siguiente a V
+      // Entrega única (U = V o a 30 días o menos): 60 días libres tras V
+      const ventanaCorta = firstDeliveryDate &&
+        Math.round((diaMs(lastDeliveryDate) - diaMs(firstDeliveryDate)) / 86400000) <= 30;
+      inicioMs = diaMs(lastDeliveryDate) + ((ventanaCorta ? DIAS_LIBRES.ENTREGA_UNICA : 0) + 1) * 86400000;
       if (etaDate) inicioMs = Math.max(inicioMs, diaMs(etaDate));  // no antes de llegar a bodega
     } else if (etaDate) {                                          // CONTRACT: la reserva no cuenta
       inicioMs = diaMs(etaDate) + (DIAS_LIBRES.CONTRACT + 1) * 86400000;
@@ -274,6 +279,8 @@ function leerSheet() {
       finance_fee:    r2(finDia * diasMes),             // finance a facturar (último mes cerrado)
       warehouse_acum: r2(whDia  * diasCobro),           // storage acumulado desde el inicio
       finance_acum:   r2(finDia * diasCobro),           // finance acumulado desde el inicio
+      wh_mensual:     r2(whDia  * 30),                  // tarifa mensual de storage de la fila
+      fin_mensual:    r2(finDia * 30),                  // finance de un mes completo (valor × tasa)
       warehouse_salida: r2(whDia  * diasSalida),        // storage a sumar a la factura del café si sale hoy
       finance_salida:   r2(finDia * diasSalida),        // finance a sumar a la factura del café si sale hoy
       wh_cur:         st.moneda,                        // moneda del storage fee
