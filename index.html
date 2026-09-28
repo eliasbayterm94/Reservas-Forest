@@ -3641,7 +3641,7 @@ async function cargarConsumo(forzar){
     let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('la respuesta no vino en JSON'); }
     if(j.error) throw new Error(j.error);
     if(!j.filas || !j.meta || !j.cols) throw new Error('la respuesta no trae las filas de consumo');
-    cc.data = j; cc.cargadoEn = Date.now();
+    cc.data = ccUnirDuplicados(j); cc.cargadoEn = Date.now();
     cc.ts = 'Datos: ' + new Date(j.meta.generado).toLocaleString('es-CO');
     est.classList.add('hidden');
   }catch(err){
@@ -3653,6 +3653,59 @@ async function cargarConsumo(forzar){
     if(ciModo==='consumo') $('ciTs').textContent = cc.ts;
   }
   renderConsumo();
+}
+
+// Un mismo cliente facturado con dos nombres ("Haven Coffee Roasters" y "Haven Coffee
+// Co") se une en uno solo, pero únicamente si los dos compran en la MISMA región: con
+// regiones distintas pueden ser empresas diferentes (Laura, 2026-09-27). La clave del
+// nombre es la misma que usa el script para cruzar reservas (ccClaveCliente_).
+const CC_STOP = ['coffee','coffees','roasters','roaster','roastery','roasting','roast','co','company',
+  'ltd','llc','limited','pty','srl','inc','specialty','speciality','trading','the','fze','sl','gmbh','bv',
+  'cafe','caffe','and','fzco','spc','lda','sa','sas','ab','as','kft'];
+function ccClaveCliente(s){
+  const t = String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+    .replace(/\(.*?\)/g,' ').replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(Boolean);
+  return t.filter(x=>!CC_STOP.includes(x)).join('') || t.join('');
+}
+// Une dos listas de pedidos ("hace cuántos días") y vuelve a juntar los que caen a 7 días o menos.
+function ccUnirPedidos(a, b){
+  const d = [...new Set([].concat(a||[], b||[]))].sort((x,y)=>y-x), out = [];
+  let prev = null;
+  d.forEach(x=>{ if(prev==null || prev-x > 7) out.push(x); prev = x; });
+  return out;
+}
+function ccUnirDuplicados(P){
+  const I = {}; P.cols.forEach((c,i)=>I[c]=i);
+  // Región principal y volumen de cada nombre
+  const info = {};
+  P.filas.forEach(r=>{ const c = r[I.cliente], kg = r[I.m].reduce((a,b)=>a+b,0)*r[I.size];
+    const x = info[c] = info[c] || { kg:0, reg:{} };
+    x.kg += kg; x.reg[r[I.region]] = (x.reg[r[I.region]]||0) + kg + 1e-6; });
+  const regionDe = c => Object.keys(info[c].reg).sort((a,b)=>info[c].reg[b]-info[c].reg[a])[0];
+  // Grupos por clave + región; el nombre que queda es el de más volumen
+  const grupos = {};
+  Object.keys(info).forEach(c=>{ const k = ccClaveCliente(c)+'|'+regionDe(c); (grupos[k] = grupos[k] || []).push(c); });
+  const canon = {}, unidos = [];
+  Object.values(grupos).filter(g=>g.length>1).forEach(g=>{
+    g.sort((a,b)=>info[b].kg-info[a].kg);
+    g.slice(1).forEach(o=>{ canon[o] = g[0]; unidos.push([g[0], o, regionDe(g[0])]); });
+  });
+  if(!unidos.length) return Object.assign({}, P, { unidos });
+  // Filas: misma clave cliente × café × presentación se suman
+  const porClave = new Map(), filas = [];
+  P.filas.forEach(r0=>{
+    const r = r0.slice(); r[I.cliente] = canon[r[I.cliente]] || r[I.cliente];
+    const k = r[I.cliente]+'|'+r[I.producto]+'|'+r[I.size];
+    const f = porClave.get(k);
+    if(!f){ r[I.m] = r[I.m].slice(); porClave.set(k, r); filas.push(r); return; }
+    r[I.m].forEach((x,i)=> f[I.m][i] += x);
+    f[I.mtd] += r[I.mtd]; f[I.res] += r[I.res];
+    if(r[I.ultima] > f[I.ultima]){ f[I.ultima] = r[I.ultima]; if(r[I.comercial]) f[I.comercial] = r[I.comercial]; }
+    f[I.pedidos] = ccUnirPedidos(f[I.pedidos], r[I.pedidos]);
+  });
+  const clientes = Object.assign({}, P.clientes);
+  unidos.forEach(([c,o])=>{ clientes[c] = ccUnirPedidos(clientes[c], clientes[o]); delete clientes[o]; });
+  return Object.assign({}, P, { filas, clientes, unidos });
 }
 
 function ccSet(k, v){
@@ -3786,6 +3839,9 @@ function ccPorCliente(filas, M){
 }
 
 // ── Columnas por vista. get = valor para ordenar/exportar; fmt = cómo se pinta.
+// Nombre del cliente; si se unió con otro nombre, lo dice al lado y en el tooltip.
+const ccCliHtml = c => { const otros = (cc.data.unidos||[]).filter(u=>u[0]===c).map(u=>u[1]);
+  return esc(c) + (otros.length ? ` <span style="color:var(--text3);font-size:11px;font-weight:400" title="También facturado como: ${escAttr(otros.join(', '))}">+${otros.length} nombre${otros.length>1?'s':''}</span>` : ''); };
 const ccEstHtml = e => `<span class="cc-est ${CC_EST_CLS[e]||''}">${esc(e)}</span>`;
 const ccProxHtml = (d, atraso) => !d ? '—'
   : atraso>0 ? `<span class="cc-atraso" title="Debió comprar hace ${atraso} días">${ccFecha(d)}</span>` : ccFecha(d);
@@ -3813,7 +3869,7 @@ function ccColumnas(M){
   ];
   if(cc.vista==='cli'){
     const base = [
-      {t:'Cliente', w:230, get:c=>c.cli, cls:'c-cliente'},
+      {t:'Cliente', w:230, get:c=>c.cli, cls:'c-cliente', html:c=>ccCliHtml(c.cli)},
       {t:'Región', w:64, get:c=>c.region},
       {t:'Estado', w:98, get:c=>c.estado, html:c=>ccEstHtml(c.estado)},
       {t:'Periodo', w:92, get:c=>c.per, tip:'Cada cuánto compra: mediana de días entre pedidos, con cualquier café'},
@@ -3841,7 +3897,7 @@ function ccColumnas(M){
     ]).concat([{t:'Comercial', w:100, get:c=>c.com}]);
   }
   return [
-    {t:'Cliente', w:210, get:f=>f.cli, cls:'c-cliente'},
+    {t:'Cliente', w:210, get:f=>f.cli, cls:'c-cliente', html:f=>ccCliHtml(f.cli)},
     {t:'Café', w:170, get:f=>f.prod},
     {t:'Present.', w:74, get:f=>f.size, fmt:x=>x+' kg'},
     {t:'Región', w:64, get:f=>f.region},
@@ -3923,6 +3979,7 @@ function renderConsumo(){
     + CC_PERIODOS.map((p,i)=>`${p[1]} ≤ ${p[0]} d`).join(', ') + `, más = Irregular. `
     + `Recurrente = pedidos en ${CC_REC.meses}+ de los últimos 12 meses; En riesgo = recurrente que lleva más de ${CC_REC.atraso}× su intervalo (mín. ${CC_REC.atrasoMin} días) sin comprar; Esporádico = 1 o 2 meses con compra. `
     + `Estado y periodo se miden por cliente, con cualquier café. `
+    + (cc.data.unidos.length ? `Se unieron ${cc.data.unidos.length} clientes facturados con dos nombres en la misma región (lista en el Excel). ` : '')
     + `${cc.data.sinCruzar.length} reservas no se pudieron cruzar con un cliente-café (van en el Excel).`;
   if(window.lucide) lucide.createIcons();
 }
@@ -3978,6 +4035,8 @@ function exportConsumoExcel(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sc), 'Reservas sin cruzar');
   const mp = [['Cliente en reservas','Cliente en ventas','Cómo se emparejó','Otros candidatos']].concat(cc.data.mapeo);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mp), 'Mapeo clientes');
+  const un = [['Nombre que queda','También facturado como','Región']].concat(cc.data.unidos);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(un), 'Clientes unidos');
   XLSX.writeFile(wb, `Forest_Consumo_${cc.vista}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 

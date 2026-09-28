@@ -177,6 +177,12 @@ script los empareja solo y acierta la mayoría. Para corregir los que falle:
 
   Los clientes sin compras en los últimos 12 meses no aparecen.
 - **Próxima compra:** última compra + intervalo típico.
+- **Clientes con dos nombres:** si un cliente está facturado con dos nombres que solo se
+  diferencian en palabras como *Coffee*, *Roasters*, *Co* o *LLC*, y los dos compran en la
+  **misma región**, la app los suma como uno. Queda el nombre con más volumen, con la marca
+  "+1 nombre" al lado; la lista va en la hoja *Clientes unidos* del Excel. Si las regiones
+  son distintas no se unen, porque pueden ser empresas diferentes (por ejemplo GOLD BOX
+  ROASTERY LLC en MENA y Goldbox en UK).
 
 Todos los cortes (días, meses, horizonte) están como constantes al comienzo del bloque
 *Consumo clientes* de `index.html` (`CC_PERIODOS`, `CC_REC`, `CC_HORIZONTE`). Cambiarlos
