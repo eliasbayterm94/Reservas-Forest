@@ -281,13 +281,44 @@ tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee
    así conserva su estética y su lógica sin mezclarse con la app. */
 .ci-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0}
 /* El rótulo cede espacio y se recorta con … antes que empujar los botones a otra fila */
-.ci-bar .ci-lbl{flex:1 1 auto;min-width:60px;overflow:hidden;text-overflow:ellipsis}
+.ci-bar .ci-lbl{flex:1 1 0;min-width:60px;overflow:hidden;text-overflow:ellipsis}
 .ci-hint{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:12px;color:var(--text2);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
 .ci-hint.hidden{display:none}
 .ci-hint b{font-family:'DM Mono',monospace;color:var(--fc-navy)}
 /* Spinner pequeño: el dashboard tarda y sin señal de vida parece colgado */
 .ci-spin{width:15px;height:15px;flex-shrink:0;border:2px solid var(--border2);border-top-color:var(--fc-navy);border-radius:50%;animation:spin .8s linear infinite}
 .ci-frame{flex:1;width:100%;min-height:0;border:0;background:var(--bg)}
+.ci-frame.hidden,.ci-solo-dash.hidden,.ci-solo-cons.hidden{display:none}
+/* Selector Dashboard | Consumo clientes */
+.ci-seg{display:inline-flex;border:1.5px solid var(--border2);border-radius:8px;overflow:hidden;flex-shrink:0}
+.ci-seg button{border:0;background:#fff;color:var(--text2);font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:0 12px;height:30px;cursor:pointer}
+.ci-seg button+button{border-left:1.5px solid var(--border2)}
+.ci-seg button.on{background:var(--fc-navy);color:var(--fc-yellow)}
+
+/* ══ CONSUMO CLIENTES (dentro de Control Inventario) ══ */
+.cc-panel{flex:1;display:flex;flex-direction:column;min-height:0}
+.cc-panel.hidden,.cc-estado.hidden,.cc-chip.hidden{display:none}
+.cc-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.cc-bar .ci-seg button{height:28px;padding:0 10px}
+.cc-bar .ger-sel{padding:5px 8px;font-size:12px}
+.cc-bar input.ger-sel{cursor:text;width:170px}
+.cc-estado{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:12px;color:var(--text2);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.cc-estado b{font-family:'DM Mono',monospace;color:var(--fc-navy)}
+.cc-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:13px;background:var(--fc-navy);color:#fff;font-size:11px;font-weight:600}
+.cc-chip button{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;cursor:pointer;font-size:12px;padding:0}
+#ccTable tbody tr{cursor:pointer}
+#ccTable thead th{padding:0}
+#ccTable td.c-num{font-size:12px}
+.cc-est{display:inline-block;min-width:74px;text-align:center;padding:2px 7px;border-radius:10px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.cc-est.rec{background:var(--ok-bg);color:var(--ok-fg)}
+.cc-est.esp{background:var(--surface3);color:var(--text2)}
+.cc-est.rie{background:var(--warn-bg);color:var(--warn)}
+.cc-atraso{color:var(--warn);font-weight:700}
+.cc-spark{display:block}
+.cc-hl{background:var(--green-xl)}
+.cc-foot{font-size:10.5px;color:var(--text3);line-height:1.45;padding:6px 16px;background:var(--surface2);border-top:1px solid var(--border);flex-shrink:0}
+.cc-foot summary{cursor:pointer;font-weight:700;color:var(--text2)}
+.cc-foot div{padding-top:4px}
 
 /* ══ AGING BADGES (cartera) ══ */
 .age{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;white-space:nowrap}
@@ -475,6 +506,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   .ci-bar .res-count{flex-basis:100%;white-space:normal}
   .ci-bar .btn-excel{margin-left:0 !important}
   .ci-hint{padding:10px}
+  /* Consumo clientes: todo el panel hace scroll vertical; la tabla, solo horizontal */
+  #ciConsumo{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .cc-bar{padding:8px 10px;gap:6px}
+  .cc-bar .ger-sel{flex:1 1 calc(50% - 6px);max-width:none;min-width:0}
+  .cc-bar input.ger-sel{width:auto}
+  .cc-bar .res-count{flex-basis:100%;margin-left:0 !important}
 
   /* Filtros colapsables (cerrados por defecto en móvil) — Reservas y Cartera */
   .filter-toggle{display:inline-flex}
@@ -995,15 +1032,53 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   </div>
   <div id="ciContent" class="gercontent hidden">
   <div class="ci-bar">
+    <div class="ci-seg" role="tablist">
+      <button id="ciSegDash" class="on" onclick="ciSetModo('dash')">Dashboard</button>
+      <button id="ciSegCons" onclick="ciSetModo('consumo')">Consumo clientes</button>
+    </div>
     <span class="res-count ci-lbl" title="Se genera desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones">Control de Inventario · café verde — se genera en vivo desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones</span>
     <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
-    <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar el dashboard con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
-    <button class="btn-excel" onclick="exportControlInvPDF(this)" style="margin-left:8px;background:#a8351c;color:#fff" title="Descarga un resumen ejecutivo en PDF: inventario on spot / on float por región y % reservado vs libre (kg)"><i data-lucide="file-text"></i> Resumen PDF</button>
-    <button class="btn-excel" onclick="exportInventarioValorPDF(this)" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Descarga la valorización del inventario en USD por región (total / reservado / libre)"><i data-lucide="dollar-sign"></i> Valor $ (PDF)</button>
-    <button class="btn-excel" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
+    <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
+    <button class="btn-excel ci-solo-dash" onclick="exportControlInvPDF(this)" style="margin-left:8px;background:#a8351c;color:#fff" title="Descarga un resumen ejecutivo en PDF: inventario on spot / on float por región y % reservado vs libre (kg)"><i data-lucide="file-text"></i> Resumen PDF</button>
+    <button class="btn-excel ci-solo-dash" onclick="exportInventarioValorPDF(this)" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Descarga la valorización del inventario en USD por región (total / reservado / libre)"><i data-lucide="dollar-sign"></i> Valor $ (PDF)</button>
+    <button class="btn-excel ci-solo-dash" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
+    <button class="btn-excel ci-solo-cons hidden" onclick="exportConsumoExcel()" style="margin-left:8px" title="Descarga la vista actual en Excel, más las reservas sin cruzar y el mapeo de clientes"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
   <iframe id="ciFrame" class="ci-frame" title="Control de Inventario — Café Verde" referrerpolicy="no-referrer"></iframe>
+
+  <!-- ── Consumo clientes: periodicidad, recurrencia y proyección a 6 meses por cliente ── -->
+  <div id="ciConsumo" class="cc-panel hidden">
+    <div class="resumen" id="ccKpis"></div>
+    <div class="cc-bar">
+      <div class="ci-seg" title="Cómo agrupar">
+        <button id="ccVcli" class="on" onclick="ccSet('vista','cli')">Por cliente</button>
+        <button id="ccVprod" onclick="ccSet('vista','prod')">Por café</button>
+        <button id="ccVdet" onclick="ccSet('vista','det')">Detalle</button>
+      </div>
+      <div class="ci-seg" title="Unidades (sacos/cajas) o kilos">
+        <button id="ccUu" class="on" onclick="ccSet('unidad','u')">Unidades</button>
+        <button id="ccUk" onclick="ccSet('unidad','k')">Kg</button>
+      </div>
+      <select id="ccReg" class="ger-sel" onchange="ccSet('region',this.value)"><option value="">Todas las regiones</option></select>
+      <select id="ccCat" class="ger-sel" onchange="ccSet('cat',this.value)"><option value="">Todas las categorías</option></select>
+      <select id="ccEst" class="ger-sel" onchange="ccSet('estado',this.value)" title="Recurrente: compró en 3+ de los últimos 12 meses y va al día. En riesgo: era recurrente pero lleva más del doble de su intervalo sin comprar. Esporádico: 1 o 2 meses con compra.">
+        <option value="">Todos los clientes</option><option value="Recurrente">Recurrentes</option><option value="Esporádico">Esporádicos</option><option value="En riesgo">En riesgo</option>
+      </select>
+      <select id="ccPer" class="ger-sel" onchange="ccSet('per',this.value)" title="Cada cuánto compra el cliente (intervalo típico entre pedidos)"><option value="">Todo periodo</option></select>
+      <select id="ccPesos" class="ger-sel" onchange="ccSet('pesos',this.value)" title="Cómo se pondera el estimado mensual">
+        <option value="eq">Estimado: 3M / 6M / 12M iguales</option><option value="rec">Estimado: más peso a lo reciente</option><option value="est">Estimado: más peso a los 12 meses</option>
+      </select>
+      <input id="ccBuscar" class="ger-sel" type="search" placeholder="Buscar cliente o café…" oninput="ccSet('q',this.value)">
+      <span id="ccChip" class="cc-chip hidden"><span id="ccChipTxt"></span><button onclick="ccSet('foco',null)" title="Quitar filtro">×</button></span>
+      <span class="res-count" id="ccCount" style="margin-left:auto"></span>
+    </div>
+    <div class="cc-estado hidden" id="ccEstado"></div>
+    <div class="table-wrap" id="twCc">
+      <table id="ccTable"><thead id="ccHead"></thead><tbody id="ccBody"></tbody></table>
+    </div>
+    <details class="cc-foot"><summary>Cómo se calcula</summary><div id="ccFoot"></div></details>
+  </div>
   </div><!-- /ciContent -->
 </div><!-- /viewControlInv -->
 
@@ -3416,7 +3491,7 @@ function switchTab(tab){
 // o el navegador se niega a mostrarlo embebido.
 // ═══════════════════════════════════════════════════
 const CTRLINV_URL = 'https://script.google.com/macros/s/AKfycbztojL2jnqEOecJgi4Vg4YhZHpWRq45xIXeSS7h_IzJBbEhroS9jZI26LO0o0_6mIEjWw/exec';
-let ctrlInvLoaded = false, ctrlInvTimer = null, ctrlInvCargadoEn = 0;
+let ctrlInvLoaded = false, ctrlInvTimer = null, ctrlInvCargadoEn = 0, ctrlInvCargando = false, ciTsDash = '—';
 // Al volver a la pestaña, si la carga ya tiene esta edad se rehace. Sin esto la
 // página se quedaba con la foto del momento en que se abrió: dejando la app
 // abierta toda la mañana, a las 6 seguías viendo lo de las 8. Media hora es el
@@ -3432,7 +3507,8 @@ function ciUnlock(){
 }
 function mostrarControlInv(){
   $('ciLock').classList.add('hidden'); $('ciContent').classList.remove('hidden');
-  cargarControlInv(false);
+  let modo = 'dash'; try{ modo = sessionStorage.getItem('ciModo') || 'dash'; }catch(e){}
+  ciSetModo(modo);
 }
 
 // Carga perezosa: el iframe no pide nada hasta que se abre la pestaña.
@@ -3474,6 +3550,7 @@ async function cargarControlInv(forzar){
       + (s>=50 ? ' · ¿sigue en blanco? Prueba «Abrir aparte».' : '') + '</span>';
   };
   clearInterval(ctrlInvTimer); pintar(); ctrlInvTimer = setInterval(pintar, 1000);
+  ctrlInvCargando = true;
   // El listener se engancha aquí y no como atributo onload= en el HTML: así no
   // se dispara con el about:blank inicial, que ocurre antes de que este script
   // exista y lanzaría un ReferenceError en consola.
@@ -3519,11 +3596,465 @@ async function cargarControlInv(forzar){
 }
 function ctrlInvCargado(){
   clearInterval(ctrlInvTimer);
+  ctrlInvCargando = false;
   $('ciHint').classList.add('hidden');
-  $('ciTs').textContent = 'Generado: '+new Date().toLocaleString('es-CO');
+  ciTsDash = 'Generado: '+new Date().toLocaleString('es-CO');
+  if(ciModo==='dash') $('ciTs').textContent = ciTsDash;
 }
-function recargarControlInv(){ cargarControlInv(true); }
+function recargarControlInv(){ ciModo==='consumo' ? cargarConsumo(true) : cargarControlInv(true); }
 function abrirControlInv(){ window.open(CTRLINV_URL, '_blank', 'noopener'); }
+
+// ═══════════════════════════════════════════════════
+// CONTROL INVENTARIO → CONSUMO CLIENTES
+// Datos: ?format=consumo del mismo Apps Script (consumo-clientes.gs). El script
+// manda las ventas ya agregadas por cliente × producto × presentación, mes a mes
+// en unidades, con las reservas RESERVADO cruzadas. Promedios, estimado y
+// proyección se calculan aquí, así cambiar la ponderación no pide redesplegar.
+// ═══════════════════════════════════════════════════
+let ciModo = 'dash';
+const cc = { data:null, cargadoEn:0, cargando:false, error:'', ts:'—',
+             vista:'cli', unidad:'u', region:'', cat:'', estado:'', per:'', pesos:'eq', q:'', foco:null, sort:{} };
+const CC_PESOS = { eq:[1/3,1/3,1/3], rec:[.5,.3,.2], est:[.2,.3,.5] };   // pesos de los promedios 3M, 6M, 12M
+const CC_CAJA_MAX_KG = 24;                  // hasta 24 kg es caja; más, saco (igual que el dashboard)
+const CC_HORIZONTE = 6;                     // meses de proyección, después del mes en curso
+// Periodo según el intervalo típico (mediana de días entre pedidos). Más de 240 días: Irregular.
+const CC_PERIODOS = [[40,'Mensual'], [75,'Bimensual'], [120,'Trimestral'], [240,'Semestral']];
+const CC_PER_ORDEN = ['Mensual','Bimensual','Trimestral','Semestral','Irregular','Una compra'];
+// Recurrente: compró en 3+ de los últimos 12 meses. Pasa a "En riesgo" si lleva más de
+// 2 × su intervalo (y al menos 60 días) sin comprar.
+const CC_REC = { meses:3, atraso:2, atrasoMin:60 };
+const CC_EST_CLS = { 'Recurrente':'rec', 'Esporádico':'esp', 'En riesgo':'rie' };
+const CC_MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function ciSetModo(m){
+  ciModo = m==='consumo' ? 'consumo' : 'dash';
+  try{ sessionStorage.setItem('ciModo', ciModo); }catch(e){}
+  const c = ciModo==='consumo';
+  $('ciSegDash').classList.toggle('on', !c); $('ciSegCons').classList.toggle('on', c);
+  $('ciFrame').classList.toggle('hidden', c);
+  $('ciConsumo').classList.toggle('hidden', !c);
+  document.querySelectorAll('.ci-solo-dash').forEach(e=>e.classList.toggle('hidden', c));
+  document.querySelectorAll('.ci-solo-cons').forEach(e=>e.classList.toggle('hidden', !c));
+  if(c){ $('ciHint').classList.add('hidden'); $('ciTs').textContent = cc.ts; cargarConsumo(false); }
+  else { $('ciHint').classList.toggle('hidden', !ctrlInvCargando); $('ciTs').textContent = ciTsDash; cargarControlInv(false); }
+  if(window.lucide) lucide.createIcons();
+}
+
+async function cargarConsumo(forzar){
+  if(cc.cargando) return;
+  if(cc.data && !forzar && (Date.now()-cc.cargadoEn) < CI_FRESCURA_MS){ renderConsumo(); return; }
+  cc.cargando = true; cc.error = '';
+  const t0 = Date.now(), est = $('ccEstado');
+  const base = forzar ? 'Recalculando desde las hojas, sin caché — puede tardar ~40 s.' : 'Cargando el consumo de clientes…';
+  const pintar = () => { est.innerHTML = `<span class="ci-spin"></span><span>${base} <b>${Math.round((Date.now()-t0)/1000)}s</b></span>`; };
+  est.classList.remove('hidden'); pintar();
+  const reloj = setInterval(pintar, 1000);
+  $('ciTs').textContent = forzar ? 'Recalculando…' : 'Cargando…';
+  try{
+    const url = CTRLINV_URL + '?format=consumo' + (forzar ? '&refresh=1' : '') + '&_=' + Date.now();
+    const resp = await fetchConTiempo(url, forzar ? 90000 : 30000, forzar ? 1 : 2);
+    const txt = await resp.text();
+    let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('la respuesta no vino en JSON'); }
+    if(j.error) throw new Error(j.error);
+    if(!j.filas || !j.meta || !j.cols) throw new Error('la respuesta no trae las filas de consumo');
+    cc.data = ccUnirDuplicados(j); cc.cargadoEn = Date.now();
+    cc.ts = 'Datos: ' + new Date(j.meta.generado).toLocaleString('es-CO');
+    est.classList.add('hidden');
+  }catch(err){
+    cc.error = String(err && err.message || err);
+    est.innerHTML = `<span>⚠ No se pudo cargar el consumo (${esc(cc.error)}). Si es la primera vez, revisa que el script de Control Inventario ya tenga <b>consumo-clientes.gs</b> y una versión nueva desplegada.</span>`;
+    cc.ts = '—';
+  }finally{
+    clearInterval(reloj); cc.cargando = false;
+    if(ciModo==='consumo') $('ciTs').textContent = cc.ts;
+  }
+  renderConsumo();
+}
+
+// Un mismo cliente facturado con dos nombres ("Haven Coffee Roasters" y "Haven Coffee
+// Co") se une en uno solo, pero únicamente si los dos compran en la MISMA región: con
+// regiones distintas pueden ser empresas diferentes (Laura, 2026-09-27). La clave del
+// nombre es la misma que usa el script para cruzar reservas (ccClaveCliente_).
+const CC_STOP = ['coffee','coffees','roasters','roaster','roastery','roasting','roast','co','company',
+  'ltd','llc','limited','pty','srl','inc','specialty','speciality','trading','the','fze','sl','gmbh','bv',
+  'cafe','caffe','and','fzco','spc','lda','sa','sas','ab','as','kft'];
+function ccClaveCliente(s){
+  const t = String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+    .replace(/\(.*?\)/g,' ').replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(Boolean);
+  return t.filter(x=>!CC_STOP.includes(x)).join('') || t.join('');
+}
+// Une dos listas de pedidos ("hace cuántos días") y vuelve a juntar los que caen a 7 días o menos.
+function ccUnirPedidos(a, b){
+  const d = [...new Set([].concat(a||[], b||[]))].sort((x,y)=>y-x), out = [];
+  let prev = null;
+  d.forEach(x=>{ if(prev==null || prev-x > 7) out.push(x); prev = x; });
+  return out;
+}
+function ccUnirDuplicados(P){
+  const I = {}; P.cols.forEach((c,i)=>I[c]=i);
+  // Región principal y volumen de cada nombre
+  const info = {};
+  P.filas.forEach(r=>{ const c = r[I.cliente], kg = r[I.m].reduce((a,b)=>a+b,0)*r[I.size];
+    const x = info[c] = info[c] || { kg:0, reg:{} };
+    x.kg += kg; x.reg[r[I.region]] = (x.reg[r[I.region]]||0) + kg + 1e-6; });
+  const regionDe = c => Object.keys(info[c].reg).sort((a,b)=>info[c].reg[b]-info[c].reg[a])[0];
+  // Grupos por clave + región; el nombre que queda es el de más volumen
+  const grupos = {};
+  Object.keys(info).forEach(c=>{ const k = ccClaveCliente(c)+'|'+regionDe(c); (grupos[k] = grupos[k] || []).push(c); });
+  const canon = {}, unidos = [];
+  Object.values(grupos).filter(g=>g.length>1).forEach(g=>{
+    g.sort((a,b)=>info[b].kg-info[a].kg);
+    g.slice(1).forEach(o=>{ canon[o] = g[0]; unidos.push([g[0], o, regionDe(g[0])]); });
+  });
+  if(!unidos.length) return Object.assign({}, P, { unidos });
+  // Filas: misma clave cliente × café × presentación se suman
+  const porClave = new Map(), filas = [];
+  P.filas.forEach(r0=>{
+    const r = r0.slice(); r[I.cliente] = canon[r[I.cliente]] || r[I.cliente];
+    const k = r[I.cliente]+'|'+r[I.producto]+'|'+r[I.size];
+    const f = porClave.get(k);
+    if(!f){ r[I.m] = r[I.m].slice(); porClave.set(k, r); filas.push(r); return; }
+    r[I.m].forEach((x,i)=> f[I.m][i] += x);
+    f[I.mtd] += r[I.mtd]; f[I.res] += r[I.res];
+    if(r[I.ultima] > f[I.ultima]){ f[I.ultima] = r[I.ultima]; if(r[I.comercial]) f[I.comercial] = r[I.comercial]; }
+    f[I.pedidos] = ccUnirPedidos(f[I.pedidos], r[I.pedidos]);
+  });
+  const clientes = Object.assign({}, P.clientes);
+  unidos.forEach(([c,o])=>{ clientes[c] = ccUnirPedidos(clientes[c], clientes[o]); delete clientes[o]; });
+  return Object.assign({}, P, { filas, clientes, unidos });
+}
+
+function ccSet(k, v){
+  cc[k] = v;
+  if(k==='vista'){ ['prod','cli','det'].forEach(x=>$('ccV'+x).classList.toggle('on', x===v)); }
+  if(k==='unidad'){ $('ccUu').classList.toggle('on', v==='u'); $('ccUk').classList.toggle('on', v==='k'); }
+  renderConsumo();
+}
+
+// ── Modelo: métricas por fila a partir de los meses en unidades
+function ccModelo(){
+  const P = cc.data, M = P.meta, N = M.meses.length, I = {};
+  P.cols.forEach((c,i)=>I[c]=i);
+  const [w3,w6,w12] = CC_PESOS[cc.pesos] || CC_PESOS.eq, wt = w3+w6+w12;
+  const hoy = new Date(M.hoy+'T00:00:00'), cm = hoy.getMonth(), anio = hoy.getFullYear();
+  // Horizonte: los CC_HORIZONTE meses que siguen al mes en curso (el resto de este va aparte).
+  const mesesProy = Array.from({length:CC_HORIZONTE}, (_,j)=>{ const x = cm+1+j;
+    return CC_MES[x%12]+'-'+String(anio+Math.floor(x/12)).slice(-2); });
+  const iEne = N - cm;                        // enero de este año dentro de "m"
+  const iAA0 = N - 11, iAA1 = iAA0 + CC_HORIZONTE - 1;   // los mismos meses del horizonte, un año antes
+  const ahora = new Date(); ahora.setHours(0,0,0,0);
+  const DIA = 864e5;
+  const filas = P.filas.map(r=>{
+    const m = r[I.m], size = Number(r[I.size])||0;
+    const s = (a,b)=>{ let t=0; for(let i=Math.max(a,0); i<b; i++) t += m[i]||0; return t; };
+    const u12 = s(N-12,N), p12 = u12/12, p6 = s(N-6,N)/6, p3 = s(N-3,N)/3;
+    const est = (w3*p3 + w6*p6 + w12*p12)/wt;
+    const mtd = Number(r[I.mtd])||0;
+    const resto = Math.max(0, est-mtd);                 // lo que falta del mes en curso
+    const proy6 = est*CC_HORIZONTE;
+    const ytd = s(iEne,N) + mtd;
+    const ult = new Date(r[I.ultima]+'T00:00:00');
+    const rit = ccRitmo(r[I.pedidos], hoy, ult, ahora);
+    const res = Number(r[I.res])||0;
+    return { region:r[I.region], cli:r[I.cliente], com:r[I.comercial]||'', cat:r[I.categoria], prod:r[I.producto], size,
+      tipo: size<=CC_CAJA_MAX_KG ? 'caja' : 'saco', m12:m.slice(N-12), mtd, u12, p12, p6, p3, est,
+      tend: p12>0 ? p3/p12-1 : null, ult, dias: rit.dias, per: rit.per, prox: rit.prox, atraso: rit.atraso,
+      resto, proy6, ytd, cierre: ytd + resto + est*(11-cm), aa: s(iAA0, iAA1+1), res,
+      cub: est>0 && res>0 ? res/est : null, porCubrir: Math.max(0, resto+proy6-res) };
+  });
+  // Ritmo del cliente: con los pedidos de cualquier café, no café por café.
+  const ultCli = {};
+  filas.forEach(f=>{ if(!ultCli[f.cli] || f.ult>ultCli[f.cli]) ultCli[f.cli] = f.ult; });
+  const clientes = {};
+  Object.keys(ultCli).forEach(c=>{ clientes[c] = ccRitmo((P.clientes||{})[c], hoy, ultCli[c], ahora); });
+  filas.forEach(f=>{ const r = clientes[f.cli]; f.cEst = r.estado; f.cPer = r.per; });
+  return { filas, clientes, mesesProy, anio, meses12: M.meses.slice(N-12), mesActual: M.mesActual,
+           horTxt: mesesProy[0]+' a '+mesesProy[CC_HORIZONTE-1],
+           tramoAA: M.meses[iAA0]+' a '+M.meses[iAA1], ytdTxt: 'ene a '+CC_MES[cm]+' '+anio };
+}
+
+// Pedidos ("hace cuántos días" respecto a la fecha de los datos, del más viejo al más
+// reciente) → periodo, estado y próxima compra estimada.
+function ccRitmo(ped, hoy, ult, ahora){
+  ped = Array.isArray(ped) ? ped : [];
+  const DIA = 864e5, gaps = [];
+  for(let i=1; i<ped.length; i++) gaps.push(ped[i-1]-ped[i]);
+  gaps.sort((a,b)=>a-b);
+  const iv = !gaps.length ? null : gaps.length%2 ? gaps[(gaps.length-1)/2] : (gaps[gaps.length/2-1]+gaps[gaps.length/2])/2;
+  const per = iv==null ? 'Una compra' : ((CC_PERIODOS.find(p=>iv<=p[0])||[0,'Irregular'])[1]);
+  const meses = new Set(ped.filter(d=>d<=365).map(d=>{ const x = new Date(hoy.getTime()-d*DIA); return x.getFullYear()*12+x.getMonth(); }));
+  const dias = Math.max(0, Math.round((ahora-ult)/DIA));   // hay facturas con fecha adelantada
+  const estado = meses.size < CC_REC.meses ? 'Esporádico'
+    : dias > Math.max(CC_REC.atraso*iv, CC_REC.atrasoMin) ? 'En riesgo' : 'Recurrente';
+  const prox = iv!=null ? new Date(ult.getTime()+Math.round(iv)*DIA) : null;
+  return { ult, iv, per, meses:meses.size, pedidos12: ped.filter(d=>d<=365).length, dias, estado, prox,
+           atraso: prox && prox<ahora ? Math.round((ahora-prox)/DIA) : 0 };
+}
+
+function ccFiltrar(filas){
+  const q = cc.q.trim().toLowerCase();
+  return filas.filter(f=>
+    (!cc.region || f.region===cc.region) && (!cc.cat || f.cat===cc.cat) &&
+    (!cc.estado || f.cEst===cc.estado) && (!cc.per || f.cPer===cc.per) &&
+    (!q || f.cli.toLowerCase().includes(q) || f.prod.toLowerCase().includes(q)) &&
+    (!cc.foco || f[cc.foco.k]===cc.foco.v && (cc.foco.size==null || f.size===cc.foco.size)));
+}
+
+// ── Formatos
+const ccN0 = n => (n==null||!isFinite(n)||Math.abs(n)<0.05) ? '—' : Math.round(n).toLocaleString('es-CO');
+const ccN1 = n => (n==null||!isFinite(n)||Math.abs(n)<0.05) ? '—' : n.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+const ccPct = n => n==null ? '—' : (n>0?'+':'')+Math.round(n*100)+'%';
+const ccFecha = d => d ? d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+const ccNum = () => cc.unidad==='k' ? ccN0 : ccN1;         // unidades con un decimal, kg enteros
+const ccV = (f, x) => cc.unidad==='k' ? x*f.size : x;      // unidades → kg si se pide
+
+function ccSpark(arr){
+  const mx = Math.max(...arr, 0); if(!(mx>0)) return '<span style="color:var(--text3)">—</span>';
+  const w=6, gap=1, h=20;
+  const bars = arr.map((x,i)=>{ const bh = x>0 ? Math.max(2, Math.round(x/mx*h)) : 1;
+    return `<rect x="${i*(w+gap)}" y="${h-bh}" width="${w}" height="${bh}" rx="1" fill="${x>0?'var(--fc-navy)':'var(--border2)'}"/>`; }).join('');
+  return `<svg class="cc-spark" width="${arr.length*(w+gap)}" height="${h}" viewBox="0 0 ${arr.length*(w+gap)} ${h}">${bars}</svg>`;
+}
+
+// ── Agrupaciones
+function ccPorProducto(filas){
+  const porPres = cc.unidad==='u';          // en unidades hay que separar por presentación
+  const g = new Map();
+  filas.forEach(f=>{
+    const k = porPres ? f.prod+'|'+f.size : f.prod;
+    let p = g.get(k);
+    if(!p){ p = { prod:f.prod, cat:f.cat, size: porPres ? f.size : null, sizes:new Set(), cli:new Set(), rec:new Set(),
+                  u12:0, est:0, resto:0, proy6:0, ytd:0, cierre:0, aa:0, res:0, porCubrir:0 }; g.set(k,p); }
+    p.sizes.add(f.size);
+    if(f.est>0) p.cli.add(f.cli);
+    if(f.cEst==='Recurrente') p.rec.add(f.cli);
+    ['u12','est','resto','proy6','ytd','cierre','aa','res','porCubrir'].forEach(x=> p[x] += ccV(f, f[x]));
+  });
+  return [...g.values()].map(p=>Object.assign(p, { nCli:p.cli.size, nRec:p.rec.size,
+    pres: p.size!=null ? p.size+' kg' : [...p.sizes].sort((a,b)=>b-a).join(' / ')+' kg' }));
+}
+function ccPorCliente(filas, M){
+  const g = new Map();
+  filas.forEach(f=>{
+    let c = g.get(f.cli);
+    if(!c){ c = Object.assign({ cli:f.cli, region:f.region, com:f.com, top:-1, kgProd:{}, kgCat:{},
+                  estKg:0, proyKg:0, aaKg:0, resKg:0, porCubrirKg:0,
+                  estS:0, estC:0, proyS:0, proyC:0, porCubrirS:0, porCubrirC:0 }, M.clientes[f.cli]); g.set(f.cli,c); }
+    const kg = (f.est || f.u12/12)*f.size;      // para ordenar los cafés que más compra
+    if(kg > c.top){ c.top = kg; c.region = f.region; c.com = f.com || c.com; }
+    c.kgProd[f.prod] = (c.kgProd[f.prod]||0) + kg;
+    c.kgCat[f.cat] = (c.kgCat[f.cat]||0) + kg;
+    c.estKg += f.est*f.size; c.proyKg += f.proy6*f.size; c.aaKg += f.aa*f.size;
+    c.resKg += f.res*f.size; c.porCubrirKg += f.porCubrir*f.size;
+    if(f.tipo==='caja'){ c.estC += f.est; c.proyC += f.proy6; c.porCubrirC += f.porCubrir; }
+    else { c.estS += f.est; c.proyS += f.proy6; c.porCubrirS += f.porCubrir; }
+  });
+  const orden = o => Object.keys(o).sort((a,b)=>o[b]-o[a]);
+  return [...g.values()].map(c=>{ const prods = orden(c.kgProd);
+    return Object.assign(c, { nProd:prods.length, cafesL:prods, cafes:prods.join(', '), tipos:orden(c.kgCat).join(', ') }); });
+}
+
+// ── Columnas por vista. get = valor para ordenar/exportar; fmt = cómo se pinta.
+// Nombre del cliente; si se unió con otro nombre, lo dice al lado y en el tooltip.
+const ccCliHtml = c => { const otros = (cc.data.unidos||[]).filter(u=>u[0]===c).map(u=>u[1]);
+  return esc(c) + (otros.length ? ` <span style="color:var(--text3);font-size:11px;font-weight:400" title="También facturado como: ${escAttr(otros.join(', '))}">+${otros.length} nombre${otros.length>1?'s':''}</span>` : ''); };
+const ccEstHtml = e => `<span class="cc-est ${CC_EST_CLS[e]||''}">${esc(e)}</span>`;
+const ccProxHtml = (d, atraso) => !d ? '—'
+  : atraso>0 ? `<span class="cc-atraso" title="Debió comprar hace ${atraso} días">${ccFecha(d)}</span>` : ccFecha(d);
+function ccColumnas(M){
+  const u = cc.unidad==='k' ? 'kg' : 'unid', F = ccNum();
+  const p6 = 'Proy. '+CC_HORIZONTE+' meses', tipP6 = 'Estimado mensual × '+CC_HORIZONTE+' ('+M.horTxt+')';
+  const tipAA = 'Facturado real en '+M.tramoAA+', los mismos meses un año antes';
+  const tipCubrir = 'Resto de '+M.mesActual+' + proyección '+CC_HORIZONTE+' meses − reservado, café por café';
+  const resto = 'Resto '+M.mesActual.slice(0,3), tipResto = 'Estimado del mes en curso menos lo ya facturado';
+  if(cc.vista==='prod') return [
+    {t:'Café', w:220, get:p=>p.prod, cls:'c-cliente'},
+    {t:'Categoría', w:110, get:p=>p.cat},
+    {t:'Present.', w:90, get:p=>p.pres},
+    {t:'Clientes', w:74, num:1, get:p=>p.nCli, fmt:ccN0, tip:'Clientes con estimado mayor a 0'},
+    {t:'Recurrentes', w:88, num:1, get:p=>p.nRec, fmt:ccN0, tip:'Clientes recurrentes que compran este café'},
+    {t:'Últ. 12M ('+u+')', w:104, num:1, get:p=>p.u12, fmt:F},
+    {t:'Estimado / mes', w:110, num:1, get:p=>p.est, fmt:F, hl:1},
+    {t:resto, w:84, num:1, get:p=>p.resto, fmt:F, tip:tipResto},
+    {t:p6, w:110, num:1, get:p=>p.proy6, fmt:F, hl:1, tip:tipP6},
+    {t:'Mismo periodo año ant.', w:140, num:1, get:p=>p.aa, fmt:F, tip:tipAA},
+    {t:'Reservado', w:92, num:1, get:p=>p.res, fmt:F},
+    {t:'Por cubrir', w:92, num:1, get:p=>p.porCubrir, fmt:F, tip:tipCubrir},
+    {t:'Real '+M.ytdTxt, w:118, num:1, get:p=>p.ytd, fmt:F},
+    {t:'Cierre '+M.anio+' est.', w:108, num:1, get:p=>p.cierre, fmt:F, tip:'Real en lo que va del año + estimado hasta diciembre'},
+  ];
+  if(cc.vista==='cli'){
+    const base = [
+      {t:'Cliente', w:230, get:c=>c.cli, cls:'c-cliente', html:c=>ccCliHtml(c.cli)},
+      {t:'Región', w:64, get:c=>c.region},
+      {t:'Estado', w:98, get:c=>c.estado, html:c=>ccEstHtml(c.estado)},
+      {t:'Periodo', w:92, get:c=>c.per, tip:'Cada cuánto compra: mediana de días entre pedidos, con cualquier café'},
+      {t:'Meses con compra', w:92, num:1, get:c=>c.meses, fmt:x=>x+'/12', tip:'Meses con al menos un pedido, de los últimos 12'},
+      {t:'Última compra', w:98, get:c=>c.ult, fmt:ccFecha},
+      {t:'Días sin comprar', w:92, num:1, get:c=>c.dias, fmt:x=>x==null ? '—' : String(x)},
+      {t:'Próx. compra', w:98, get:c=>c.prox, html:c=>ccProxHtml(c.prox, c.atraso), tip:'Última compra + intervalo típico. En rojo: ya se pasó.'},
+      {t:'Cafés que compra', w:240, get:c=>c.cafes, tip:'Del que más compra al que menos', html:c=>{ const l = c.cafesL;
+        return `<span title="${escAttr(c.cafes)}">${esc(l.slice(0,3).join(', '))}${l.length>3 ? ` <span style="color:var(--text3)">+${l.length-3}</span>` : ''}</span>`; }},
+      {t:'Tipo', w:130, get:c=>c.tipos},
+    ];
+    return base.concat(cc.unidad==='k' ? [
+      {t:'Estimado kg / mes', w:120, num:1, get:c=>c.estKg, fmt:ccN0, hl:1},
+      {t:p6+' (kg)', w:130, num:1, get:c=>c.proyKg, fmt:ccN0, hl:1, tip:tipP6},
+      {t:'Mismo periodo año ant. (kg)', w:160, num:1, get:c=>c.aaKg, fmt:ccN0, tip:tipAA},
+      {t:'Reservado (kg)', w:104, num:1, get:c=>c.resKg, fmt:ccN0},
+      {t:'Por cubrir (kg)', w:104, num:1, get:c=>c.porCubrirKg, fmt:ccN0, tip:tipCubrir},
+    ] : [
+      {t:'Sacos / mes', w:90, num:1, get:c=>c.estS, fmt:ccN1, hl:1},
+      {t:'Cajas / mes', w:90, num:1, get:c=>c.estC, fmt:ccN1, hl:1},
+      {t:p6+' sacos', w:118, num:1, get:c=>c.proyS, fmt:ccN1, tip:tipP6},
+      {t:p6+' cajas', w:118, num:1, get:c=>c.proyC, fmt:ccN1, tip:tipP6},
+      {t:'Por cubrir sacos', w:112, num:1, get:c=>c.porCubrirS, fmt:ccN1, tip:tipCubrir},
+      {t:'Por cubrir cajas', w:112, num:1, get:c=>c.porCubrirC, fmt:ccN1, tip:tipCubrir},
+    ]).concat([{t:'Comercial', w:100, get:c=>c.com}]);
+  }
+  return [
+    {t:'Cliente', w:210, get:f=>f.cli, cls:'c-cliente', html:f=>ccCliHtml(f.cli)},
+    {t:'Café', w:170, get:f=>f.prod},
+    {t:'Present.', w:74, get:f=>f.size, fmt:x=>x+' kg'},
+    {t:'Región', w:64, get:f=>f.region},
+    {t:'Estado cliente', w:104, get:f=>f.cEst, html:f=>ccEstHtml(f.cEst)},
+    {t:'Periodo café', w:92, get:f=>f.per, tip:'Cada cuánto compra este café en esta presentación'},
+    {t:'Últimos 12 meses', w:104, get:f=>f.u12, html:f=>ccSpark(f.m12), tip:M.meses12[0]+' a '+M.meses12[11]},
+    {t:'Últ. 12M', w:82, num:1, get:f=>ccV(f,f.u12), fmt:F},
+    {t:'Prom. 3M', w:78, num:1, get:f=>ccV(f,f.p3), fmt:F},
+    {t:'Prom. 12M', w:80, num:1, get:f=>ccV(f,f.p12), fmt:F},
+    {t:'Tend.', w:62, num:1, get:f=>f.tend, fmt:ccPct, tip:'Promedio 3M contra promedio 12M'},
+    {t:'Estimado / mes', w:106, num:1, get:f=>ccV(f,f.est), fmt:F, hl:1},
+    {t:'Última compra', w:98, get:f=>f.ult, fmt:ccFecha},
+    {t:'Próx. compra', w:98, get:f=>f.prox, html:f=>ccProxHtml(f.prox, f.atraso), tip:'Última compra + intervalo típico de este café. En rojo: ya se pasó.'},
+    {t:p6, w:110, num:1, get:f=>ccV(f,f.proy6), fmt:F, hl:1, tip:tipP6},
+    {t:'Reservado', w:86, num:1, get:f=>ccV(f,f.res), fmt:F},
+    {t:'Meses cubiertos', w:98, num:1, get:f=>f.cub, fmt:ccN1, tip:'Reservado ÷ estimado mensual'},
+    {t:'Por cubrir', w:86, num:1, get:f=>ccV(f,f.porCubrir), fmt:F, tip:tipCubrir},
+    {t:'Comercial', w:100, get:f=>f.com},
+  ];
+}
+
+let ccFilasVista = [], ccColsVista = [];
+function renderConsumo(){
+  const body = $('ccBody'); if(!body) return;
+  if(!cc.data){
+    $('ccHead').innerHTML = ''; $('ccKpis').innerHTML = ''; $('ccCount').textContent = ''; $('ccFoot').textContent = '';
+    body.innerHTML = cc.cargando ? '' : `<tr><td style="padding:22px;color:var(--text3)">${cc.error ? 'Sin datos.' : 'Cargando…'}</td></tr>`;
+    return;
+  }
+  const M = ccModelo();
+  // Opciones de filtro (se conservan al redibujar)
+  const llenar = (id, vals, todos) => { const s=$(id), cur=s.value;
+    s.innerHTML = `<option value="">${todos}</option>` + vals.map(v=>`<option value="${escAttr(v)}">${esc(v)}</option>`).join('');
+    s.value = vals.includes(cur) ? cur : ''; };
+  llenar('ccReg', [...new Set(M.filas.map(f=>f.region))].sort(), 'Todas las regiones');
+  llenar('ccCat', [...new Set(M.filas.map(f=>f.cat))].sort(), 'Todas las categorías');
+  const pers = new Set(M.filas.map(f=>f.cPer));
+  llenar('ccPer', CC_PER_ORDEN.filter(p=>pers.has(p)), 'Todo periodo');
+  if($('ccEst').value !== cc.estado) $('ccEst').value = cc.estado;
+
+  const filas = ccFiltrar(M.filas);
+  ccKpis(filas, M);
+
+  $('ccChip').classList.toggle('hidden', !cc.foco);
+  if(cc.foco) $('ccChipTxt').textContent = (cc.foco.k==='cli' ? 'Cliente: ' : 'Café: ') + cc.foco.v + (cc.foco.size!=null ? ' · '+cc.foco.size+' kg' : '');
+
+  const rows = cc.vista==='prod' ? ccPorProducto(filas) : cc.vista==='cli' ? ccPorCliente(filas, M) : filas;
+  const cols = ccColumnas(M);
+  // Orden: el último elegido para esta vista, o el estimado de mayor a menor.
+  const key = cc.vista+'|'+cc.unidad;
+  const hlIdx = cols.findIndex(c=>c.hl);
+  const st = cc.sort[key] || { i: hlIdx, dir: -1 };
+  const sc = cols[st.i] || cols[hlIdx];
+  rows.sort((a,b)=>{ const x=sc.get(a), y=sc.get(b);
+    const vx = x instanceof Date ? x.getTime() : x, vy = y instanceof Date ? y.getTime() : y;
+    if(vx==null && vy==null) return 0; if(vx==null) return 1; if(vy==null) return -1;
+    return (typeof vx==='string' ? vx.localeCompare(vy) : vx-vy) * st.dir; });
+  ccFilasVista = rows; ccColsVista = cols;
+
+  $('ccHead').innerHTML = '<tr>' + cols.map((c,i)=>`<th style="width:${c.w}px${c.num?';text-align:right':''}" class="${st.i===i?(st.dir>0?'asc':'desc'):''}"${c.tip?` title="${escAttr(c.tip)}"`:''}><div class="th-inner" style="${c.num?'justify-content:flex-end':''}" onclick="ccOrden(${i})">${esc(c.t)}<span class="th-sort"></span></div></th>`).join('') + '</tr>';
+  const MAX = 1500;
+  body.innerHTML = rows.slice(0, MAX).map((r,i)=>`<tr class="${i%2?'alt':''}" onclick="ccClick(${i})">` + cols.map(c=>{
+    const v = c.get(r);
+    const txt = c.html ? c.html(r) : esc(c.fmt ? c.fmt(v) : (v==null?'—':v));
+    return `<td class="${c.num?'c-num':''} ${c.cls||''} ${c.hl?'cc-hl':''}"${!c.html&&!c.num?` title="${escAttr(v==null?'':v)}"`:''}>${txt}</td>`;
+  }).join('') + '</tr>').join('')
+    + (rows.length>MAX ? `<tr><td colspan="${cols.length}" style="color:var(--text3);padding:12px">Se muestran ${MAX} de ${rows.length} filas. Filtra o usa Excel para ver todo.</td></tr>` : '')
+    + (!rows.length ? `<tr><td colspan="${cols.length}" style="color:var(--text3);padding:22px">Nada coincide con los filtros.</td></tr>` : '');
+  const que = cc.vista==='prod' ? (cc.unidad==='u' ? 'cafés × presentación' : 'cafés') : cc.vista==='cli' ? 'clientes' : 'filas cliente × café × presentación';
+  $('ccCount').textContent = rows.length.toLocaleString('es-CO') + ' ' + que;
+
+  const [w3,w6,w12] = CC_PESOS[cc.pesos];
+  $('ccFoot').innerHTML = `Consumo = ventas facturadas (Informe Inventario 22+) en unidades tal como se facturan; kg = unidades × presentación. `
+    + `Promedios sobre meses completos (${esc(M.meses12[0])} a ${esc(M.meses12[11])}); ${esc(M.mesActual)} va aparte porque está en curso. `
+    + `Un mes sin compra cuenta como 0. Estimado = ${Math.round(w3*100)}% prom. 3M + ${Math.round(w6*100)}% prom. 6M + ${Math.round(w12*100)}% prom. 12M. `
+    + `Proyección ${CC_HORIZONTE} meses = estimado mensual × ${CC_HORIZONTE} (${esc(M.horTxt)}); lo que falta de ${esc(M.mesActual)} (estimado − ya facturado) va aparte. `
+    + `Por cubrir = resto de ${esc(M.mesActual)} + proyección − reservas RESERVADO del Drilldown; FACTURADO SIN ROTAR no suma porque ya está en ventas. `
+    + `Un pedido junta las facturas a 7 días o menos entre sí. Periodo = mediana de días entre pedidos (últimos 24 meses): `
+    + CC_PERIODOS.map((p,i)=>`${p[1]} ≤ ${p[0]} d`).join(', ') + `, más = Irregular. `
+    + `Recurrente = pedidos en ${CC_REC.meses}+ de los últimos 12 meses; En riesgo = recurrente que lleva más de ${CC_REC.atraso}× su intervalo (mín. ${CC_REC.atrasoMin} días) sin comprar; Esporádico = 1 o 2 meses con compra. `
+    + `Estado y periodo se miden por cliente, con cualquier café. `
+    + (cc.data.unidos.length ? `Se unieron ${cc.data.unidos.length} clientes facturados con dos nombres en la misma región (lista en el Excel). ` : '')
+    + `${cc.data.sinCruzar.length} reservas no se pudieron cruzar con un cliente-café (van en el Excel).`;
+  if(window.lucide) lucide.createIcons();
+}
+
+function ccKpis(filas, M){
+  const S = fn => filas.reduce((t,f)=>t+fn(f), 0);
+  const kg = x => S(f=>f[x]*f.size), sac = x => S(f=>f.tipo==='saco'?f[x]:0), caj = x => S(f=>f.tipo==='caja'?f[x]:0);
+  const card = (cls, l, n, s, attrs='') => `<div class="rcard ${cls}"${attrs}><div class="rc-l">${l}</div><div class="rc-n">${n}</div><div class="rc-s">${s}</div></div>`;
+  const u = (a,b) => `${ccN0(a)} sacos · ${ccN0(b)} cajas`;
+  // Clientes por estado; clic en la tarjeta filtra (y otro clic quita el filtro).
+  const est = e => { const cl = new Set(), kgE = S(f=>{ if(f.cEst!==e) return 0; cl.add(f.cli); return f.est*f.size; });
+    return card('clickable'+(cc.estado===e?' active':''), e==='En riesgo' ? 'En riesgo' : e+'s', ccN0(cl.size)+' clientes',
+      ccN0(kgE)+' kg/mes', ` onclick="ccSet('estado', cc.estado==='${e}' ? '' : '${e}')" title="Clic para filtrar"`); };
+  $('ccKpis').innerHTML =
+      card('tot', 'Estimado mensual', ccN0(kg('est'))+' kg', u(sac('est'), caj('est')))
+    + card('b0', 'Próximos '+CC_HORIZONTE+' meses', ccN0(kg('proy6'))+' kg', M.horTxt+' · '+u(sac('proy6'), caj('proy6')))
+    + card('fut', 'Hace un año', ccN0(kg('aa'))+' kg', 'real '+M.tramoAA)
+    + card('b30', 'Reservado', ccN0(kg('res'))+' kg', u(sac('res'), caj('res')))
+    + card('b60', 'Por cubrir', ccN0(kg('porCubrir'))+' kg', 'resto de '+M.mesActual+' + '+CC_HORIZONTE+' meses − reservado')
+    + est('Recurrente') + est('En riesgo') + est('Esporádico');
+}
+
+function ccOrden(i){
+  const key = cc.vista+'|'+cc.unidad, cur = cc.sort[key];
+  const numerica = ccColsVista[i] && ccColsVista[i].num;
+  cc.sort[key] = { i, dir: cur && cur.i===i ? -cur.dir : (numerica ? -1 : 1) };
+  renderConsumo();
+}
+
+// Clic en una fila: de producto o cliente baja al detalle filtrado; en el detalle, al cliente.
+function ccClick(i){
+  const r = ccFilasVista[i]; if(!r) return;
+  if(cc.vista==='prod') cc.foco = { k:'prod', v:r.prod, size:r.size };
+  else if(cc.vista==='cli') cc.foco = { k:'cli', v:r.cli };
+  else if(!cc.foco || cc.foco.k!=='cli') cc.foco = { k:'cli', v:r.cli };
+  else return;
+  ccSet('vista', 'det');
+}
+
+function exportConsumoExcel(){
+  if(!cc.data){ alert('El consumo aún se está cargando.'); return; }
+  const cols = ccColsVista, rows = ccFilasVista;
+  const val = (c, r) => { const v = c.get(r);
+    if(v instanceof Date) return v; if(typeof v==='number') return isFinite(v) ? Math.round(v*100)/100 : '';
+    return v==null ? '' : v; };
+  const aoa = [cols.map(c=>c.t)].concat(rows.map(r=>cols.map(c=>val(c,r))));
+  const ws = XLSX.utils.aoa_to_sheet(aoa, {cellDates:true});
+  ws['!cols'] = cols.map(c=>({wch: Math.max(9, Math.round(c.w/7))}));
+  const wb = XLSX.utils.book_new();
+  const nombre = { prod:'Por producto', cli:'Por cliente', det:'Detalle' }[cc.vista] + (cc.unidad==='k' ? ' (kg)' : ' (unid)');
+  XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0,31));
+  const sc = [['Cliente (reserva)','Café (reserva)','ICO','Bodega','Unidades','Bag size (kg)','Motivo']].concat(cc.data.sinCruzar);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sc), 'Reservas sin cruzar');
+  const mp = [['Cliente en reservas','Cliente en ventas','Cómo se emparejó','Otros candidatos']].concat(cc.data.mapeo);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mp), 'Mapeo clientes');
+  const un = [['Nombre que queda','También facturado como','Región']].concat(cc.data.unidos);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(un), 'Clientes unidos');
+  XLSX.writeFile(wb, `Forest_Consumo_${cc.vista}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 
 // Agrega el inventario (master_ico_full del JSON) por región: on spot / on float / reservado / libre en kg.
 function ctrlInvResumen(j){
@@ -5202,7 +5733,7 @@ function exportRotacionPDF(){
   });
   doc.save(`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.pdf`);
 }
-function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : activeTab==='ctrlinv' ? cargarControlInv(true) : cargarDatos(true); }
+function refrescar(){ activeTab==='cartera' ? cargarCartera(true) : activeTab==='historial' ? cargarSeguimiento() : activeTab==='ctrlinv' ? recargarControlInv() : cargarDatos(true); }
 
 // ── Historial (facturas cerradas / pagadas) ──
 let cerradasData = [];

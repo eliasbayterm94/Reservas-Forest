@@ -18,6 +18,11 @@
  *   - construirDashboardHtml_ hace el reemplazo de __DATA_JSON__ con función
  *     en vez de string, para que un "$&" dentro de los datos no se interprete
  *     como patrón de reemplazo. Misma corrección que ya tenía ciDashboardHtml_.
+ *
+ * CAMBIO 2026-09-27:
+ *   - doGet atiende ?format=consumo (vista "Consumo clientes" de la app).
+ *     Es una sola línea, marcada con "NUEVA 2026-09-27". Requiere el archivo
+ *     ConsumoClientes (consumo-clientes.gs) en este mismo proyecto.
  */
 
 // ⚠️ Si el ID del archivo "parser" (Drilldown de Posiciones) cambia algún día,
@@ -86,6 +91,8 @@ function generarReporteDashboard(){
 //                                 cada visita. Con ?refresh=1 recalcula a la
 //                                 fuerza (~30 s).
 //   5. ALLOWALL                 → permite que la app lo muestre embebido.
+//   6. ?format=consumo          → datos de la vista "Consumo clientes" de la app.
+//                                 Requiere el archivo ConsumoClientes.
 //
 // Lo que NO cambia: construirDashboardHtml_, generarReporteDashboard y el menú
 // dentro de Sheets siguen exactamente igual.
@@ -100,6 +107,7 @@ function doGet(e){
     if (formato === 'tpl')   return ciServeTpl_();           // plantilla sola
     if (formato === 'json')  return ciServeJson_(forzar);    // datos solos
     if (formato === 'embed') return ciServeEmbed_(forzar);   // ambos juntos (pesado)
+    if (formato === 'consumo') return ccServeJson_(forzar);  // consumo por cliente ← NUEVA 2026-09-27
 
     const html = ciDashboardHtml_(forzar);
     return HtmlService.createHtmlOutput(html)
@@ -232,25 +240,33 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   const REGIONS5 = ['USA','AU','UK','EU','MENA'];
   const catsFound = [...new Set(inv.filter(r=>r.status==='On Spot').map(r=>r.series))].filter(c=>c && c!=='SERVICE').sort();
   const openPos = drilldownRows.filter(r=> ['RESERVADO','FACTURADO SIN ROTAR'].includes(toStr(r['Estado'])));
-  const invIcoSetOnSpot = new Set(inv.filter(r=>r.status==='On Spot').map(r=>r.ico));
+  // Antes solo entraban las reservas de lotes On Spot, así que una reserva sobre
+  // un lote en tránsito no existía en el detalle ni poniendo el filtro en
+  // "On Float". Ahora entran todas y es el estado del lote el que decide qué se
+  // ve, según el filtro de arriba (activeMasterIco en la plantilla).
+  const invIcoSet = new Set(inv.map(r=>r.ico));
   const clientsByIco = {};
   openPos.forEach(row=>{
     const ico = toStr(row['ICO']);
-    if(!invIcoSetOnSpot.has(ico)) return;
+    if(!invIcoSet.has(ico)) return;
     const cliente = toStr(row['Cliente']);
     if(!cliente) return;
     const bags = toNum(row['Cantidad']);
     const bagSize = toNum(row['Bag Size']);
     const kg = bags*bagSize;
-    const key = ico+'||'+cliente;
-    if(!clientsByIco[key]) clientsByIco[key] = {ico, cliente, bags:0, kg:0};
+    // Columna H del Drilldown: SPOT o CONTRACT. Entra en la llave porque un
+    // mismo cliente puede tener las dos cosas sobre el mismo ICO (son pocos
+    // casos, pero mezclarlos dejaría la columna ambigua).
+    const tipo = toStr(row['Spot/Contrato?']);
+    const key = ico+'||'+cliente+'||'+tipo;
+    if(!clientsByIco[key]) clientsByIco[key] = {ico, cliente, tipo, bags:0, kg:0};
     clientsByIco[key].bags += bags;
     clientsByIco[key].kg += kg;
   });
   const clientListByIco = {};
   Object.values(clientsByIco).forEach(c=>{
     if(!clientListByIco[c.ico]) clientListByIco[c.ico] = [];
-    clientListByIco[c.ico].push({cliente:c.cliente, bags:c.bags, kg:c.kg});
+    clientListByIco[c.ico].push({cliente:c.cliente, tipo:c.tipo, bags:c.bags, kg:c.kg});
   });
   Object.values(clientListByIco).forEach(arr=>arr.sort((a,b)=>b.bags-a.bags));
 
@@ -355,6 +371,16 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   const monthly_by_region_category = {categories:catsFound, regions:{ALL:buildMonthlyRows(valid)}};
   REGIONS5.forEach(region=> monthly_by_region_category.regions[region] = buildMonthlyRows(valid.filter(v=>v.region===region)));
 
+  // Las mismas filas mensuales pero por bodega, para que el filtro de bodega del
+  // tablero también mande en el Módulo 2. La lista junta las bodegas que
+  // aparecen en ventas con las del inventario, así toda bodega seleccionable
+  // tiene su serie (en ceros si no ha vendido nada este año).
+  const BODEGAS_SERIE = [];
+  valid.forEach(v=>{ if(v.warehouse && BODEGAS_SERIE.indexOf(v.warehouse)<0) BODEGAS_SERIE.push(v.warehouse); });
+  inv.forEach(r=>{ if(r.warehouse && BODEGAS_SERIE.indexOf(r.warehouse)<0) BODEGAS_SERIE.push(r.warehouse); });
+  monthly_by_region_category.warehouses = {};
+  BODEGAS_SERIE.forEach(w=> monthly_by_region_category.warehouses[w] = buildMonthlyRows(valid.filter(v=>v.warehouse===w)));
+
   // ---------- 10b. monthly_vejez_venta: vejez al vender por mes (YTD), KG-ponderada ----------
   const validWithEta = valid.filter(v=>v.eta);
   const buildMonthlyVejez = (rows)=>{
@@ -376,6 +402,8 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   };
   const monthly_vejez_venta = {categories:catsFound, regions:{ALL:buildMonthlyVejez(validWithEta)}};
   REGIONS5.forEach(region=> monthly_vejez_venta.regions[region] = buildMonthlyVejez(validWithEta.filter(v=>v.region===region)));
+  monthly_vejez_venta.warehouses = {};
+  BODEGAS_SERIE.forEach(w=> monthly_vejez_venta.warehouses[w] = buildMonthlyVejez(validWithEta.filter(v=>v.warehouse===w)));
 
   // ---------- sales_vejez_by_region_category: qué tan viejo estaba el café AL VENDERSE (12m), KG-ponderado ----------
   const trailing12ForVejez = trailing12.filter(v=>v.eta);
@@ -394,15 +422,17 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   });
 
   // ---------- reservas_vencidas: posiciones abiertas cuya fecha de entrega comprometida ya pasó ----------
-  const invIcosOnSpot = new Set(inv.filter(r=>r.status==='On Spot').map(r=>r.ico));
+  // Mismo criterio que arriba: las vencidas de lotes en tránsito también cuentan,
+  // y cada fila lleva el estado para que la plantilla pueda filtrarlas.
+  const invIcosTodos = new Set(inv.map(r=>r.ico));
   const icoInfo = {};
-  inv.forEach(r=>{ if(r.status==='On Spot') icoInfo[r.ico] = r; });
+  inv.forEach(r=>{ if(!icoInfo[r.ico] || r.status==='On Spot') icoInfo[r.ico] = r; });
   const reservas_vencidas = [];
   drilldownRows.forEach(row=>{
     const estado = toStr(row['Estado']);
     if(estado!=='RESERVADO' && estado!=='FACTURADO SIN ROTAR') return;
     const ico = toStr(row['ICO']);
-    if(!invIcosOnSpot.has(ico)) return;
+    if(!invIcosTodos.has(ico)) return;
     const lastDelivery = parseGSheetDate(row['Last Delivery']);
     if(!lastDelivery || lastDelivery >= TODAY) return;
     const info = icoInfo[ico];
@@ -410,6 +440,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
     const fechaReserva = parseGSheetDate(row['Fecha Reserva']);
     reservas_vencidas.push({
       ico, cliente: toStr(row['Cliente']),
+      status: info?info.status:'',
       product: info?info.product:'', category: info?info.series:'', region: info?info.region:'',
       warehouse: info?info.warehouse:toStr(row['Bodega']),
       bag_size: info?info.bag_size:null,
