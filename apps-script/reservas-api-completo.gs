@@ -57,14 +57,14 @@ const CHUNK_SIZE   = 90000;
 // ── Política de fees (v13) ──────────────────────────────────────
 // Inicio del cobro (storage y finance usan la misma fecha):
 //   SPOT:     60 días libres tras la reserva (sin fecha de reserva no se cobra)
-//   CONTRACT: con Last Delivery → día siguiente a V; si U y V están a 30 días
+//   CONTRACT: con Last Delivery → 30 días libres tras V; si U y V están a 30 días
 //             o menos (entrega única), 60 días libres tras V
 //             sin Last Delivery → 180 días libres tras la llegada (ETA)
 //             (la fecha de reserva no cuenta en CONTRACT)
 //   SPOT: si la reserva es anterior a la llegada, se cuenta desde la llegada.
 // Tarifas mensuales, cobradas por día (tarifa / 30). Solo se cobra si el café
 // sigue en bodega el día 1 siguiente al inicio (aviso): ver fee_estado.
-const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60 };
+const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60, TRAS_LAST_DELIVERY: 30 };
 // Tasa mensual del finance fee sobre el valor del contrato (AU tiene la suya)
 const FIN_RATE    = { AU: 0.0103, DEFAULT: 0.0072 };
 const LB_POR_KG   = 2.2046;
@@ -206,10 +206,10 @@ function leerSheet() {
     if (tipo === "SPOT") {
       if (baseReserva) inicioMs = diaMs(baseReserva) + (DIAS_LIBRES.SPOT + 1) * 86400000;
     } else if (lastDeliveryDate) {
-      // Entrega única (U = V o a 30 días o menos): 60 días libres tras V
+      // Entrega única (U = V o a 30 días o menos): 60 días libres tras V; si no, 30
       const ventanaCorta = firstDeliveryDate &&
         Math.round((diaMs(lastDeliveryDate) - diaMs(firstDeliveryDate)) / 86400000) <= 30;
-      inicioMs = diaMs(lastDeliveryDate) + ((ventanaCorta ? DIAS_LIBRES.ENTREGA_UNICA : 0) + 1) * 86400000;
+      inicioMs = diaMs(lastDeliveryDate) + ((ventanaCorta ? DIAS_LIBRES.ENTREGA_UNICA : DIAS_LIBRES.TRAS_LAST_DELIVERY) + 1) * 86400000;
       if (etaDate) inicioMs = Math.max(inicioMs, diaMs(etaDate));  // no antes de llegar a bodega
     } else if (etaDate) {                                          // CONTRACT: la reserva no cuenta
       inicioMs = diaMs(etaDate) + (DIAS_LIBRES.CONTRACT + 1) * 86400000;
