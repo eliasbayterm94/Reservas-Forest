@@ -1,23 +1,18 @@
 // =============================================================================
-// generarDrilldownPosiciones — v6
+// generarDrilldownPosiciones — v6 (sobre v4)
 //
-// CAMBIOS RESPECTO A v5:
-//   - T (Price Per KG), U/V (First/Last Delivery) y AC (Price) se buscan en
-//     CONSOLIDADO CONTRATOS por codigo padre + cafe (col H, Reference).
-//     Antes se buscaba solo por contrato y la ultima linea del contrato pisaba
-//     a las demas: en contratos con varios cafes todos quedaban con el precio
-//     del ultimo, y un cafe que no es del contrato (p. ej. un Black Condor en
-//     una factura de contrato) heredaba un precio ajeno.
-//   - Si el cafe no esta en su contrato, T y AC quedan vacios; U/V se toman
-//     del contrato. Esas filas se listan en el registro y el status lo avisa.
+// CAMBIOS RESPECTO A v4:
+//   - T (Price Per KG) y U/V (First/Last Delivery) se buscan en CONSOLIDADO
+//     CONTRATOS por codigo padre + cafe (col H, Reference). Antes se buscaba
+//     solo por contrato y la ultima linea del contrato pisaba a las demas: en
+//     contratos con varios cafes todos quedaban con el precio del ultimo, y un
+//     cafe que no es del contrato (p. ej. un Black Condor en una factura de
+//     contrato) heredaba un precio ajeno.
+//   - Si el cafe no esta en su contrato, T queda vacio; U/V se toman del
+//     contrato. Esas filas se listan en el registro y el status lo avisa.
+//   - El registro tambien lista los contratos que no aparecen en CONSOLIDADO.
 //
-// CAMBIOS DE v5 RESPECTO A v4:
-//   - Se agrega el campo "Price" en la columna AC (29), tomado de la
-//     columna N de CONSOLIDADO CONTRATOS (libro [NUEVO] ORDENES CONTENEDORES).
-//     Viaja en el mismo mapa que First/Last Delivery y sigue su misma regla:
-//     si el mapa de contratos no carga, AC no se toca.
-//
-// CAMBIOS DE v4:
+// CAMBIOS DE v4 RESPECTO A v3:
 //   - Se agrega el campo "Container" en la columna AB (28).
 //     Se detecta automaticamente en la hoja de origen (igual que Serie,
 //     Pallet Price, Bag Size) y se escribe/limpia igual que esas columnas.
@@ -30,7 +25,7 @@
 // FIXES HEREDADOS DE v3:
 //   1. Columna K (Estado) tiene formulas propias → NO se borra con clearContent.
 //      Se reescriben las formulas al final sobre el rango exacto de filas con datos.
-//   2. Si contractData viene vacio (error en trigger), T/U/V/AC NO se tocan.
+//   2. Si contractData viene vacio (error en trigger), T/U/V NO se tocan.
 //   3. Filtro se remueve antes de operar y se recrea al final.
 //   4. Status cell muestra error exacto cuando algo falla.
 // =============================================================================
@@ -80,7 +75,6 @@ function generarDrilldownPosiciones() {
   out.getRange(1, 21, 1, 1).setValue("First Delivery");
   out.getRange(1, 22, 1, 1).setValue("Last Delivery");
   out.getRange(1, 28, 1, 1).setValue("Container"); // AB
-  out.getRange(1, 29, 1, 1).setValue("Price");     // AC - NUEVO v5
   // Formato de texto para toda la columna AB, asi Sheets nunca la
   // reinterpreta como fecha/numero (incluye filas ya existentes).
   if (out.getMaxRows() > 1) {
@@ -90,7 +84,7 @@ function generarDrilldownPosiciones() {
   // ── LIMPIAR DATOS ANTERIORES ──────────────────────────────────────────────
   // Col K (11) = Estado tiene formulas propias → se salta.
   // Se limpia A-J (1-10) y L-M (12-13) por separado.
-  // T-V (20-22) y AC (29) solo se limpian si contractData carga OK (ver mas abajo).
+  // T-V (20-22) solo se limpian si contractData carga OK (ver mas abajo).
   // AB (28) = Container se limpia junto con O-S ya que no tiene formulas propias.
   const maxRows = out.getMaxRows();
   if (maxRows > 1) {
@@ -197,8 +191,9 @@ function generarDrilldownPosiciones() {
             palletPrice,                                   // 15 R  Pallet Price
             bagSize,                                       // 16 S  Bag Size
             container,                                     // 17 AB Container
-            // T Price Per KG, U First Delivery, V Last Delivery y AC Price
-            // se rellenan despues si contractData OK
+            // 18 T Price Per KG   → se rellena despues si contractData OK
+            // 19 U First Delivery → se rellena despues si contractData OK
+            // 20 V Last Delivery  → se rellena despues si contractData OK
           ]);
 
           clientsByRegion[cfg.region] = clientsByRegion[cfg.region] || new Set();
@@ -303,20 +298,17 @@ function generarDrilldownPosiciones() {
       out.getRange(filasFinal + 1, 28, maxRows - filasFinal, 1).clearContent(); // AB
     }
 
-    // ── T/U/V + AC: SOLO SE ESCRIBEN SI EL MAPA DE CONTRATOS CARGO BIEN ──
+    // ── T/U/V: SOLO SE ESCRIBEN SI EL MAPA DE CONTRATOS CARGO BIEN ───────
     // Si contractData vino vacio (timeout/permisos en trigger automatico),
-    // NO se tocan T/U/V/AC para preservar los valores anteriores.
+    // NO se tocan T/U/V para preservar los valores anteriores.
     if (contractsLoaded) {
-      if (maxRows > 1) {
-        out.getRange(2, 20, maxRows - 1, 3).clearContent(); // limpiar T-V primero
-        out.getRange(2, 29, maxRows - 1, 1).clearContent(); // limpiar AC - NUEVO v5
-      }
+      if (maxRows > 1) out.getRange(2, 20, maxRows - 1, 3).clearContent(); // limpiar T-V primero
 
-      // v6: se busca por codigo padre + cafe. Los precios (T, AC) solo salen
-      // de la linea del mismo cafe: si el cafe no esta en el contrato quedan
-      // vacios, en vez de heredar el precio de otro cafe. Las fechas (U, V)
-      // son del contrato: si no aparece el cafe, se toman de la primera linea
-      // del contrato que las tenga.
+      // v6: se busca por codigo padre + cafe. El precio (T) solo sale de la
+      // linea del mismo cafe: si el cafe no esta en el contrato queda vacio,
+      // en vez de heredar el precio de otro cafe. Las fechas (U, V) son del
+      // contrato: si no aparece el cafe, se toman de la primera linea del
+      // contrato que las tenga.
       const sinCafe = [], sinContrato = [];
       const matches = finalRows.map((r, i) => {
         const res = DRILL_buscarLineaContrato_(contractData, r[10], r[2]);
@@ -328,18 +320,16 @@ function generarDrilldownPosiciones() {
       if (sinContrato.length) Logger.log("Contrato no encontrado en CONSOLIDADO (" + sinContrato.length + "):\n" + sinContrato.join("\n"));
       drillAvisoContratos = sinCafe.length ? ` · ${sinCafe.length} reservas con un cafe que no esta en su contrato (ver registro)` : "";
 
-      const priceCol         = matches.map(m => [m.linea ? (m.linea.pricePerKg ?? "") : ""]);
-      const firstDelCol      = matches.map(m => [m.fechas ? DRILL_formatDate_(m.fechas.firstDelivery) : ""]);
-      const lastDelCol       = matches.map(m => [m.fechas ? DRILL_formatDate_(m.fechas.lastDelivery)  : ""]);
-      const contractPriceCol = matches.map(m => [m.linea ? (m.linea.price ?? "") : ""]); // AC - NUEVO v5
+      const priceCol    = matches.map(m => [m.linea  ? (m.linea.pricePerKg ?? "") : ""]);
+      const firstDelCol = matches.map(m => [m.fechas ? DRILL_formatDate_(m.fechas.firstDelivery) : ""]);
+      const lastDelCol  = matches.map(m => [m.fechas ? DRILL_formatDate_(m.fechas.lastDelivery)  : ""]);
 
-      out.getRange(2, 20, priceCol.length,         1).setValues(priceCol);
-      out.getRange(2, 21, firstDelCol.length,      1).setValues(firstDelCol);
-      out.getRange(2, 22, lastDelCol.length,       1).setValues(lastDelCol);
-      out.getRange(2, 29, contractPriceCol.length, 1).setValues(contractPriceCol); // AC - NUEVO v5
+      out.getRange(2, 20, priceCol.length,    1).setValues(priceCol);
+      out.getRange(2, 21, firstDelCol.length, 1).setValues(firstDelCol);
+      out.getRange(2, 22, lastDelCol.length,  1).setValues(lastDelCol);
 
     } else {
-      Logger.log("ADVERTENCIA: contractData vacio — columnas T/U/V/AC no modificadas.");
+      Logger.log("ADVERTENCIA: contractData vacio — columnas T/U/V no modificadas.");
     }
 
   } else {
@@ -364,7 +354,7 @@ function generarDrilldownPosiciones() {
     try {
       const filterAntesDeCrear = out.getFilter();
       if (filterAntesDeCrear) filterAntesDeCrear.remove();
-      out.getRange(1, 1, filterRows, 29).createFilter(); // ampliado hasta AC (29)
+      out.getRange(1, 1, filterRows, 28).createFilter(); // ampliado hasta AB (28)
     } catch (e) {
       Logger.log("No se pudo recrear el filtro: " + e.message);
     }
@@ -374,30 +364,28 @@ function generarDrilldownPosiciones() {
   if (!contractsLoaded && contractError) {
     ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos no actualizados — " + contractError + ")");
   } else if (!contractsLoaded) {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios, T/U/V/AC sin cambios)");
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios, T/U/V sin cambios)");
   } else {
     ss.getRange(DRILL_STATUS_CELL).setValue("OK" + drillAvisoContratos);
   }
 }
 
-
 // =============================================================================
-// Helper: extrae clave normalizada del campo Contrato
+// Helper: extrae clave normalizada del campo Contrato (codigo padre)
 // =============================================================================
 function DRILL_contratoKey_(contratoVal) {
   const raw = contratoVal ? contratoVal.toString() : "";
   return (raw.includes("||") ? raw.split("||")[0] : raw).trim().toUpperCase();
 }
 
-
 // =============================================================================
 // DRILL_buscarLineaContrato_ — v6
 // Busca la linea de CONSOLIDADO CONTRATOS por codigo padre + cafe.
 // Devuelve { linea, fechas, motivo }:
-//   linea  → linea del mismo cafe (de aqui salen los precios) o null
+//   linea  → linea del mismo cafe (de aqui sale el precio) o null
 //   fechas → la misma linea, o la primera del contrato con fechas
 //   motivo → "" | "sin cafe" (el contrato existe pero no tiene ese cafe)
-//            | "sin contrato" (codigo no esta en CONSOLIDADO)
+//            | "sin contrato" (el codigo no esta en CONSOLIDADO)
 // =============================================================================
 function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const key = DRILL_contratoKey_(contratoVal);
@@ -405,17 +393,18 @@ function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const lineas = contractData[key];
   if (!lineas) return { linea: null, fechas: null, motivo: "sin contrato" };
 
-  const ref   = DRILL_norm_(cafe);
-  const linea = ref ? lineas.find(l => l.ref === ref) || null : null;
+  const ref    = DRILL_norm_(cafe);
+  const linea  = ref ? lineas.find(l => l.ref === ref) || null : null;
   const fechas = linea || lineas.find(l => l.firstDelivery || l.lastDelivery) || null;
   return { linea, fechas, motivo: linea ? "" : "sin cafe" };
 }
 
-
 // =============================================================================
 // DRILL_buildContractDataMap_
 // Devuelve { map, error } en lugar de solo el mapa para poder distinguir
-// fallo real de hoja vacia y NO borrar T/U/V/AC si no hay datos.
+// fallo real de hoja vacia y NO borrar T/U/V si no hay datos.
+// v6: el mapa guarda TODAS las lineas de cada contrato (una por cafe):
+//     { "FC-26-NJ-9660": [ { ref, pricePerKg, firstDelivery, lastDelivery }, … ] }
 // =============================================================================
 function DRILL_buildContractDataMap_() {
   const MAX_RETRIES = 3;
@@ -437,13 +426,10 @@ function DRILL_buildContractDataMap_() {
       const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
       const map  = {};
 
-      // v6: un contrato puede tener varias lineas (una por cafe). Se guardan
-      // TODAS bajo el codigo padre; antes la ultima linea pisaba a las demas.
       data.forEach(row => {
         const rawId         = row[0]  ? row[0].toString().trim() : "";
         const reference     = row[7];  // col H - Reference (cafe)
         const pricePerKg    = row[11]; // col L
-        const price         = row[13]; // col N - NUEVO v5
         const firstDelivery = row[14]; // col O
         const lastDelivery  = row[15]; // col P
 
@@ -452,7 +438,7 @@ function DRILL_buildContractDataMap_() {
         const key = DRILL_contratoKey_(rawId);
         if (!key) return;
         (map[key] = map[key] || []).push({
-          ref: DRILL_norm_(reference), pricePerKg, price, firstDelivery, lastDelivery
+          ref: DRILL_norm_(reference), pricePerKg, firstDelivery, lastDelivery
         });
       });
 
@@ -468,7 +454,6 @@ function DRILL_buildContractDataMap_() {
 
   return { map: {}, error: lastError ? lastError.message : "Error desconocido" };
 }
-
 
 // =============================================================================
 // FUNCIONES AUXILIARES
