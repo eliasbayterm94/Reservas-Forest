@@ -195,8 +195,8 @@ function leerSheet() {
     }
 
     // ── Y, Z, AA: fees según la política v13 (ver DIAS_LIBRES arriba)
-    const precioKg    = toNum(r[C.precio_kg]);    // T (solo se expone)
-    const palletPrice = toNum(r[C.pallet_price]);  // R — precio del contrato
+    const precioKg    = toNum(r[C.precio_kg]);    // T — precio del contrato (por kg; por lb en USA)
+    const palletPrice = toNum(r[C.pallet_price]);  // R — Pallet Price (SPOT)
     const bagSize     = toNum(r[C.bag_size]);       // S — kg por saco
 
     // Primer día cobrado: los días libres se cuentan completos después de la
@@ -246,7 +246,11 @@ function leerSheet() {
     // el acumulado (todos los días desde el inicio) va aparte.
     const whDia  = st.monto / 30;
 
-    const valorContrato = palletPrice * bagSize * cantidad * (info.region === 'USA' ? LB_POR_KG : 1);
+    // Precio base del finance: en CONTRACT el precio del contrato (T); si T está
+    // vacía, o en SPOT, el Pallet Price (R). Misma unidad: por kg, por lb en USA.
+    const usaT          = tipo === "CONTRACT" && precioKg > 0;
+    const precioBase    = usaT ? precioKg : palletPrice;
+    const valorContrato = precioBase * bagSize * cantidad * (info.region === 'USA' ? LB_POR_KG : 1);
     const finDia = valorContrato * (FIN_RATE[info.region] || FIN_RATE.DEFAULT) / 30;
     const r2     = x => x > 0 ? Math.round(x * 100) / 100 : null;
 
@@ -281,6 +285,8 @@ function leerSheet() {
       finance_acum:   r2(finDia * diasCobro),           // finance acumulado desde el inicio
       wh_mensual:     r2(whDia  * 30),                  // tarifa mensual de storage de la fila
       fin_mensual:    r2(finDia * 30),                  // finance de un mes completo (valor × tasa)
+      precio_base:    precioBase,                       // precio usado en el finance
+      precio_fuente:  usaT ? 'T' : 'R',                 // T = precio contrato, R = Pallet Price
       warehouse_salida: r2(whDia  * diasSalida),        // storage a sumar a la factura del café si sale hoy
       finance_salida:   r2(finDia * diasSalida),        // finance a sumar a la factura del café si sale hoy
       wh_cur:         st.moneda,                        // moneda del storage fee
