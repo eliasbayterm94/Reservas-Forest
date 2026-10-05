@@ -13,6 +13,8 @@
 //     Esas filas se listan en el registro y el status lo avisa.
 //   - Cafes equivalentes (DRILL_EQUIVALENCIAS_): Black Condor, Huila Condor y
 //     Reforest Washed cuentan como la misma referencia al buscar en el contrato.
+//   - Reservas sin contrato ("Not Assigned", "Spot Contract": codigos sin
+//     numeros) no se cruzan con CONSOLIDADO: T/U/V quedan vacios.
 //   - El registro tambien lista los contratos que no aparecen en CONSOLIDADO.
 //
 // CAMBIOS DE v4 RESPECTO A v3:
@@ -400,7 +402,10 @@ const DRILL_EQUIVALENCIAS_ = [
 
 function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const key = DRILL_contratoKey_(contratoVal);
-  if (!key || key === "NOT ASSIGNED") return { linea: null, fechas: null, motivo: "" };
+  // Solo codigos de contrato reales (llevan numeros). "Not Assigned" o
+  // "Spot Contract" no son contratos: si CONSOLIDADO tuviera lineas con ese
+  // texto, todas las reservas sin contrato heredarian sus fechas y precio.
+  if (!key || !/\d/.test(key)) return { linea: null, fechas: null, motivo: "" };
   const lineas = contractData[key];
   if (!lineas) return { linea: null, fechas: null, motivo: "sin contrato" };
 
