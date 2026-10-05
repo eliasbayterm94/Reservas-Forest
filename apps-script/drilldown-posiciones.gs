@@ -714,3 +714,34 @@ function DRILL_formatDate_(v) {
   const y = v.getUTCFullYear();
   return d + "/" + m + "/" + y;
 }
+
+// =============================================================================
+// diagCafesSinPrecio — diagnostico (solo lee, no modifica nada)
+// Para cada reserva de contrato que quedo sin Price Per KG (T), escribe en el
+// registro que cafe busca y que cafes tiene ese contrato en CONSOLIDADO.
+// Ejecutar a mano DESPUES de generarDrilldownPosiciones.
+// =============================================================================
+function diagCafesSinPrecio() {
+  const out  = SpreadsheetApp.getActive().getSheetByName(DRILL_OUTPUT_SHEET);
+  const data = out.getRange(2, 1, out.getLastRow() - 1, 22).getValues();
+  const sheet = SpreadsheetApp.openById(CONTRACTS_SPREADSHEET_ID).getSheetByName("CONSOLIDADO CONTRATOS");
+  const raw = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+  const refs = {};
+  raw.forEach(r => {
+    const k = DRILL_contratoKey_(r[0]);
+    if (k) (refs[k] = refs[k] || []).push(String(r[7]));
+  });
+  const vistos = {};
+  let n = 0;
+  data.forEach(r => {
+    if (r[7] !== "CONTRACT" || r[19] !== "") return;   // solo contratos sin precio (T)
+    const k = DRILL_contratoKey_(r[11]);
+    if (!k || !/\d/.test(k)) return;                    // sin contrato real
+    const id = k + "|" + r[2];
+    if (vistos[id]) return;
+    vistos[id] = true;
+    n++;
+    Logger.log(`${k} | busca: "${r[2]}" | el contrato tiene: ${refs[k] ? refs[k].map(x => `"${x}"`).join(", ") : "(no está en CONSOLIDADO)"}`);
+  });
+  Logger.log(`Total: ${n} combinaciones contrato + cafe sin precio`);
+}
