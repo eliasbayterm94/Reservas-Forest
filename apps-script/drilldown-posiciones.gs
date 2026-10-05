@@ -409,14 +409,24 @@ function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const lineas = contractData[key];
   if (!lineas) return { linea: null, fechas: null, motivo: "sin contrato" };
 
-  const ref   = DRILL_norm_(cafe);
-  let linea   = ref ? lineas.find(l => l.ref === ref) || null : null;
+  const ref = DRILL_norm_(cafe);
+  let cand  = ref ? lineas.filter(l => l.ref === ref) : [];
   // Si no esta con su nombre exacto, se acepta un cafe equivalente del contrato
-  if (!linea && ref) {
+  if (!cand.length && ref) {
     const grupo = DRILL_EQUIVALENCIAS_.find(g => g.includes(ref));
-    if (grupo) linea = lineas.find(l => grupo.includes(l.ref)) || null;
+    if (grupo) cand = lineas.filter(l => grupo.includes(l.ref));
   }
-  if (linea) return { linea, fechas: linea, motivo: "" };
+  if (cand.length) {
+    // El mismo cafe puede estar en varias lineas (p. ej. entregas parciales):
+    // se prefiere la que tenga precio y fechas, y las fechas de cualquiera
+    // de sus lineas que las tenga.
+    const tieneFechas = l => l.firstDelivery || l.lastDelivery;
+    const tienePrecio = l => l.pricePerKg !== "" && l.pricePerKg != null;
+    const linea  = cand.find(l => tienePrecio(l) && tieneFechas(l)) || cand.find(tienePrecio) || cand[0];
+    const fechas = tieneFechas(linea) ? linea : cand.find(tieneFechas) || null;
+    if (!fechas) Logger.log(`Sin First/Last Delivery en CONSOLIDADO: ${DRILL_contratoKey_(contratoVal)} · ${cafe}`);
+    return { linea, fechas, motivo: "" };
+  }
 
   // Sin el cafe, las fechas del contrato solo sirven si todas sus lineas
   // tienen las mismas; si no, se tomarian las de otro cafe.
