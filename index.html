@@ -676,6 +676,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div class="fsep"></div>
   <span class="pill fee off" id="pFee" onclick="toggleFee(this)">Con Fees</span>
   <span class="res-count" id="resCount">—</span>
+  <button class="btn-excel" onclick="exportFacturacionMes()" style="margin-left:8px" title="Excel del día 1: qué fees facturar por cliente (mes cerrado) y a quién avisar"><i data-lucide="receipt"></i> Facturación del mes</button>
   <button class="btn-vista" id="btnDetalle" onclick="toggleVistaRes()" title="Mostrar u ocultar columnas de detalle (contrato, fees, ETA…)"></button>
 </div>
 
@@ -3303,6 +3304,85 @@ function emailVencidas90(){
   const p = vencidas90Payload(rep);
   if(!p){ alert('Ese comercial no tiene facturas vencidas de más de 90 días.'); return; }
   window.location.href = 'mailto:?subject=' + encodeURIComponent(p.subject) + '&body=' + encodeURIComponent(p.body);
+}
+// ── Facturación mensual de fees ─────────────────────────────────────────────
+// Excel para el día 1, con TODAS las reservas (no aplica filtros):
+//   1. Resumen por cliente: storage + finance del último mes cerrado, por moneda.
+//   2. A facturar (detalle): cada reserva que cobra, con su periodo y la cuenta.
+//   3. Avisar día 1: reservas cuyo aviso cae el próximo día 1 (o hoy, si hoy es 1).
+function exportFacturacionMes(){
+  if(!DATA || !DATA.length){ alert('Aún no hay datos cargados.'); return; }
+  const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const MES_L=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const dmy=s=>{ if(!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; };
+  const r2=v=>Math.round((Number(v)||0)*100)/100;
+
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const mesIni=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);   // mes que se factura
+  const mesFin=new Date(hoy.getFullYear(),hoy.getMonth(),0);
+  const aviso = hoy.getDate()===1 ? hoy : new Date(hoy.getFullYear(),hoy.getMonth()+1,1);
+  const avisoIso=iso(aviso);
+  const mesTxt=`${MES_L[mesIni.getMonth()]} ${mesIni.getFullYear()}`;
+
+  // 1-2. Lo que se factura por el último mes cerrado
+  const cobran=DATA.filter(r=>r.fee_estado==='COBRA' && (r.fee_mes_dias||0)>0)
+    .sort((a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato)));
+  const det=[['Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Factura','Sacos',
+    'Cobra desde','Periodo','Días','Storage tarifa/mes','Storage','Moneda storage',
+    'Precio usado','Fuente precio','Finance/mes','Finance','Moneda finance']];
+  const res={};
+  cobran.forEach(r=>{
+    const ini=r.fee_inicio?new Date(r.fee_inicio+'T00:00:00'):mesIni;
+    const desde=ini>mesIni?ini:mesIni;
+    det.push([r.cliente,r.comercial||'',r.bodega,r.tipo==='SPOT'?'Spot':'Contrato',r.contrato||'',r.cafe,r.ico,r.factura||'',r.cantidad,
+      dmy(r.fee_inicio),`${desde.getDate()}–${mesFin.getDate()} ${MES[mesIni.getMonth()]}`,r.fee_mes_dias,
+      r2(r.wh_mensual),r2(r.warehouse_fee),r.wh_cur,
+      Number(r.precio_base)||Number(r.pallet_price)||0,r.precio_fuente==='T'?'Precio contrato':'Pallet Price',
+      r2(r.fin_mensual),r2(r.finance_fee),r.fin_cur]);
+    const add=(cur,campo,v)=>{ const k=r.cliente+'|'+cur;
+      const o=res[k]=res[k]||{cliente:r.cliente,cur,storage:0,finance:0,reservas:new Set(),comerciales:new Set()};
+      o[campo]+=Number(v)||0; o.reservas.add(r._rkey||r.contrato+r.cafe+r.ico); if(r.comercial) o.comerciales.add(r.comercial); };
+    add(r.wh_cur,'storage',r.warehouse_fee);
+    add(r.fin_cur,'finance',r.finance_fee);
+  });
+  const resumen=[['Cliente','Comercial','Moneda','Storage','Finance','Total a facturar','Reservas']];
+  Object.values(res).sort((a,b)=>a.cliente.localeCompare(b.cliente)||a.cur.localeCompare(b.cur)).forEach(o=>{
+    resumen.push([o.cliente,[...o.comerciales].join(', '),o.cur,r2(o.storage),r2(o.finance),r2(o.storage+o.finance),o.reservas.size]);
+  });
+  // Totales por moneda al final del resumen
+  const tot={}; Object.values(res).forEach(o=>{ const t=tot[o.cur]=tot[o.cur]||{s:0,f:0}; t.s+=o.storage; t.f+=o.finance; });
+  resumen.push([]);
+  Object.keys(tot).sort().forEach(c=>resumen.push(['TOTAL','',c,r2(tot[c].s),r2(tot[c].f),r2(tot[c].s+tot[c].f),'']));
+
+  // 3. A quién avisar el próximo día 1
+  const avisar=DATA.filter(r=>r.fee_notif===avisoIso && (r.fee_estado==='ACUMULA'||r.fee_estado==='GRATIS'||r.fee_estado==='COBRA'))
+    .sort((a,b)=>a.cliente.localeCompare(b.cliente));
+  const avi=[['Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Sacos','Cobra desde','Fecha aviso',
+    'Días acumulados hoy','Storage/mes','Moneda storage','Finance/mes','Moneda finance','Mensaje']];
+  avisar.forEach(r=>{
+    avi.push([r.cliente,r.comercial||'',r.bodega,r.tipo==='SPOT'?'Spot':'Contrato',r.contrato||'',r.cafe,r.ico,r.cantidad,
+      dmy(r.fee_inicio),dmy(r.fee_notif),r.fee_dias||0,r2(r.wh_mensual),r.wh_cur,r2(r.fin_mensual),r.fin_cur,
+      `Su periodo libre terminó; desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan todos los días desde el ${dmy(r.fee_inicio)}.`]);
+  });
+
+  // Hojas con formato de número y anchos
+  const hoja=(aoa,numCols,anchos)=>{
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const rng=XLSX.utils.decode_range(ws['!ref']||'A1');
+    for(let R=1;R<=rng.e.r;R++) numCols.forEach(C=>{ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&c.t==='n') c.z='#,##0.00'; });
+    ws['!cols']=anchos.map(w=>({wch:w}));
+    ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2'};
+    return ws;
+  };
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,hoja(resumen,[3,4,5],[30,24,9,14,14,16,10]),'Resumen por cliente');
+  XLSX.utils.book_append_sheet(wb,hoja(det,[12,13,15,17,18],[26,16,10,9,18,24,10,12,7,12,14,6,12,12,9,11,15,12,12,9]),'A facturar (detalle)');
+  XLSX.utils.book_append_sheet(wb,hoja(avi,[11,13],[26,16,10,9,18,24,10,7,12,12,10,12,9,12,9,90]),'Avisar día 1');
+  XLSX.writeFile(wb,`Forest_Facturacion_Fees_${iso(mesIni).slice(0,7)}.xlsx`);
+  // Pequeño resumen en pantalla
+  const totTxt=Object.keys(tot).sort().map(c=>`${c} ${(tot[c].s+tot[c].f).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`).join(' · ')||'nada';
+  console.log(`Facturación ${mesTxt}: ${cobran.length} reservas · ${totTxt} · avisar el ${dmy(avisoIso)}: ${avisar.length}`);
 }
 function exportCartera(){
   const GREEN='1E4D18',WHITE='FFFFFF',BORDER_C='DDD9CF',ROW_ALT='F8F6F0';
