@@ -2071,7 +2071,8 @@ function feeTooltip(r, esWH){
   const m0=new Date(hoy.getFullYear(),hoy.getMonth()-1,1), m1=new Date(hoy.getFullYear(),hoy.getMonth(),0);
   const desde=ini&&ini>m0?ini:m0;
   const base = esWH ? `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`
-                    : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato)`;
+                    : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato`
+                      + (r.precio_base ? ` · precio ${r.precio_fuente==='T'?'contrato':'Pallet Price'} ${r.precio_base}` : '') + ')';
   const L=[`${esWH?'Storage':'Finance'} de ${MES[m0.getMonth()]} (${desde.getDate()}–${m1.getDate()} ${MES[m0.getMonth()]}): `
          + `${base} ÷ 30 × ${r.fee_mes_dias} d = ${f2(mes)}`];
   if(sal>0)  L.push(`Si sale hoy, sumar a la factura del café: ${r.fee_salida_dias} d = ${f2(sal)}`);
