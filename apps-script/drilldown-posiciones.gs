@@ -9,7 +9,8 @@
 //     cafe que no es del contrato (p. ej. un Black Condor en una factura de
 //     contrato) heredaba un precio ajeno.
 //   - Si el cafe no esta en su contrato, T queda vacio; U/V se toman del
-//     contrato. Esas filas se listan en el registro y el status lo avisa.
+//     contrato solo si todas sus lineas tienen las mismas fechas (si no, vacias).
+//     Esas filas se listan en el registro y el status lo avisa.
 //   - El registro tambien lista los contratos que no aparecen en CONSOLIDADO.
 //
 // CAMBIOS DE v4 RESPECTO A v3:
@@ -383,7 +384,8 @@ function DRILL_contratoKey_(contratoVal) {
 // Busca la linea de CONSOLIDADO CONTRATOS por codigo padre + cafe.
 // Devuelve { linea, fechas, motivo }:
 //   linea  → linea del mismo cafe (de aqui sale el precio) o null
-//   fechas → la misma linea, o la primera del contrato con fechas
+//   fechas → la misma linea; si no aparece el cafe, las del contrato solo
+//            cuando todas sus lineas tienen las mismas fechas (si no, null)
 //   motivo → "" | "sin cafe" (el contrato existe pero no tiene ese cafe)
 //            | "sin contrato" (el codigo no esta en CONSOLIDADO)
 // =============================================================================
@@ -393,10 +395,16 @@ function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const lineas = contractData[key];
   if (!lineas) return { linea: null, fechas: null, motivo: "sin contrato" };
 
-  const ref    = DRILL_norm_(cafe);
-  const linea  = ref ? lineas.find(l => l.ref === ref) || null : null;
-  const fechas = linea || lineas.find(l => l.firstDelivery || l.lastDelivery) || null;
-  return { linea, fechas, motivo: linea ? "" : "sin cafe" };
+  const ref   = DRILL_norm_(cafe);
+  const linea = ref ? lineas.find(l => l.ref === ref) || null : null;
+  if (linea) return { linea, fechas: linea, motivo: "" };
+
+  // Sin el cafe, las fechas del contrato solo sirven si todas sus lineas
+  // tienen las mismas; si no, se tomarian las de otro cafe.
+  const conFechas = lineas.filter(l => l.firstDelivery || l.lastDelivery);
+  const firma     = l => DRILL_formatDate_(l.firstDelivery) + "|" + DRILL_formatDate_(l.lastDelivery);
+  const unicas    = conFechas.length && conFechas.every(l => firma(l) === firma(conFechas[0]));
+  return { linea: null, fechas: unicas ? conFechas[0] : null, motivo: "sin cafe" };
 }
 
 // =============================================================================
