@@ -1438,8 +1438,8 @@ const COLS = [
   { key:'container',    label:'Status',            w:85,  cls:'',         containerBadge:true },
   { key:'dias',         label:'Vejez',             w:85,  cls:'',         diasBadge:true },
   { key:'dias_reserva', label:'Días Reserv.',      w:85,  cls:'',         diasBadge:true },
-  { key:'warehouse_fee',label:'Storage (mes)',     w:110, cls:'',         feecell:true, secFee:true },
-  { key:'finance_fee',  label:'Finance (mes)',     w:110, cls:'',         feecell:true, secFee:true },
+  { key:'warehouse_fee',label:'Storage (mes)',     w:130, cls:'',         feecell:true, secFee:true },
+  { key:'finance_fee',  label:'Finance (mes)',     w:130, cls:'',         feecell:true, secFee:true },
   { key:'fee_en',       label:'Estado fee',        w:150, cls:'',         feeBadge:true, secFee:true },
   { key:'comercial',    label:'Comercial',         w:95,  cls:'c-muted' },
   { key:'rAccion',      label:'Acción',            w:118, resAccion:true },
@@ -2080,7 +2080,7 @@ function feeTooltip(r, esWH){
   return L.join('&#10;');
 }
 function fmtFee(val, cur){
-  const n=Math.round(Number(val)).toLocaleString('en-US');
+  const n=Number(val).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   return `${CUR_SYM[cur]??'$'}${n}`;
 }
 function fmtNum(v){ return Math.round(Number(v)).toLocaleString('en-US'); }
@@ -2191,12 +2191,12 @@ function aplicarFiltros(){
     const feeAplica = r.fee_en===null||r.fee_en<=0;
     if(feeAplica){
       const whSym=CUR_SYM[r.wh_cur]??'$', finSym=CUR_SYM[r.fin_cur]??'$';
-      if(r.warehouse_fee>0) whPorMoneda[whSym]=(whPorMoneda[whSym]||0)+Math.round(r.warehouse_fee);
-      if(r.finance_fee>0)   finPorMoneda[finSym]=(finPorMoneda[finSym]||0)+Math.round(r.finance_fee);
+      if(r.warehouse_fee>0) whPorMoneda[whSym]=(whPorMoneda[whSym]||0)+r.warehouse_fee;
+      if(r.finance_fee>0)   finPorMoneda[finSym]=(finPorMoneda[finSym]||0)+r.finance_fee;
     }
   }
   const uniqC=clienteSet.size;
-  const joinMoneda=o=>Object.entries(o).map(([s,v])=>`${s}${v.toLocaleString('en-US')}`).join(' + ')||'—';
+  const joinMoneda=o=>Object.entries(o).map(([s,v])=>`${s}${v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`).join(' + ')||'—';
   const totalWHStr=joinMoneda(whPorMoneda);
   const totalFinStr=joinMoneda(finPorMoneda);
 
@@ -2249,7 +2249,7 @@ function exportExcel(){
   const badge=(bg,fg)=>({fill:{patternType:'solid',fgColor:{rgb:bg}},font:{bold:true,color:{rgb:fg},sz:9,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB(BORDER_C)});
   const base=(ev,al)=>({fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{sz:10,name:'Calibri',color:{rgb:'1A1710'}},alignment:{horizontal:al||'left',vertical:'center'},border:allB(BORDER_C)});
   const mono=(ev,col,al)=>({fill:{patternType:'solid',fgColor:{rgb:ev?ROW_ALT:WHITE}},font:{sz:9.5,name:'Courier New',color:{rgb:col||TEXT2}},alignment:{horizontal:al||'left',vertical:'center'},border:allB(BORDER_C)});
-  const feeS=(ev)=>({fill:{patternType:'solid',fgColor:{rgb:ev?'FDF6E3':FEE_BG}},font:{bold:true,sz:10,name:'Courier New',color:{rgb:FEE_FG}},alignment:{horizontal:'right',vertical:'center'},border:allB(FEE_FG)});
+  const feeS=(ev)=>({fill:{patternType:'solid',fgColor:{rgb:ev?'FDF6E3':FEE_BG}},font:{bold:true,sz:10,name:'Courier New',color:{rgb:FEE_FG}},alignment:{horizontal:'right',vertical:'center'},border:allB(FEE_FG),numFmt:'#,##0.00'});
 
   const wb=XLSX.utils.book_new(),ws={};
   COLS.forEach((col,c)=>{ws[XLSX.utils.encode_cell({r:0,c})]=hdr(col.label,col.secFee);});
