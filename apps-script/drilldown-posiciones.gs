@@ -11,6 +11,8 @@
 //   - Si el cafe no esta en su contrato, T queda vacio; U/V se toman del
 //     contrato solo si todas sus lineas tienen las mismas fechas (si no, vacias).
 //     Esas filas se listan en el registro y el status lo avisa.
+//   - Cafes equivalentes (DRILL_EQUIVALENCIAS_): Black Condor, Huila Condor y
+//     Reforest Washed cuentan como la misma referencia al buscar en el contrato.
 //   - El registro tambien lista los contratos que no aparecen en CONSOLIDADO.
 //
 // CAMBIOS DE v4 RESPECTO A v3:
@@ -389,6 +391,13 @@ function DRILL_contratoKey_(contratoVal) {
 //   motivo → "" | "sin cafe" (el contrato existe pero no tiene ese cafe)
 //            | "sin contrato" (el codigo no esta en CONSOLIDADO)
 // =============================================================================
+// Cafes que cuentan como la misma referencia al cruzar con el contrato: si la
+// reserva dice uno y el contrato otro del mismo grupo, se toma esa linea.
+// Nombres en minuscula, sin tildes ni signos (como los deja DRILL_norm_).
+const DRILL_EQUIVALENCIAS_ = [
+  ["black condor", "huila condor", "reforest washed"],
+];
+
 function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   const key = DRILL_contratoKey_(contratoVal);
   if (!key || key === "NOT ASSIGNED") return { linea: null, fechas: null, motivo: "" };
@@ -396,7 +405,12 @@ function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {
   if (!lineas) return { linea: null, fechas: null, motivo: "sin contrato" };
 
   const ref   = DRILL_norm_(cafe);
-  const linea = ref ? lineas.find(l => l.ref === ref) || null : null;
+  let linea   = ref ? lineas.find(l => l.ref === ref) || null : null;
+  // Si no esta con su nombre exacto, se acepta un cafe equivalente del contrato
+  if (!linea && ref) {
+    const grupo = DRILL_EQUIVALENCIAS_.find(g => g.includes(ref));
+    if (grupo) linea = lineas.find(l => grupo.includes(l.ref)) || null;
+  }
   if (linea) return { linea, fechas: linea, motivo: "" };
 
   // Sin el cafe, las fechas del contrato solo sirven si todas sus lineas
