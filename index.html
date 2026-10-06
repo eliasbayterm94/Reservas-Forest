@@ -4411,13 +4411,32 @@ function ctrlInvDatos(j){
     if(reg[rg]) reg[rg].venta += Number(v.kg)||0;
     T.venta += Number(v.kg)||0;
   });
+  // Ventana de 6 meses: top5_by_region ya la trae calculada, y va con la clave
+  // cruda de la región (USA, AU, UK...), no con la que devuelve normRegion.
+  const t5 = (j && j.top5_by_region) || {};
+  const venta6De = rgCrudo => {
+    const b = t5[rgCrudo] && t5[rgCrudo]['6'] && t5[rgCrudo]['6'].ALL;
+    return b ? (Number(b.total_kg)||0) : null;
+  };
+  const crudoDe = {};   // normRegion(x) -> clave cruda, para volver a top5
+  todos.forEach(x=>{ const n = normRegion(x.region||'—')||'—'; if(!crudoDe[n]) crudoDe[n] = x.region; });
+
+  let v6Total = 0, hay6 = false;
   const regiones = Object.keys(reg).map(rg=>{
     const g = reg[rg];
     const rot = g.kg>0 ? g.venta/g.kg : null;
-    return Object.assign({region: rg==='Australia'?'AU':rg, rot, dias: rot>0?365/rot:null}, g);
+    const v6 = venta6De(crudoDe[rg]);
+    if(v6!=null){ v6Total += v6; hay6 = true; }
+    // Se anualiza (x2) para poder compararla contra la de 12 meses.
+    const rot6 = (v6!=null && g.kg>0) ? (v6*2)/g.kg : null;
+    return Object.assign({region: rg==='Australia'?'AU':rg, rot, dias: rot>0?365/rot:null,
+                          venta6: v6, rot6, dias6: rot6>0?365/rot6:null}, g);
   }).sort((a,b)=>b.kg-a.kg);
   T.rot = T.kg>0 ? T.venta/T.kg : null;
   T.dias = T.rot>0 ? 365/T.rot : null;
+  T.venta6 = hay6 ? v6Total : null;
+  T.rot6 = (T.venta6!=null && T.kg>0) ? (T.venta6*2)/T.kg : null;
+  T.dias6 = T.rot6>0 ? 365/T.rot6 : null;
 
   // Distribución por grupo de días (sin SERVICE, igual que el Módulo 3)
   const baseKg = lots.reduce((s,x)=>s+(Number(x.total_kg)||0),0);
@@ -4449,6 +4468,8 @@ function ctrlInvDatos(j){
   const viejos = lots.filter(x=>(Number(x.vejez_dias)||0)>90).map(fila)
                      .sort((a,b)=>b.dias-a.dias);
   const viejosLibreKg = viejos.reduce((s,r)=>s+r.libreKg,0);
+  // Los que además tienen saldo libre: son sobre los que se puede actuar hoy.
+  const accionables = viejos.filter(r=>r.libreKg>0).sort((a,b)=>b.libreKg-a.libreKg);
   // MICROLOT con saldo libre
   const micro = lots.filter(x=>x.series==='MICROLOT' && (Number(x.free_bags)||0)>0).map(fila);
   const microKg = micro.reduce((s,r)=>s+r.libreKg,0);
@@ -4465,7 +4486,7 @@ function ctrlInvDatos(j){
     regiones, T, lotes: todos.length, baseKg, buckets,
     vejezProm: baseKg>0 ? vejezPond/baseKg : 0,
     cambian, criticos: cambian.filter(c=>invBucket(c.dias+7)>=5).length,
-    viejos, viejosLibreKg, micro, microKg,
+    viejos, viejosLibreKg, accionables, micro, microKg,
     venc, venc150: venc.filter(v=>v.dias>150).length,
   };
 }
@@ -4574,18 +4595,31 @@ async function exportControlInvPDF(btn){
 
     let y2 = doc.lastAutoTable.finalY + 16;
     titSec('ROTACIÓN POR REGIÓN', izq, y2, colW);
+    const dias = v => v!=null ? Math.round(v)+' d' : '—';
+    const rotx = v => v!=null ? num(v)+'x' : '—';
     doc.autoTable(estiloTabla({
       startY: y2+10, tableWidth: colW, margin:{left:izq, right:W-izq-colW},
-      head: [['Región','Vendido 12 m (kg)','Inventario (kg)','Rotación','Días de inv.']],
-      body: D.regiones.map(r=>[r.region, kgf(r.venta), kgf(r.kg),
-              r.rot!=null?num(r.rot)+'x':'—', r.dias!=null?Math.round(r.dias):'—']),
-      foot: [['TOTAL', kgf(T.venta), kgf(T.kg), num(T.rot)+'x', Math.round(T.dias)]],
-      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 3:{fontStyle:'bold'}},
+      head: [[{content:'', colSpan:2},
+              {content:'ÚLTIMOS 12 MESES', colSpan:2, styles:{halign:'center'}},
+              {content:'ÚLTIMOS 6 MESES (anualizado)', colSpan:2, styles:{halign:'center', fillColor:FC.navyDark}}],
+             ['Región','Inventario','Vendido','Rot · días','Vendido','Rot · días']],
+      body: D.regiones.map(r=>[r.region, kgf(r.kg), kgf(r.venta),
+              rotx(r.rot)+' · '+dias(r.dias),
+              r.venta6!=null?kgf(r.venta6):'—',
+              rotx(r.rot6)+' · '+dias(r.dias6)]),
+      foot: [['TOTAL', kgf(T.kg), kgf(T.venta), rotx(T.rot)+' · '+dias(T.dias),
+              T.venta6!=null?kgf(T.venta6):'—', rotx(T.rot6)+' · '+dias(T.dias6)]],
+      styles:{font:F.txt, fontSize:6.8, cellPadding:3.5, halign:'right', lineColor:FC.linea, lineWidth:.5, textColor:FC.ink},
+      headStyles:{font:F.tit, fontStyle:'bold', fillColor:FC.navy, textColor:FC.yellow, halign:'right', fontSize:6.2},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 3:{fontStyle:'bold'}, 5:{fontStyle:'bold'}},
       didParseCell:(d)=>{
-        if(d.section==='body' && d.column.index===4){
-          const r = D.regiones[d.row.index];
-          if(r && r.dias!=null && r.dias>120){ d.cell.styles.textColor=FC.warn; d.cell.styles.fontStyle='bold'; }
-        }
+        if(d.section!=='body') return;
+        const r = D.regiones[d.row.index];
+        if(!r) return;
+        // Más de 120 días a 12 meses: se marca.
+        if(d.column.index===3 && r.dias!=null && r.dias>120) d.cell.styles.textColor=FC.warn;
+        // La columna de 6 meses va en azul de marca: es la lectura del ritmo de hoy.
+        if(d.column.index===5) d.cell.styles.textColor = (r.dias6!=null && r.dias!=null && r.dias6 < r.dias) ? FC.ok : FC.warn;
       },
     }));
 
@@ -4593,14 +4627,15 @@ async function exportControlInvPDF(btn){
     // siempre real y se actualiza solo.
     const lenta = D.regiones.filter(r=>r.dias!=null).sort((a,b)=>b.dias-a.dias)[0];
     let yn = doc.lastAutoTable.finalY + 10;
-    doc.setFillColor(...FC.cream); doc.rect(izq, yn, colW, 40, 'F');
-    doc.setFillColor(...FC.blue); doc.rect(izq, yn, 2.5, 40, 'F');
+    doc.setFillColor(...FC.cream); doc.rect(izq, yn, colW, 52, 'F');
+    doc.setFillColor(...FC.blue); doc.rect(izq, yn, 2.5, 52, 'F');
     doc.setFont(F.tit,'bold'); doc.setFontSize(6.6); doc.setTextColor(...FC.navy);
     doc.text('CÓMO SE LEEN LOS DÍAS', izq+9, yn+12, {charSpace:0.3});
     doc.setFont(F.txt,'normal'); doc.setFontSize(6.2); doc.setTextColor(...FC.ink);
     const ej = lenta
-      ? `Días = 365 ÷ rotación. ${lenta.region} vendió ${kgf(lenta.venta)} kg en 12 meses y hoy tiene ${kgf(lenta.kg)} kg: ${num(lenta.rot)} veces al año, o sea 365 ÷ ${num(lenta.rot)} = ${Math.round(lenta.dias)} días. Al ritmo del último año, ese es el tiempo que le duraría lo que tiene en bodega. Es una proyección, no un dato observado: cruza un flujo (12 meses de ventas) con una foto (hoy), e incluye el café On Float que aún no aterriza.`
-      : 'Días = 365 ÷ rotación, y rotación = kg vendidos en 12 meses ÷ kg en bodega hoy.';
+      ? `Días = 365 ÷ rotación. ${lenta.region} vendió ${kgf(lenta.venta)} kg en 12 meses y hoy tiene ${kgf(lenta.kg)} kg: ${num(lenta.rot)} veces al año, o sea 365 ÷ ${num(lenta.rot)} = ${Math.round(lenta.dias)} días. Es una proyección, no un dato observado: cruza un flujo (las ventas) con una foto (lo que hay hoy), e incluye el café On Float que aún no aterriza.`
+        + (T.dias6!=null ? ` La columna de 6 meses mide lo mismo con la mitad del periodo, anualizada: al ritmo del último semestre el total sería ${Math.round(T.dias6)} días en vez de ${Math.round(T.dias)}. Cuando la de 6 meses es menor, la venta viene acelerando.` : '')
+      : 'Días = 365 ÷ rotación, y rotación = kg vendidos en el periodo ÷ kg en bodega hoy.';
     doc.text(doc.splitTextToSize(ej, colW-18), izq+9, yn+22);
 
     // Columna derecha
@@ -4663,6 +4698,21 @@ async function exportControlInvPDF(btn){
     doc.text(doc.splitTextToSize(
       `${pc1(viejoKg,D.baseKg)} del inventario lleva más de 90 días en bodega, y de eso ${kgf(D.viejosLibreKg)} kg están libres: es el café sobre el que se puede actuar hoy.`,
       colW-20), der+10, y+26);
+    y += 42+14;
+
+    // Los lotes concretos, para que la portada no se quede en el agregado.
+    // El listado completo va en la hoja 3.
+    titSec('LOTES VIEJOS CON SALDO LIBRE', der, y, colW);
+    doc.autoTable(estiloTabla({
+      startY: y+10, tableWidth: colW, margin:{left:der, right:M},
+      head: [['ICO','Producto','Bodega','Días','Libre (kg)','Unidades']],
+      body: D.accionables.slice(0,6).map(a=>[a.ico, a.producto.slice(0,20), a.bodega, String(a.dias),
+              kgf(a.libreKg), invUdsCorto(a.caja?0:a.libreBags, a.caja?a.libreBags:0)]),
+      styles:{font:F.txt, fontSize:6.8, cellPadding:3.5, halign:'right', lineColor:FC.linea, lineWidth:.5, textColor:FC.ink},
+      headStyles:{font:F.tit, fontStyle:'bold', fillColor:[90,84,66], textColor:[255,255,255], halign:'right', fontSize:6.2},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 1:{halign:'left'},
+                    2:{halign:'left'}, 4:{textColor:FC.ok, fontStyle:'bold'}, 5:{fontSize:6.2, textColor:FC.gris}},
+    }));
 
     pie('Reservado = órdenes + contratos. Las alertas excluyen la serie SERVICE, igual que el Módulo 3 del dashboard.');
 
