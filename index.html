@@ -4589,6 +4589,20 @@ async function exportControlInvPDF(btn){
       },
     }));
 
+    // Cómo leer los días. Se arma con la región más lenta, así el ejemplo es
+    // siempre real y se actualiza solo.
+    const lenta = D.regiones.filter(r=>r.dias!=null).sort((a,b)=>b.dias-a.dias)[0];
+    let yn = doc.lastAutoTable.finalY + 10;
+    doc.setFillColor(...FC.cream); doc.rect(izq, yn, colW, 40, 'F');
+    doc.setFillColor(...FC.blue); doc.rect(izq, yn, 2.5, 40, 'F');
+    doc.setFont(F.tit,'bold'); doc.setFontSize(6.6); doc.setTextColor(...FC.navy);
+    doc.text('CÓMO SE LEEN LOS DÍAS', izq+9, yn+12, {charSpace:0.3});
+    doc.setFont(F.txt,'normal'); doc.setFontSize(6.2); doc.setTextColor(...FC.ink);
+    const ej = lenta
+      ? `Días = 365 ÷ rotación. ${lenta.region} vendió ${kgf(lenta.venta)} kg en 12 meses y hoy tiene ${kgf(lenta.kg)} kg: ${num(lenta.rot)} veces al año, o sea 365 ÷ ${num(lenta.rot)} = ${Math.round(lenta.dias)} días. Al ritmo del último año, ese es el tiempo que le duraría lo que tiene en bodega. Es una proyección, no un dato observado: cruza un flujo (12 meses de ventas) con una foto (hoy), e incluye el café On Float que aún no aterriza.`
+      : 'Días = 365 ÷ rotación, y rotación = kg vendidos en 12 meses ÷ kg en bodega hoy.';
+    doc.text(doc.splitTextToSize(ej, colW-18), izq+9, yn+22);
+
     // Columna derecha
     y = ky+kh+20;
     titSec('ALERTAS DE VEJEZ', der, y, colW);
