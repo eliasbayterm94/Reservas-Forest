@@ -1,7 +1,12 @@
 // =============================================================================
-// generarDrilldownPosiciones — v7 (sobre v4)
+// generarDrilldownPosiciones — v8 (sobre v4)
 //
-// CAMBIOS RESPECTO A v6:
+// CAMBIOS RESPECTO A v7:
+//   - First/Last Delivery se pasan a texto en la zona horaria de la hoja de
+//     contratos, no en UTC. Una fecha con hora (p. ej. 14-jul 8 p. m.) salia
+//     un dia despues (15-jul).
+//
+// CAMBIOS DE v7 RESPECTO A v6:
 //   - Si CONSOLIDADO CONTRATOS no carga, T/U/V ya no se dejan en la misma
 //     fila: se toma una foto por reserva antes de limpiar y se devuelven a
 //     cada reserva sus propios valores. Antes, si entraban o salian reservas,
@@ -488,6 +493,7 @@ function DRILL_buildContractDataMap_() {
     try {
       const contractsSS = SpreadsheetApp.openById(CONTRACTS_SPREADSHEET_ID);
       const sheet = contractsSS.getSheetByName("CONSOLIDADO CONTRATOS");
+      DRILL_TZ_ = contractsSS.getSpreadsheetTimeZone(); // v8: fechas en la zona de la hoja de contratos
 
       if (!sheet) {
         Logger.log("DRILL_buildContractDataMap_: hoja no encontrada");
@@ -743,13 +749,15 @@ function DRILL_asText_(v) {
   return v.toString().trim();
 }
 
+// Zona horaria de la hoja de contratos; se toma al leer CONSOLIDADO (v8)
+let DRILL_TZ_ = null;
+
 function DRILL_formatDate_(v) {
   if (!v || v === "") return "";
   if (!(v instanceof Date)) return v.toString().trim();
-  const d = String(v.getUTCDate()).padStart(2, "0");
-  const m = String(v.getUTCMonth() + 1).padStart(2, "0");
-  const y = v.getUTCFullYear();
-  return d + "/" + m + "/" + y;
+  // v8: se formatea en la zona horaria de la hoja de contratos (no en UTC):
+  // una fecha con hora, p. ej. 14-jul 8 p. m. en Colombia, en UTC ya es el 15.
+  return Utilities.formatDate(v, DRILL_TZ_ || Session.getScriptTimeZone(), "dd/MM/yyyy");
 }
 
 // =============================================================================
