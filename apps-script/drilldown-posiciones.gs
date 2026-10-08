@@ -1,7 +1,13 @@
 // =============================================================================
-// generarDrilldownPosiciones — v8 (sobre v4)
+// generarDrilldownPosiciones — v9 (sobre v4)
 //
-// CAMBIOS RESPECTO A v7:
+// CAMBIOS RESPECTO A v8:
+//   - First/Last Delivery se leen del texto que muestra la celda en CONSOLIDADO
+//     ("15-jul-2026"), no del valor Date. Segun la celda trajera hora o no, la
+//     conversion de zona horaria corria la fecha un dia (v6 y v8 fallaban en
+//     casos distintos).
+//
+// CAMBIOS DE v8 RESPECTO A v7 (reemplazado por v9):
 //   - First/Last Delivery se pasan a texto en la zona horaria de la hoja de
 //     contratos, no en UTC. Una fecha con hora (p. ej. 14-jul 8 p. m.) salia
 //     un dia despues (15-jul).
@@ -493,7 +499,6 @@ function DRILL_buildContractDataMap_() {
     try {
       const contractsSS = SpreadsheetApp.openById(CONTRACTS_SPREADSHEET_ID);
       const sheet = contractsSS.getSheetByName("CONSOLIDADO CONTRATOS");
-      DRILL_TZ_ = contractsSS.getSpreadsheetTimeZone(); // v8: fechas en la zona de la hoja de contratos
 
       if (!sheet) {
         Logger.log("DRILL_buildContractDataMap_: hoja no encontrada");
@@ -504,14 +509,18 @@ function DRILL_buildContractDataMap_() {
       if (lastRow < 2) return { map: {}, error: null };
 
       const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      // v9: las fechas se toman del TEXTO que muestra la celda ("15-jul-2026"),
+      // no del valor Date: segun traiga hora o no, la conversion de zona horaria
+      // las corria un dia hacia adelante o hacia atras.
+      const fechasTxt = sheet.getRange(2, 15, lastRow - 1, 2).getDisplayValues(); // O, P
       const map  = {};
 
-      data.forEach(row => {
+      data.forEach((row, i) => {
         const rawId         = row[0]  ? row[0].toString().trim() : "";
         const reference     = row[7];  // col H - Reference (cafe)
         const pricePerKg    = row[11]; // col L
-        const firstDelivery = row[14]; // col O
-        const lastDelivery  = row[15]; // col P
+        const firstDelivery = DRILL_fechaDeTexto_(fechasTxt[i][0], row[14]); // col O
+        const lastDelivery  = DRILL_fechaDeTexto_(fechasTxt[i][1], row[15]); // col P
 
         if (!rawId) return;
 
@@ -749,15 +758,25 @@ function DRILL_asText_(v) {
   return v.toString().trim();
 }
 
-// Zona horaria de la hoja de contratos; se toma al leer CONSOLIDADO (v8)
-let DRILL_TZ_ = null;
+// v9: texto de fecha como se ve en la celda → "dd/mm/yyyy".
+// Acepta "15-jul-2026", "15/07/2026", "15-07-2026" (meses en español o
+// inglés). Si no lo entiende, usa el valor Date de la celda.
+function DRILL_fechaDeTexto_(txt, valor) {
+  const s = String(txt || "").trim().toLowerCase().replace(/\./g, "");
+  if (!s) return valor instanceof Date ? DRILL_formatDate_(valor) : "";
+  const MESES = { ene:1, jan:1, feb:2, mar:3, abr:4, apr:4, may:5, jun:6, jul:7,
+                  ago:8, aug:8, sep:9, set:9, oct:10, nov:11, dic:12, dec:12 };
+  let m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*[-\/ ](\d{4})$/);
+  if (m && MESES[m[2]]) return `${m[1].padStart(2, "0")}/${String(MESES[m[2]]).padStart(2, "0")}/${m[3]}`;
+  m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (m) return `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${m[3]}`;
+  return valor instanceof Date ? DRILL_formatDate_(valor) : String(txt).trim();
+}
 
 function DRILL_formatDate_(v) {
   if (!v || v === "") return "";
   if (!(v instanceof Date)) return v.toString().trim();
-  // v8: se formatea en la zona horaria de la hoja de contratos (no en UTC):
-  // una fecha con hora, p. ej. 14-jul 8 p. m. en Colombia, en UTC ya es el 15.
-  return Utilities.formatDate(v, DRILL_TZ_ || Session.getScriptTimeZone(), "dd/MM/yyyy");
+  return Utilities.formatDate(v, Session.getScriptTimeZone(), "dd/MM/yyyy");
 }
 
 // =============================================================================
