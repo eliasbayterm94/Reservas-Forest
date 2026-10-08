@@ -4212,27 +4212,7 @@ function exportConsumoExcel(){
 }
 
 // Agrega el inventario (master_ico_full del JSON) por región: on spot / on float / reservado / libre en kg.
-function ctrlInvResumen(j){
-  const lots = (j && j.master_ico_full) || [];
-  const nuevo = () => ({spot:0, float:0, tot:0, res:0, free:0, n:0});
-  const byReg = {}; const T = nuevo();
-  lots.forEach(x=>{
-    const bs = Number(x.bag_size)||0;
-    const tkg = Number(x.total_kg)||0;
-    const rkg = ((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs;
-    const fkg = (Number(x.free_bags)||0)*bs;
-    const isFloat = /float/i.test(String(x.status||''));
-    const rg = normRegion(x.region||'—')||'—';
-    const g = byReg[rg]=byReg[rg]||nuevo();
-    g.tot+=tkg; g.res+=rkg; g.free+=fkg; g.n++; if(isFloat) g.float+=tkg; else g.spot+=tkg;
-    T.tot+=tkg; T.res+=rkg; T.free+=fkg; T.n++; if(isFloat) T.float+=tkg; else T.spot+=tkg;
-  });
-  const rows = Object.keys(byReg).map(rg=>Object.assign({region:rg}, byReg[rg])).sort((a,b)=>b.tot-a.tot);
-  // Reservado on-spot (base del dashboard) para reconciliar el 73%
-  let spotTot=0, spotRes=0;
-  lots.forEach(x=>{ if(!/float/i.test(String(x.status||''))){ const bs=Number(x.bag_size)||0; spotTot+=Number(x.total_kg)||0; spotRes+=((Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0))*bs; } });
-  return { rows, tot:T, lotes:lots.length, spotTot, spotRes };
-}
+// ctrlInvResumen se retiro: lo reemplaza ctrlInvDatos, mas abajo.
 // ── Valorización: la moneda del 'price' depende de la región ──
 // USA = USD/lb  ·  MENA = USD/kg  ·  EU = EUR/kg  ·  UK = GBP/kg  ·  AU = AUD/kg.
 // Tasas a USD fijas (edítalas aquí cuando cambien):
@@ -4318,287 +4298,529 @@ async function exportInventarioValorPDF(btn){
 // kg con separador de miles local (es-CO)
 function kgFmtLocal(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
 // Descarga el resumen ejecutivo de inventario en PDF (lee el mismo ?format=json del dashboard).
-// ── Alertas de vejez para el PDF ──
-// Reproduce lo que hace el Módulo 3 del dashboard: los mismos siete grupos de
-// días, el mismo criterio de "cambia de grupo en 7 días" y la misma exclusión
-// de la serie SERVICE. Si cambia allá, hay que cambiarlo aquí.
+// ════════ RESUMEN DE INVENTARIO EN PDF ════════
+// Una lámina de portada más tres hojas de detalle. Todo sale del mismo
+// ?format=json que alimenta el dashboard, así que los números coinciden con lo
+// que se ve en pantalla.
+
+// Paleta del Forest Design System (los mismos tokens del :root de la app).
+const FC = {
+  navy:[27,32,61], navyDark:[15,18,38], yellow:[231,226,68], cream:[245,244,238],
+  ink:[12,12,11], blue:[149,181,206], warn:[168,53,28], ok:[61,98,36],
+  gold:[156,152,16], gris:[90,90,85], gris2:[154,154,147], linea:[232,232,226],
+};
+// Un color por región, los mismos del dashboard, para que las bandas del
+// detalle se reconozcan de una.
+const FC_REGION = {
+  USA:[178,58,34], AU:[37,83,78], UK:[183,134,46], EU:[91,81,56], MENA:[140,44,25],
+};
+// Las fuentes de la marca. El PDF solo trae Helvetica de fábrica, así que se
+// bajan los TTF una vez y se registran; jsPDF los subsetea, el archivo no crece
+// casi nada. Si la descarga falla, se sigue con Helvetica y ya.
+const FC_FUENTES = [
+  {archivo:'Archivo_700Bold.ttf',      familia:'Archivo',    estilo:'bold',   npm:'archivo'},
+  {archivo:'Montserrat_400Regular.ttf',familia:'Montserrat', estilo:'normal', npm:'montserrat'},
+  {archivo:'Montserrat_700Bold.ttf',   familia:'Montserrat', estilo:'bold',   npm:'montserrat'},
+];
+let FC_CACHE = null;
+async function fcCargarFuentes(doc){
+  const fallback = {tit:'helvetica', txt:'helvetica'};
+  try{
+    if(!FC_CACHE){
+      FC_CACHE = {};
+      await Promise.all(FC_FUENTES.map(async f=>{
+        const url = `https://cdn.jsdelivr.net/npm/@expo-google-fonts/${f.npm}/${f.archivo}`;
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('no se pudo bajar '+f.archivo);
+        const u = new Uint8Array(await r.arrayBuffer());
+        let bin=''; for(let i=0;i<u.length;i+=8192) bin+=String.fromCharCode.apply(null,u.subarray(i,i+8192));
+        FC_CACHE[f.archivo] = btoa(bin);
+      }));
+    }
+    FC_FUENTES.forEach(f=>{
+      doc.addFileToVFS(f.archivo, FC_CACHE[f.archivo]);
+      doc.addFont(f.archivo, f.familia, f.estilo);
+    });
+    return {tit:'Archivo', txt:'Montserrat'};
+  }catch(e){
+    FC_CACHE = null;
+    console.warn('Fuentes de marca no disponibles, se usa Helvetica:', e);
+    return fallback;
+  }
+}
+
+// ── Grupos de días: los mismos siete del Módulo 3 ──
 const INV_AGE_BUCKETS = [
-  {hasta:30,    label:'0 - 30',    rgb:[76,122,61]},
-  {hasta:60,    label:'31 - 60',   rgb:[124,150,51]},
-  {hasta:90,    label:'61 - 90',   rgb:[173,154,46]},
-  {hasta:180,   label:'91 - 180',  rgb:[201,127,46]},
-  {hasta:240,   label:'180 - 240', rgb:[193,95,46]},
-  {hasta:365,   label:'241 - 365', rgb:[172,63,42]},
-  {hasta:1e9,   label:'+365',      rgb:[122,35,32]},
+  {desde:0,   hasta:30,  label:'0 - 30',    rgb:[76,122,61]},
+  {desde:31,  hasta:60,  label:'31 - 60',   rgb:[124,150,51]},
+  {desde:61,  hasta:90,  label:'61 - 90',   rgb:[173,154,46]},
+  {desde:91,  hasta:180, label:'91 - 180',  rgb:[201,127,46]},
+  {desde:181, hasta:240, label:'180 - 240', rgb:[193,95,46]},
+  {desde:241, hasta:365, label:'241 - 365', rgb:[172,63,42]},
+  {desde:366, hasta:1e9, label:'+365',      rgb:[122,35,32]},
 ];
 function invBucket(dias){
   for(let i=0;i<INV_AGE_BUCKETS.length;i++){ if(dias<=INV_AGE_BUCKETS[i].hasta) return i; }
   return INV_AGE_BUCKETS.length-1;
 }
-function ctrlInvVejez(j){
-  const lots = ((j && j.master_ico_full) || []).filter(x=>x.series!=='SERVICE');
-  const total = lots.reduce((s,x)=>s+(Number(x.total_kg)||0), 0);
-  const buckets = INV_AGE_BUCKETS.map(b=>({label:b.label, rgb:b.rgb, kg:0, libre:0, lotes:0}));
+// Cuántos días lleva el lote dentro del grupo en el que está hoy.
+function invDiasEnGrupo(dias){ return dias - INV_AGE_BUCKETS[invBucket(dias)].desde + 1; }
+function invEsCaja(bagSize){ return (Number(bagSize)||0) <= 24; }
+// "1.234 sacos + 56 cajas"
+function invUds(sacos, cajas){
+  const p=[];
+  if(sacos) p.push(Math.round(sacos).toLocaleString('es-CO')+(Math.round(sacos)===1?' saco':' sacos'));
+  if(cajas) p.push(Math.round(cajas).toLocaleString('es-CO')+(Math.round(cajas)===1?' caja':' cajas'));
+  return p.length ? p.join(' + ') : '0 sacos';
+}
+// Versión corta para celdas estrechas: "1.234 sc · 56 cj"
+function invUdsCorto(sacos, cajas){
+  const p=[];
+  if(sacos) p.push(Math.round(sacos).toLocaleString('es-CO')+' sc');
+  if(cajas) p.push(Math.round(cajas).toLocaleString('es-CO')+' cj');
+  return p.length ? p.join(' · ') : '—';
+}
+
+// ── Todo lo que necesita el PDF, calculado una sola vez ──
+function ctrlInvDatos(j){
+  const todos = (j && j.master_ico_full) || [];
+  const lots  = todos.filter(x=>x.series!=='SERVICE');   // base del Módulo 3
+
+  const nuevo = () => ({kg:0, spot:0, float:0, res:0, free:0, n:0,
+                        sac:0, caj:0, resSac:0, resCaj:0, freeSac:0, freeCaj:0, venta:0});
+  const reg = {}; const T = nuevo();
+  todos.forEach(x=>{
+    const bs = Number(x.bag_size)||0;
+    const kg = Number(x.total_kg)||0;
+    const bags = Number(x.total_bags)||0;
+    const rb = (Number(x.reserved_orders_bags)||0)+(Number(x.reserved_contracts_bags)||0);
+    const fb = Number(x.free_bags)||0;
+    const caja = invEsCaja(bs);
+    const rg = normRegion(x.region||'—')||'—';
+    const g = reg[rg] = reg[rg] || nuevo();
+    [g,T].forEach(o=>{
+      o.kg+=kg; o.res+=rb*bs; o.free+=fb*bs; o.n++;
+      if(/float/i.test(String(x.status||''))) o.float+=kg; else o.spot+=kg;
+      if(caja){ o.caj+=bags; o.resCaj+=rb; o.freeCaj+=fb; }
+      else    { o.sac+=bags; o.resSac+=rb; o.freeSac+=fb; }
+    });
+  });
+  // Ventas de los últimos 12 meses, por región, para la rotación
+  ((j && j.warehouse_category_sales)||[]).forEach(v=>{
+    const rg = normRegion(v.region||'—')||'—';
+    if(reg[rg]) reg[rg].venta += Number(v.kg)||0;
+    T.venta += Number(v.kg)||0;
+  });
+  // Ventana de 6 meses: top5_by_region ya la trae calculada, y va con la clave
+  // cruda de la región (USA, AU, UK...), no con la que devuelve normRegion.
+  const t5 = (j && j.top5_by_region) || {};
+  const venta6De = rgCrudo => {
+    const b = t5[rgCrudo] && t5[rgCrudo]['6'] && t5[rgCrudo]['6'].ALL;
+    return b ? (Number(b.total_kg)||0) : null;
+  };
+  const crudoDe = {};   // normRegion(x) -> clave cruda, para volver a top5
+  todos.forEach(x=>{ const n = normRegion(x.region||'—')||'—'; if(!crudoDe[n]) crudoDe[n] = x.region; });
+
+  let v6Total = 0, hay6 = false;
+  const regiones = Object.keys(reg).map(rg=>{
+    const g = reg[rg];
+    const rot = g.kg>0 ? g.venta/g.kg : null;
+    const v6 = venta6De(crudoDe[rg]);
+    if(v6!=null){ v6Total += v6; hay6 = true; }
+    // Se anualiza (x2) para poder compararla contra la de 12 meses.
+    const rot6 = (v6!=null && g.kg>0) ? (v6*2)/g.kg : null;
+    return Object.assign({region: rg==='Australia'?'AU':rg, rot, dias: rot>0?365/rot:null,
+                          venta6: v6, rot6, dias6: rot6>0?365/rot6:null}, g);
+  }).sort((a,b)=>b.kg-a.kg);
+  T.rot = T.kg>0 ? T.venta/T.kg : null;
+  T.dias = T.rot>0 ? 365/T.rot : null;
+  T.venta6 = hay6 ? v6Total : null;
+  T.rot6 = (T.venta6!=null && T.kg>0) ? (T.venta6*2)/T.kg : null;
+  T.dias6 = T.rot6>0 ? 365/T.rot6 : null;
+
+  // Distribución por grupo de días (sin SERVICE, igual que el Módulo 3)
+  const baseKg = lots.reduce((s,x)=>s+(Number(x.total_kg)||0),0);
+  const buckets = INV_AGE_BUCKETS.map(b=>({label:b.label, rgb:b.rgb, kg:0, libre:0, n:0, sac:0, caj:0}));
   let vejezPond = 0;
   lots.forEach(x=>{
-    const kg = Number(x.total_kg)||0;
-    const libre = (Number(x.free_bags)||0)*(Number(x.bag_size)||0);
-    const i = invBucket(Number(x.vejez_dias)||0);
-    buckets[i].kg += kg; buckets[i].libre += libre; buckets[i].lotes++;
+    const kg = Number(x.total_kg)||0, bs = Number(x.bag_size)||0;
+    const b = buckets[invBucket(Number(x.vejez_dias)||0)];
+    b.kg += kg; b.n++; b.libre += (Number(x.free_bags)||0)*bs;
+    if(invEsCaja(bs)) b.caj += Number(x.total_bags)||0; else b.sac += Number(x.total_bags)||0;
     vejezPond += (Number(x.vejez_dias)||0)*kg;
   });
-  // Cambian de grupo dentro de 7 días
-  let cambian=0, criticos=0;
-  lots.forEach(x=>{
+
+  const fila = x => {
+    const bs = Number(x.bag_size)||0, bags = Number(x.total_bags)||0, fb = Number(x.free_bags)||0;
     const v = Number(x.vejez_dias)||0;
-    const hoy = invBucket(v), luego = invBucket(v+7);
-    if(hoy===luego) return;
-    cambian++;
-    if(luego>=5) criticos++;          // cae en 241-365 o +365
-  });
-  // Ya pasados de 90 días, y cuánto de eso está libre (accionable)
-  const viejos = lots.filter(x=>(Number(x.vejez_dias)||0)>90);
-  const viejosLibreKg = viejos.reduce((s,x)=>s+((Number(x.free_bags)||0)*(Number(x.bag_size)||0)),0);
-  // MICROLOT con disponibilidad libre
-  const micro = lots.filter(x=>x.series==='MICROLOT' && (Number(x.free_bags)||0)>0);
-  const microKg = micro.reduce((s,x)=>s+((Number(x.free_bags)||0)*(Number(x.bag_size)||0)),0);
-  // Reservas con la entrega comprometida ya vencida
-  const venc = (j && j.reservas_vencidas) || [];
-  const venc150 = venc.filter(v=>(Number(v.dias_vencida)||0)>150).length;
-  // Bodegas ordenadas por el café viejo que tienen libre, que es sobre el que
-  // se puede actuar. Ordenar solo por vejez promedio pone arriba bodegas con
-  // cien kilos muy viejos, que no dicen nada en una diapositiva.
-  const porBodega = {};
-  lots.forEach(x=>{
-    const w = x.warehouse||'—';
-    const kg = Number(x.total_kg)||0;
-    const libre = (Number(x.free_bags)||0)*(Number(x.bag_size)||0);
-    const viejo = (Number(x.vejez_dias)||0) > 90;
-    const g = porBodega[w] = porBodega[w] || {kg:0, vw:0, viejoKg:0, viejoLibre:0};
-    g.kg += kg; g.vw += (Number(x.vejez_dias)||0)*kg;
-    if(viejo){ g.viejoKg += kg; g.viejoLibre += libre; }
-  });
-  const bodegas = Object.keys(porBodega)
-    .map(w=>({bodega:w, kg:porBodega[w].kg, viejoKg:porBodega[w].viejoKg,
-              viejoLibre:porBodega[w].viejoLibre,
-              vejez: porBodega[w].kg>0 ? porBodega[w].vw/porBodega[w].kg : 0}))
-    .filter(b=>b.viejoKg>0)
-    .sort((a,b)=>b.viejoLibre-a.viejoLibre || b.viejoKg-a.viejoKg);
-  // Los lotes concretos sobre los que se puede actuar: viejos y con saldo libre.
-  const accionables = lots
-    .filter(x=>(Number(x.vejez_dias)||0)>90 && (Number(x.free_bags)||0)>0)
-    .map(x=>({ico:x.ico, producto:x.product||'', bodega:x.warehouse||'', serie:x.series||'',
-              dias:Number(x.vejez_dias)||0,
-              libre:(Number(x.free_bags)||0)*(Number(x.bag_size)||0)}))
-    .sort((a,b)=>b.libre-a.libre || b.dias-a.dias);
-  // Rotación global: ventas de los últimos 12 meses sobre el inventario de hoy
-  const ventas12 = ((j && j.warehouse_category_sales) || []).reduce((s,r)=>s+(Number(r.kg)||0), 0);
-  const totalConServicio = ((j && j.master_ico_full)||[]).reduce((s,x)=>s+(Number(x.total_kg)||0),0);
-  const rot = totalConServicio>0 ? ventas12/totalConServicio : null;
+    const rg = normRegion(x.region||'')||'';
+    return {ico:x.ico, producto:x.product||'', categoria:x.series||'', region: rg==='Australia'?'AU':rg,
+            bodega:x.warehouse||'', dias:v, grupo:INV_AGE_BUCKETS[invBucket(v)].label,
+            grupo7:INV_AGE_BUCKETS[invBucket(v+7)].label, enGrupo:invDiasEnGrupo(v),
+            kg:Number(x.total_kg)||0, bags, caja:invEsCaja(bs),
+            libreBags:fb, libreKg:fb*bs};
+  };
+  // Cambian de grupo dentro de 7 días
+  const cambian = lots.filter(x=>{
+    const v=Number(x.vejez_dias)||0; return invBucket(v)!==invBucket(v+7);
+  }).map(fila).sort((a,b)=>b.dias-a.dias);
+  // Con más de 90 días
+  const viejos = lots.filter(x=>(Number(x.vejez_dias)||0)>90).map(fila)
+                     .sort((a,b)=>b.dias-a.dias);
+  const viejosLibreKg = viejos.reduce((s,r)=>s+r.libreKg,0);
+  // Los que además tienen saldo libre: son sobre los que se puede actuar hoy.
+  const accionables = viejos.filter(r=>r.libreKg>0).sort((a,b)=>b.libreKg-a.libreKg);
+  // MICROLOT con saldo libre
+  const micro = lots.filter(x=>x.series==='MICROLOT' && (Number(x.free_bags)||0)>0).map(fila);
+  const microKg = micro.reduce((s,r)=>s+r.libreKg,0);
+  // Reservas vencidas, con sus fechas
+  const venc = ((j && j.reservas_vencidas)||[]).map(v=>({
+    ico:v.ico, cliente:v.cliente||'', producto:v.product||'',
+    region:(r=>r==='Australia'?'AU':r)(normRegion(v.region||'')||''),
+    bodega:v.warehouse||'', bolsas:Number(v.bolsas)||0, caja:invEsCaja(v.bag_size),
+    kg:(Number(v.bolsas)||0)*(Number(v.bag_size)||0),
+    reserva:v.fecha_reserva||'', entrega:v.last_delivery||'', dias:Number(v.dias_vencida)||0,
+  })).sort((a,b)=>b.dias-a.dias);
+
   return {
-    total, buckets, bodegas,
-    vejezProm: total>0 ? vejezPond/total : 0,
-    cambian, criticos,
-    viejos: viejos.length, viejosLibreKg,
-    micro: micro.length, microKg,
-    vencidas: venc.length,
-    vencidasBolsas: venc.reduce((s,v)=>s+(Number(v.bolsas)||0),0),
-    vencidas150: venc150, accionables,
-    rotacion: rot, diasInv: (rot && rot>0) ? 365/rot : null,
+    regiones, T, lotes: todos.length, baseKg, buckets,
+    vejezProm: baseKg>0 ? vejezPond/baseKg : 0,
+    cambian, criticos: cambian.filter(c=>invBucket(c.dias+7)>=5).length,
+    viejos, viejosLibreKg, accionables, micro, microKg,
+    venc, venc150: venc.filter(v=>v.dias>150).length,
   };
 }
 
-// Resumen ejecutivo en una sola página, pensado para pegar en una presentación:
-// arriba el estatus de inventario actual, abajo las alertas de vejez. Los
-// números salen del mismo ?format=json que alimenta el dashboard, así que
-// siempre coinciden con lo que se ve en pantalla.
 async function exportControlInvPDF(btn){
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('El generador de PDF aún está cargando, intenta de nuevo en un momento.'); return; }
   const old = btn ? btn.innerHTML : ''; if(btn){ btn.disabled=true; btn.innerHTML='Generando…'; }
   try{
     const resp = await fetchConTiempo(CTRLINV_URL + '?format=json&_=' + Date.now(), 20000, 2);
     const j = JSON.parse(await resp.text());
-    const R = ctrlInvResumen(j);
-    if(!R.rows.length){ alert('El inventario no trae datos (master_ico_full vacío).'); return; }
-    const V = ctrlInvVejez(j);
+    const D = ctrlInvDatos(j);
+    if(!D.regiones.length){ alert('El inventario no trae datos (master_ico_full vacío).'); return; }
 
     const kgf = n => Math.round(Number(n)||0).toLocaleString('es-CO');
-    const pc  = (part,whole) => whole>0 ? Math.round(part/whole*100)+'%' : '—';
-    const pc1 = (part,whole) => whole>0 ? (part/whole*100).toFixed(1).replace('.',',')+'%' : '—';
+    const pc  = (p,w) => w>0 ? Math.round(p/w*100)+'%' : '—';
+    const pc1 = (p,w) => w>0 ? (p/w*100).toFixed(1).replace('.',',')+'%' : '—';
+    const num = (n,d) => (Number(n)||0).toFixed(d==null?2:d).replace('.',',');
     const fechaIso = (j.meta && j.meta.generated_for_date) || new Date().toISOString().slice(0,10);
     const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    const pf = fechaIso.split('-');
-    const fecha = pf.length===3 ? `${pf[2]} ${MESES[+pf[1]-1]} ${pf[0]}` : fechaIso;
+    const dmy = iso => { const p=String(iso||'').split('-'); return p.length===3 ? `${p[2]} ${MESES[+p[1]-1]} ${p[0].slice(2)}` : (iso||'—'); };
+    const fecha = dmy(fechaIso);
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+    // compress: con las fuentes de marca incrustadas el archivo pasa de ~1 MB a bastante menos.
+    const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4', compress:true});
+    const F = await fcCargarFuentes(doc);
     const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-    const NAVY=[27,32,61], YEL=[233,196,0], RED=[168,53,28], GRN=[44,122,44], GRIS=[122,110,82], LINEA=[221,217,207];
-    const M = 32;                       // margen
-    const T = R.tot;
+    const M = 32, T = D.T;
 
-    // ── Encabezado ──
-    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 54, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(255,255,255);
-    doc.text('CONTROL DE INVENTARIO', M, 25);
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(200,198,186);
-    doc.text('Café verde en bodega · USA, AU, UK, EU y MENA · incluye on spot y on float', M, 40);
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...YEL);
-    doc.text('Corte: '+fecha, W-M, 25, {align:'right'});
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(200,198,186);
-    doc.text(R.lotes+' lotes activos', W-M, 40, {align:'right'});
+    // Cabecera de marca. Las tablas largas se reparten en varias hojas, así que
+    // cada tabla deja aquí su título y lo vuelve a pintar en cada página.
+    let seccion = {tit:'', sub:'', nota:''};
+    const cabecera = (titulo, subtitulo) => {
+      doc.setFillColor(...FC.navy); doc.rect(0, 0, W, 50, 'F');
+      doc.setFillColor(...FC.yellow); doc.rect(0, 50, W, 2.5, 'F');
+      doc.setFont(F.tit,'bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+      doc.text(titulo, M, 24, {charSpace:0.6});
+      doc.setFont(F.txt,'normal'); doc.setFontSize(8); doc.setTextColor(...FC.blue);
+      doc.text(subtitulo, M, 39);
+      doc.setFont(F.tit,'bold'); doc.setFontSize(10); doc.setTextColor(...FC.yellow);
+      doc.text('Corte: '+fecha, W-M, 24, {align:'right'});
+      doc.setFont(F.txt,'normal'); doc.setFontSize(8); doc.setTextColor(...FC.blue);
+      doc.text(D.lotes+' lotes activos', W-M, 39, {align:'right'});
+    };
+    const pie = (nota) => {
+      doc.setDrawColor(...FC.linea); doc.setLineWidth(.5); doc.line(M, H-24, W-M, H-24);
+      doc.setFont(F.txt,'normal'); doc.setFontSize(6.5); doc.setTextColor(...FC.gris2);
+      if(nota) doc.text(nota, M, H-13);
+      doc.text('Forest Reservas · '+new Date().toLocaleString('es-CO'), W-M, H-13, {align:'right'});
+    };
+    const estiloTabla = (extra) => Object.assign({
+      styles:{font:F.txt, fontSize:7.5, cellPadding:4, halign:'right', lineColor:FC.linea, lineWidth:.5, textColor:FC.ink},
+      headStyles:{font:F.tit, fontStyle:'bold', fillColor:FC.navy, textColor:FC.yellow, halign:'right', fontSize:7},
+      footStyles:{font:F.tit, fontStyle:'bold', fillColor:FC.yellow, textColor:FC.navy, halign:'right'},
+      alternateRowStyles:{fillColor:[250,249,244]},
+      margin:{left:M, right:M, top:62, bottom:34},
+      // Cada hoja de una tabla larga lleva su cabecera y su pie.
+      didDrawPage:()=>{ if(seccion.tit){ cabecera(seccion.tit, seccion.sub); pie(seccion.nota); } },
+    }, extra||{});
+    const titSec = (txt, x, y, ancho) => {
+      doc.setFont(F.tit,'bold'); doc.setFontSize(9.5); doc.setTextColor(...FC.navy);
+      doc.text(txt, x, y, {charSpace:0.4});
+      doc.setDrawColor(...FC.yellow); doc.setLineWidth(2); doc.line(x, y+4, x+ancho, y+4);
+    };
 
-    // ── Fila de KPIs ──
+    // ═══════ HOJA 1 · LÁMINA ═══════
+    cabecera('CONTROL DE INVENTARIO', 'Café verde en bodega · USA, AU, UK, EU y MENA · incluye on spot y on float');
+
     const kpis = [
-      {t:'INVENTARIO TOTAL', v:kgf(T.tot)+' kg', s:kgf(T.spot)+' on spot · '+kgf(T.float)+' on float', c:NAVY},
-      {t:'RESERVADO',        v:kgf(T.res)+' kg', s:pc1(T.res,T.tot)+' del inventario',                 c:RED},
-      {t:'DISPONIBLE LIBRE', v:kgf(T.free)+' kg', s:pc1(T.free,T.tot)+' sin comprometer',              c:GRN},
-      // Sin el signo "≈": no existe en la fuente del PDF y sale como basura.
-      {t:'ROTACIÓN GLOBAL',  v:(V.rotacion!=null?V.rotacion.toFixed(2).replace('.',','):'—')+'x/año',
-                             s:(V.diasInv!=null?Math.round(V.diasInv)+' días de inventario':'—'), c:NAVY},
-      {t:'VEJEZ PROMEDIO',   v:Math.round(V.vejezProm)+' días', s:'ponderada por kg',                  c:NAVY},
+      {t:'INVENTARIO TOTAL', v:kgf(T.kg)+' kg',   s:invUds(T.sac,T.caj),              x:kgf(T.spot)+' on spot · '+kgf(T.float)+' on float', c:FC.navy},
+      {t:'RESERVADO',        v:kgf(T.res)+' kg',  s:invUds(T.resSac,T.resCaj),        x:pc1(T.res,T.kg)+' del inventario', c:FC.warn},
+      {t:'DISPONIBLE LIBRE', v:kgf(T.free)+' kg', s:invUds(T.freeSac,T.freeCaj),      x:pc1(T.free,T.kg)+' sin comprometer', c:FC.ok},
+      {t:'ROTACIÓN GLOBAL',  v:num(T.rot)+'x/año',s:Math.round(T.dias)+' días de inventario', x:kgf(T.venta)+' kg vendidos en 12 m', c:FC.navy},
+      {t:'VEJEZ PROMEDIO',   v:Math.round(D.vejezProm)+' días', s:'ponderada por kg', x:kgf(D.baseKg)+' kg sin SERVICE', c:FC.navy},
     ];
-    const kw = (W-M*2-4*8)/5, ky = 68, kh = 58;
+    const kw=(W-M*2-4*7)/5, ky=64, kh=62;
     kpis.forEach((k,i)=>{
-      const x = M + i*(kw+8);
-      doc.setFillColor(245,244,238); doc.rect(x, ky, kw, kh, 'F');
-      doc.setFillColor(...k.c); doc.rect(x, ky, 3, kh, 'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(...GRIS);
-      doc.text(k.t, x+10, ky+14);
-      doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...k.c);
-      doc.text(k.v, x+10, ky+35);
-      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
-      doc.text(k.s, x+10, ky+49);
+      const x = M+i*(kw+7);
+      doc.setFillColor(...FC.cream); doc.rect(x, ky, kw, kh, 'F');
+      doc.setFillColor(...k.c); doc.rect(x, ky, 2.5, kh, 'F');
+      doc.setFont(F.txt,'normal'); doc.setFontSize(6.2); doc.setTextColor(...FC.gris);
+      doc.text(k.t, x+9, ky+13, {charSpace:0.3});
+      doc.setFont(F.tit,'bold'); doc.setFontSize(14); doc.setTextColor(...k.c);
+      doc.text(k.v, x+9, ky+32);
+      doc.setFont(F.txt,'bold'); doc.setFontSize(6.6); doc.setTextColor(...FC.ink);
+      doc.text(k.s, x+9, ky+44);
+      doc.setFont(F.txt,'normal'); doc.setFontSize(6); doc.setTextColor(...FC.gris);
+      doc.text(k.x, x+9, ky+54);
     });
 
-    // ── Columna izquierda: estado por región ──
-    const colW = (W-M*2-18)/2, izq = M, der = M+colW+18;
-    let yTit = ky+kh+22;
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
-    doc.text('ESTADO POR REGIÓN', izq, yTit);
-    doc.setDrawColor(...RED); doc.setLineWidth(1.5); doc.line(izq, yTit+4, izq+colW, yTit+4);
+    const colW=(W-M*2-16)/2, izq=M, der=M+colW+16;
+    let y = ky+kh+20;
+    titSec('ESTADO POR REGIÓN', izq, y, colW);
+    doc.autoTable(estiloTabla({
+      startY: y+10, tableWidth: colW, margin:{left:izq, right:W-izq-colW},
+      head: [['Región','Total (kg)','Unidades','Reservado','Libre','% Res.']],
+      body: D.regiones.map(r=>[r.region, kgf(r.kg), invUdsCorto(r.sac,r.caj),
+              kgf(r.res)+'\n'+invUdsCorto(r.resSac,r.resCaj),
+              kgf(r.free)+'\n'+invUdsCorto(r.freeSac,r.freeCaj), pc(r.res,r.kg)]),
+      foot: [['TOTAL', kgf(T.kg), invUdsCorto(T.sac,T.caj),
+              kgf(T.res)+'\n'+invUdsCorto(T.resSac,T.resCaj),
+              kgf(T.free)+'\n'+invUdsCorto(T.freeSac,T.freeCaj), pc(T.res,T.kg)]],
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 2:{fontSize:6.2, textColor:FC.gris},
+                    3:{textColor:FC.warn, fontSize:6.8}, 4:{textColor:FC.ok, fontSize:6.8}},
+    }));
 
-    doc.autoTable({
-      startY: yTit+12,
-      head: [['Región','Total (kg)','Reservado','Libre','% Res.']],
-      // El dashboard rotula esa región "AU", no "Australia": que la lámina diga lo mismo.
-      body: R.rows.map(r=>[(r.region==='Australia'?'AU':r.region), kgf(r.tot), kgf(r.res), kgf(r.free), pc(r.res,r.tot)]),
-      foot: [['TOTAL', kgf(T.tot), kgf(T.res), kgf(T.free), pc(T.res,T.tot)]],
-      styles:{fontSize:8.5, cellPadding:4.5, halign:'right', lineColor:LINEA, lineWidth:.5},
-      headStyles:{fillColor:NAVY, textColor:[231,226,68], halign:'right', fontStyle:'bold', fontSize:7.5},
-      footStyles:{fillColor:YEL, textColor:NAVY, fontStyle:'bold', halign:'right'},
-      alternateRowStyles:{fillColor:[248,247,242]},
-      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}, 2:{textColor:RED}, 3:{textColor:GRN}},
-      margin:{left:izq, right:W-izq-colW},
-      tableWidth: colW,
-    });
+    let y2 = doc.lastAutoTable.finalY + 16;
+    titSec('ROTACIÓN POR REGIÓN', izq, y2, colW);
+    const dias = v => v!=null ? Math.round(v)+' d' : '—';
+    const rotx = v => v!=null ? num(v)+'x' : '—';
+    doc.autoTable(estiloTabla({
+      startY: y2+10, tableWidth: colW, margin:{left:izq, right:W-izq-colW},
+      head: [[{content:'', colSpan:2},
+              {content:'ÚLTIMOS 12 MESES', colSpan:2, styles:{halign:'center'}},
+              {content:'ÚLTIMOS 6 MESES (anualizado)', colSpan:2, styles:{halign:'center', fillColor:FC.navyDark}}],
+             ['Región','Inventario','Vendido','Rot · días','Vendido','Rot · días']],
+      body: D.regiones.map(r=>[r.region, kgf(r.kg), kgf(r.venta),
+              rotx(r.rot)+' · '+dias(r.dias),
+              r.venta6!=null?kgf(r.venta6):'—',
+              rotx(r.rot6)+' · '+dias(r.dias6)]),
+      foot: [['TOTAL', kgf(T.kg), kgf(T.venta), rotx(T.rot)+' · '+dias(T.dias),
+              T.venta6!=null?kgf(T.venta6):'—', rotx(T.rot6)+' · '+dias(T.dias6)]],
+      styles:{font:F.txt, fontSize:6.8, cellPadding:3.5, halign:'right', lineColor:FC.linea, lineWidth:.5, textColor:FC.ink},
+      headStyles:{font:F.tit, fontStyle:'bold', fillColor:FC.navy, textColor:FC.yellow, halign:'right', fontSize:6.2},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 3:{fontStyle:'bold'}, 5:{fontStyle:'bold'}},
+      didParseCell:(d)=>{
+        if(d.section!=='body') return;
+        const r = D.regiones[d.row.index];
+        if(!r) return;
+        // Más de 120 días a 12 meses: se marca.
+        if(d.column.index===3 && r.dias!=null && r.dias>120) d.cell.styles.textColor=FC.warn;
+        // La columna de 6 meses va en azul de marca: es la lectura del ritmo de hoy.
+        if(d.column.index===5) d.cell.styles.textColor = (r.dias6!=null && r.dias!=null && r.dias6 < r.dias) ? FC.ok : FC.warn;
+      },
+    }));
 
-    // Bodegas más envejecidas, debajo de la tabla de regiones
-    let yb = doc.lastAutoTable.finalY + 16;
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
-    doc.text('DÓNDE ESTÁ EL CAFÉ VIEJO', izq, yb);
-    doc.setDrawColor(...RED); doc.setLineWidth(1.5); doc.line(izq, yb+4, izq+colW, yb+4);
-    doc.autoTable({
-      startY: yb+12,
-      head: [['Bodega','+90 días (kg)','De eso, libre','Vejez prom.']],
-      body: V.bodegas.slice(0,5).map(b=>[b.bodega, kgf(b.viejoKg), kgf(b.viejoLibre), Math.round(b.vejez)+' días']),
-      styles:{fontSize:8.5, cellPadding:4.5, halign:'right', lineColor:LINEA, lineWidth:.5},
-      headStyles:{fillColor:[90,84,66], textColor:[255,255,255], halign:'right', fontStyle:'bold', fontSize:7.5},
-      alternateRowStyles:{fillColor:[248,247,242]},
-      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}, 2:{textColor:GRN}},
-      margin:{left:izq, right:W-izq-colW},
-      tableWidth: colW,
-    });
+    // Cómo leer los días. Se arma con la región más lenta, así el ejemplo es
+    // siempre real y se actualiza solo.
+    const lenta = D.regiones.filter(r=>r.dias!=null).sort((a,b)=>b.dias-a.dias)[0];
+    let yn = doc.lastAutoTable.finalY + 10;
+    doc.setFillColor(...FC.cream); doc.rect(izq, yn, colW, 52, 'F');
+    doc.setFillColor(...FC.blue); doc.rect(izq, yn, 2.5, 52, 'F');
+    doc.setFont(F.tit,'bold'); doc.setFontSize(6.6); doc.setTextColor(...FC.navy);
+    doc.text('CÓMO SE LEEN LOS DÍAS', izq+9, yn+12, {charSpace:0.3});
+    doc.setFont(F.txt,'normal'); doc.setFontSize(6.2); doc.setTextColor(...FC.ink);
+    const ej = lenta
+      ? `Días = 365 ÷ rotación. ${lenta.region} vendió ${kgf(lenta.venta)} kg en 12 meses y hoy tiene ${kgf(lenta.kg)} kg: ${num(lenta.rot)} veces al año, o sea 365 ÷ ${num(lenta.rot)} = ${Math.round(lenta.dias)} días. Es una proyección, no un dato observado: cruza un flujo (las ventas) con una foto (lo que hay hoy), e incluye el café On Float que aún no aterriza.`
+        + (T.dias6!=null ? ` La columna de 6 meses mide lo mismo con la mitad del periodo, anualizada: al ritmo del último semestre el total sería ${Math.round(T.dias6)} días en vez de ${Math.round(T.dias)}. Cuando la de 6 meses es menor, la venta viene acelerando.` : '')
+      : 'Días = 365 ÷ rotación, y rotación = kg vendidos en el periodo ÷ kg en bodega hoy.';
+    doc.text(doc.splitTextToSize(ej, colW-18), izq+9, yn+22);
 
-    // ── Columna derecha: alertas de vejez ──
-    yTit = ky+kh+22;
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
-    doc.text('ALERTAS DE VEJEZ', der, yTit);
-    doc.setDrawColor(...RED); doc.setLineWidth(1.5); doc.line(der, yTit+4, der+colW, yTit+4);
-
-    // Barra apilada por grupo de días
-    let y = yTit+22;
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
-    doc.text('Distribución por días en bodega · '+kgf(V.total)+' kg (sin la serie SERVICE)', der, y);
+    // Columna derecha
+    y = ky+kh+20;
+    titSec('ALERTAS DE VEJEZ', der, y, colW);
+    y += 20;
+    doc.setFont(F.txt,'normal'); doc.setFontSize(6.8); doc.setTextColor(...FC.gris);
+    doc.text('Distribución por días en bodega · '+kgf(D.baseKg)+' kg (sin la serie SERVICE)', der, y);
     y += 8;
-    const barH = 22;
-    let x0 = der;
-    V.buckets.forEach(b=>{
+    let x0 = der; const barH = 20;
+    D.buckets.forEach(b=>{
       if(!(b.kg>0)) return;
-      const w = colW * (b.kg/V.total);
+      const w = colW*(b.kg/D.baseKg);
       doc.setFillColor(...b.rgb); doc.rect(x0, y, w, barH, 'F');
-      if(w > 26){
-        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
-        doc.text(Math.round(b.kg/V.total*100)+'%', x0+w/2, y+14.5, {align:'center'});
-      }
+      if(w>24){ doc.setFont(F.txt,'bold'); doc.setFontSize(7); doc.setTextColor(255,255,255);
+                doc.text(Math.round(b.kg/D.baseKg*100)+'%', x0+w/2, y+13.5, {align:'center'}); }
       x0 += w;
     });
-    y += barH + 12;
-    // Leyenda en dos filas
-    doc.setFontSize(6.8);
-    V.buckets.forEach((b,i)=>{
-      const col = i%4, fila = Math.floor(i/4);
-      const lx = der + col*(colW/4), ly = y + fila*11;
-      doc.setFillColor(...b.rgb); doc.rect(lx, ly-5.5, 6, 6, 'F');
-      doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      doc.text(`${b.label}  ${kgf(b.kg)} kg`, lx+9, ly);
+    y += barH+11;
+    doc.setFontSize(6);
+    D.buckets.forEach((b,i)=>{
+      const col=i%4, f=Math.floor(i/4), lx=der+col*(colW/4), ly=y+f*13;
+      doc.setFillColor(...b.rgb); doc.rect(lx, ly-5, 5.5, 5.5, 'F');
+      doc.setFont(F.txt,'bold'); doc.setTextColor(...FC.ink);
+      doc.text(b.label, lx+8, ly);
+      doc.setFont(F.txt,'normal'); doc.setTextColor(...FC.gris);
+      doc.text(kgf(b.kg)+' kg · '+invUdsCorto(b.sac,b.caj), lx+8, ly+6.5);
     });
-    y += 30;
+    y += 36;
 
-    // Las cuatro alertas, en fichas
     const alertas = [
-      {n:String(V.cambian),  t:'cambian de grupo en 7 días', s:V.criticos+' quedan en crítico',           c:[201,127,46]},
-      {n:String(V.viejos),   t:'lotes con más de 90 días',   s:kgf(V.viejosLibreKg)+' kg libres accionables', c:RED},
-      {n:String(V.micro),    t:'MICROLOT con saldo libre',   s:kgf(V.microKg)+' kg sin comprometer',      c:[122,35,32]},
-      {n:String(V.vencidas), t:'reservas vencidas',          s:V.vencidas150+' llevan más de 150 días',   c:[90,84,66]},
+      {n:String(D.cambian.length), t:'cambian de grupo en 7 días', s:D.criticos+' quedan en crítico', d:'hoja 2', c:[201,127,46]},
+      {n:String(D.viejos.length),  t:'lotes con más de 90 días',   s:kgf(D.viejosLibreKg)+' kg libres', d:'hoja 3', c:FC.warn},
+      {n:String(D.micro.length),   t:'MICROLOT con saldo libre',   s:kgf(D.microKg)+' kg sin comprometer', d:'', c:[122,35,32]},
+      {n:String(D.venc.length),    t:'reservas vencidas',          s:D.venc150+' de más de 150 días', d:'hoja 4', c:FC.navy},
     ];
-    const aw = (colW-3*6)/4;
+    const aw=(colW-3*6)/4;
     alertas.forEach((a,i)=>{
-      const x = der + i*(aw+6);
-      doc.setFillColor(245,244,238); doc.rect(x, y, aw, 54, 'F');
-      doc.setFillColor(...a.c); doc.rect(x, y, aw, 3, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...a.c);
-      doc.text(a.n, x+aw/2, y+26, {align:'center'});
-      doc.setFont('helvetica','bold'); doc.setFontSize(6.6); doc.setTextColor(60,60,60);
-      doc.text(doc.splitTextToSize(a.t, aw-8), x+aw/2, y+36, {align:'center'});
-      doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(...GRIS);
-      doc.text(doc.splitTextToSize(a.s, aw-8), x+aw/2, y+48, {align:'center'});
+      const x = der+i*(aw+6);
+      doc.setFillColor(...FC.cream); doc.rect(x, y, aw, 58, 'F');
+      doc.setFillColor(...a.c); doc.rect(x, y, aw, 2.5, 'F');
+      doc.setFont(F.tit,'bold'); doc.setFontSize(17); doc.setTextColor(...a.c);
+      doc.text(a.n, x+aw/2, y+24, {align:'center'});
+      doc.setFont(F.txt,'bold'); doc.setFontSize(6); doc.setTextColor(...FC.ink);
+      doc.text(doc.splitTextToSize(a.t, aw-8), x+aw/2, y+34, {align:'center'});
+      doc.setFont(F.txt,'normal'); doc.setFontSize(5.6); doc.setTextColor(...FC.gris);
+      doc.text(doc.splitTextToSize(a.s, aw-8), x+aw/2, y+46, {align:'center'});
+      if(a.d){ doc.setFont(F.txt,'bold'); doc.setFontSize(5.4); doc.setTextColor(...FC.blue);
+               doc.text('ver '+a.d, x+aw/2, y+54, {align:'center'}); }
     });
-    y += 54 + 16;
+    y += 58+14;
 
-    // Lectura en una línea, para quien solo mire la diapositiva
-    const pctViejo = V.total>0 ? (V.buckets[3].kg+V.buckets[4].kg+V.buckets[5].kg+V.buckets[6].kg)/V.total*100 : 0;
-    const libreViejo = V.buckets[3].libre+V.buckets[4].libre+V.buckets[5].libre+V.buckets[6].libre;
-    doc.setFillColor(252,251,247); doc.rect(der, y, colW, 40, 'F');
-    doc.setDrawColor(...LINEA); doc.setLineWidth(.5); doc.rect(der, y, colW, 40, 'S');
-    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...NAVY);
-    doc.text('LECTURA', der+10, y+14);
-    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(60,60,60);
-    const lectura = `${pc1(pctViejo,100)} del inventario lleva más de 90 días en bodega, y de eso ${kgf(libreViejo)} kg están libres: es el café sobre el que se puede actuar hoy.`;
-    doc.text(doc.splitTextToSize(lectura, colW-20), der+10, y+26);
-    y += 40 + 16;
+    const viejoKg = D.buckets.slice(3).reduce((s,b)=>s+b.kg,0);
+    doc.setFillColor(252,251,247); doc.rect(der, y, colW, 42, 'F');
+    doc.setDrawColor(...FC.linea); doc.setLineWidth(.5); doc.rect(der, y, colW, 42, 'S');
+    doc.setFillColor(...FC.yellow); doc.rect(der, y, 2.5, 42, 'F');
+    doc.setFont(F.tit,'bold'); doc.setFontSize(7); doc.setTextColor(...FC.navy);
+    doc.text('LECTURA', der+10, y+14, {charSpace:0.3});
+    doc.setFont(F.txt,'normal'); doc.setFontSize(7); doc.setTextColor(...FC.ink);
+    doc.text(doc.splitTextToSize(
+      `${pc1(viejoKg,D.baseKg)} del inventario lleva más de 90 días en bodega, y de eso ${kgf(D.viejosLibreKg)} kg están libres: es el café sobre el que se puede actuar hoy.`,
+      colW-20), der+10, y+26);
+    y += 42+14;
 
-    // Los lotes concretos, para que la diapositiva no se quede en el agregado
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
-    doc.text('LOTES VIEJOS CON SALDO LIBRE', der, y);
-    doc.setDrawColor(...RED); doc.setLineWidth(1.5); doc.line(der, y+4, der+colW, y+4);
-    doc.autoTable({
-      startY: y+12,
-      head: [['ICO','Producto','Bodega','Días','Libre (kg)']],
-      body: V.accionables.slice(0,6).map(a=>[a.ico, a.producto.slice(0,22), a.bodega, String(a.dias), kgf(a.libre)]),
-      styles:{fontSize:8, cellPadding:4, halign:'right', lineColor:LINEA, lineWidth:.5},
-      headStyles:{fillColor:[90,84,66], textColor:[255,255,255], halign:'right', fontStyle:'bold', fontSize:7.5},
-      alternateRowStyles:{fillColor:[248,247,242]},
-      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:NAVY}, 1:{halign:'left'}, 2:{halign:'left'}, 4:{textColor:GRN}},
-      margin:{left:der, right:M},
-      tableWidth: colW,
+    // Los lotes concretos, para que la portada no se quede en el agregado.
+    // El listado completo va en la hoja 3.
+    titSec('LOTES VIEJOS CON SALDO LIBRE', der, y, colW);
+    doc.autoTable(estiloTabla({
+      startY: y+10, tableWidth: colW, margin:{left:der, right:M},
+      head: [['ICO','Producto','Bodega','Días','Libre (kg)','Unidades']],
+      body: D.accionables.slice(0,6).map(a=>[a.ico, a.producto.slice(0,20), a.bodega, String(a.dias),
+              kgf(a.libreKg), invUdsCorto(a.caja?0:a.libreBags, a.caja?a.libreBags:0)]),
+      styles:{font:F.txt, fontSize:6.8, cellPadding:3.5, halign:'right', lineColor:FC.linea, lineWidth:.5, textColor:FC.ink},
+      headStyles:{font:F.tit, fontStyle:'bold', fillColor:[90,84,66], textColor:[255,255,255], halign:'right', fontSize:6.2},
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 1:{halign:'left'},
+                    2:{halign:'left'}, 4:{textColor:FC.ok, fontStyle:'bold'}, 5:{fontSize:6.2, textColor:FC.gris}},
+    }));
+
+    pie('Reservado = órdenes + contratos. Las alertas excluyen la serie SERVICE, igual que el Módulo 3 del dashboard.');
+
+    // ═══════ HOJA 2 · CAMBIAN DE GRUPO ═══════
+    doc.addPage();
+    seccion = {tit:'CAMBIAN DE GRUPO ESTA SEMANA',
+               sub:'Lotes que pasan al siguiente rango de días dentro de los próximos 7 días',
+               nota:'Criterio del Módulo 3: el lote cambia de rango si su vejez + 7 días cae en el grupo siguiente.'};
+    cabecera(seccion.tit, seccion.sub);
+    titSec('DETALLE', M, 70, W-M*2);
+    doc.autoTable(estiloTabla({
+      startY: 80,
+      head: [['ICO','Producto','Categoría','Región','Bodega','Días hoy','Grupo hoy','Pasa a','KG','Unidades','Libre (kg)']],
+      body: D.cambian.map(r=>[r.ico, r.producto.slice(0,26), r.categoria, r.region, r.bodega,
+              String(r.dias), r.grupo, r.grupo7, kgf(r.kg),
+              invUdsCorto(r.caja?0:r.bags, r.caja?r.bags:0), kgf(r.libreKg)]),
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 1:{halign:'left'},
+                    2:{halign:'left', fontSize:6.5}, 3:{halign:'left'}, 4:{halign:'left'},
+                    6:{halign:'left', fontSize:6.5}, 7:{halign:'left', fontSize:6.5, fontStyle:'bold'},
+                    10:{textColor:FC.ok}},
+      didParseCell:(d)=>{
+        if(d.section==='body' && d.column.index===7){
+          const r = D.cambian[d.row.index];
+          if(r && invBucket(r.dias+7)>=5) d.cell.styles.textColor = FC.warn;
+        }
+      },
+    }));
+
+    // ═══════ HOJA 3 · MÁS DE 90 DÍAS, POR REGIÓN ═══════
+    doc.addPage();
+    seccion = {tit:'CAFÉ CON MÁS DE 90 DÍAS',
+               sub:'Por región, ordenado por días en bodega · en color los rangos de 241 - 365 y +365 días',
+               nota:'"En el grupo" = días que lleva el lote dentro de su rango actual. Cada región lleva el color que usa el dashboard.'};
+    cabecera(seccion.tit, seccion.sub);
+    let yy = 70;
+    const porRegion = {};
+    D.viejos.forEach(r=>{ (porRegion[r.region] = porRegion[r.region] || []).push(r); });
+    Object.keys(porRegion).sort((a,b)=>
+      porRegion[b].reduce((s,r)=>s+r.kg,0) - porRegion[a].reduce((s,r)=>s+r.kg,0)
+    ).forEach(rg=>{
+      const filas = porRegion[rg];
+      const kgR = filas.reduce((s,r)=>s+r.kg,0), libreR = filas.reduce((s,r)=>s+r.libreKg,0);
+      const colorRg = FC_REGION[rg] || FC.navyDark;
+      doc.autoTable(estiloTabla({
+        startY: yy,
+        head: [[{content:`${rg} — ${filas.length} lotes · ${kgf(kgR)} kg · ${kgf(libreR)} kg libres`,
+                 colSpan:9, styles:{halign:'left', fillColor:colorRg, textColor:[255,255,255], fontSize:9}}],
+               ['ICO','Producto','Categoría','Bodega','Días','Grupo','En el grupo','KG','Libre (kg)']],
+        body: filas.map(r=>[r.ico, r.producto.slice(0,24), r.categoria, r.bodega, String(r.dias),
+                r.grupo, r.enGrupo+' d', kgf(r.kg), kgf(r.libreKg)]),
+        headStyles:{font:F.tit, fontStyle:'bold', fillColor:colorRg, textColor:[255,255,255], halign:'right', fontSize:7},
+        columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 1:{halign:'left'},
+                      2:{halign:'left', fontSize:6.5}, 3:{halign:'left'}, 5:{halign:'left', fontSize:6.5},
+                      8:{textColor:FC.ok}},
+        didParseCell:(d)=>{
+          if(d.section!=='body') return;
+          const r = filas[d.row.index];
+          // Los dos rangos más viejos van en su propio color, el mismo de la
+          // barra de vejez. Sin sombrear la fila: solo el dato que importa.
+          if(r && invBucket(r.dias)>=5){
+            const c = INV_AGE_BUCKETS[invBucket(r.dias)].rgb;
+            if(d.column.index===4 || d.column.index===5){
+              d.cell.styles.textColor = c;
+              d.cell.styles.fontStyle = 'bold';
+            }
+          }
+        },
+      }));
+      yy = doc.lastAutoTable.finalY + 14;
+      if(yy > H-110){ doc.addPage(); cabecera(seccion.tit, seccion.sub); pie(seccion.nota); yy = 70; }
     });
 
-    // ── Pie ──
-    doc.setDrawColor(...LINEA); doc.setLineWidth(.5); doc.line(M, H-26, W-M, H-26);
-    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(150);
-    doc.text('Reservado = órdenes + contratos. Las alertas excluyen la serie SERVICE, igual que el Módulo 3 del dashboard.', M, H-15);
-    doc.text('Forest Reservas · generado '+new Date().toLocaleString('es-CO'), W-M, H-15, {align:'right'});
+    // ═══════ HOJA 4 · RESERVAS VENCIDAS ═══════
+    doc.addPage();
+    seccion = {tit:'RESERVAS VENCIDAS',
+               sub:'Posiciones abiertas cuya entrega comprometida ya pasó · ordenadas por días de atraso',
+               nota:'Fecha reserva y entrega comprometida salen del Drilldown de Posiciones. Vencida = la entrega comprometida ya pasó.'};
+    cabecera(seccion.tit, seccion.sub);
+    const vTot = D.venc.reduce((s,v)=>s+v.kg,0);
+    const vSac = D.venc.filter(v=>!v.caja).reduce((s,v)=>s+v.bolsas,0);
+    const vCaj = D.venc.filter(v=>v.caja).reduce((s,v)=>s+v.bolsas,0);
+    titSec(`DETALLE — ${D.venc.length} reservas · ${kgf(vTot)} kg · ${invUds(vSac,vCaj)}`, M, 70, W-M*2);
+    doc.autoTable(estiloTabla({
+      startY: 80,
+      head: [['Cliente','ICO','Producto','Región','Bodega','Cantidad','KG','Fecha reserva','Entrega comprometida','Días vencida']],
+      body: D.venc.map(v=>[v.cliente.slice(0,24), v.ico, v.producto.slice(0,22), v.region, v.bodega,
+              invUdsCorto(v.caja?0:v.bolsas, v.caja?v.bolsas:0), kgf(v.kg),
+              dmy(v.reserva), dmy(v.entrega), String(v.dias)]),
+      columnStyles:{0:{halign:'left', fontStyle:'bold', textColor:FC.navy}, 1:{halign:'left'},
+                    2:{halign:'left'}, 3:{halign:'left'}, 4:{halign:'left'},
+                    7:{halign:'center', fontSize:6.8}, 8:{halign:'center', fontSize:6.8},
+                    9:{fontStyle:'bold'}},
+      didParseCell:(d)=>{
+        if(d.section==='body' && d.column.index===9){
+          const v = D.venc[d.row.index];
+          if(v && v.dias>150){ d.cell.styles.textColor=FC.warn; }
+          else if(v && v.dias>60){ d.cell.styles.textColor=[156,94,21]; }
+        }
+      },
+    }));
+
+    // Numerar las hojas al final, que ya se sabe cuántas son
+    const n = doc.internal.getNumberOfPages();
+    for(let p=1; p<=n; p++){
+      doc.setPage(p);
+      doc.setFont(F.txt,'normal'); doc.setFontSize(6.5); doc.setTextColor(...FC.gris2);
+      doc.text(`${p} / ${n}`, W/2, H-13, {align:'center'});
+    }
 
     doc.save(`Forest_Inventario_${fechaIso}.pdf`);
   }catch(err){
