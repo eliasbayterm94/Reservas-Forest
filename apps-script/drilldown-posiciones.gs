@@ -1,7 +1,13 @@
 // =============================================================================
-// generarDrilldownPosiciones — v6 (sobre v4)
+// generarDrilldownPosiciones — v7 (sobre v4)
 //
-// CAMBIOS RESPECTO A v4:
+// CAMBIOS RESPECTO A v6:
+//   - Si CONSOLIDADO CONTRATOS no carga, T/U/V ya no se dejan en la misma
+//     fila: se toma una foto por reserva antes de limpiar y se devuelven a
+//     cada reserva sus propios valores. Antes, si entraban o salian reservas,
+//     las filas se corrian y cada una quedaba con el precio y fechas de otra.
+//
+// CAMBIOS DE v6 RESPECTO A v4:
 //   - T (Price Per KG) y U/V (First/Last Delivery) se buscan en CONSOLIDADO
 //     CONTRATOS por codigo padre + cafe (col H, Reference). Antes se buscaba
 //     solo por contrato y la ultima linea del contrato pisaba a las demas: en
@@ -92,6 +98,19 @@ function generarDrilldownPosiciones() {
   // T-V (20-22) solo se limpian si contractData carga OK (ver mas abajo).
   // AB (28) = Container se limpia junto con O-S ya que no tiene formulas propias.
   const maxRows = out.getMaxRows();
+
+  // v7: foto de T/U/V POR RESERVA antes de limpiar. Si CONSOLIDADO no carga,
+  // se devuelven a cada reserva sus propios valores. Antes se dejaban en la
+  // misma fila, y si entraban o salian reservas las filas se corrian y cada
+  // reserva quedaba con el precio y las fechas de otra.
+  const fotoTUV = {};
+  if (out.getLastRow() > 1) {
+    out.getRange(2, 1, out.getLastRow() - 1, 22).getValues().forEach(p => {
+      const k = DRILL_claveReserva_(p[0], p[1], p[2], p[3], p[11], p[7]);
+      if (k && !(k in fotoTUV)) fotoTUV[k] = [p[19], p[20], p[21]];
+    });
+  }
+
   if (maxRows > 1) {
     out.getRange(2, 1,  maxRows - 1, 10).clearContent(); // A-J  (cols  1-10)
     out.getRange(2, 12, maxRows - 1,  2).clearContent(); // L-M  (cols 12-13)
@@ -334,7 +353,16 @@ function generarDrilldownPosiciones() {
       out.getRange(2, 22, lastDelCol.length,  1).setValues(lastDelCol);
 
     } else {
-      Logger.log("ADVERTENCIA: contractData vacio — columnas T/U/V no modificadas.");
+      // v7: sin mapa de contratos, T/U/V vuelven desde la foto, por reserva.
+      if (maxRows > 1) out.getRange(2, 20, maxRows - 1, 3).clearContent();
+      let conservadas = 0;
+      const tuv = finalRows.map(r => {
+        const v = fotoTUV[DRILL_claveReserva_(r[0], r[1], r[2], r[3], r[10], r[7])];
+        if (v) conservadas++;
+        return v || ["", "", ""];
+      });
+      out.getRange(2, 20, tuv.length, 3).setValues(tuv);
+      Logger.log(`ADVERTENCIA: contractData vacio — T/U/V conservados de la ultima carga para ${conservadas} de ${finalRows.length} reservas (las nuevas quedan vacias).`);
     }
 
   } else {
@@ -367,12 +395,21 @@ function generarDrilldownPosiciones() {
 
   // ── STATUS FINAL ──────────────────────────────────────────────────────────
   if (!contractsLoaded && contractError) {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos no actualizados — " + contractError + ")");
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos no actualizados — " + contractError + "; T/U/V conservados por reserva)");
   } else if (!contractsLoaded) {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios, T/U/V sin cambios)");
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios; T/U/V conservados por reserva)");
   } else {
     ss.getRange(DRILL_STATUS_CELL).setValue("OK" + drillAvisoContratos);
   }
+}
+
+// =============================================================================
+// Helper v7: identifica una reserva (no su fila) para conservar T/U/V
+// =============================================================================
+function DRILL_claveReserva_(bodega, cliente, cafe, ico, contrato, tipo) {
+  if (!cliente && !cafe) return "";
+  return [bodega, cliente, cafe, ico, DRILL_contratoKey_(contrato), tipo]
+    .map(x => DRILL_norm_(x)).join("|");
 }
 
 // =============================================================================
