@@ -23,6 +23,12 @@
  *   - doGet atiende ?format=consumo (vista "Consumo clientes" de la app).
  *     Es una sola línea, marcada con "NUEVA 2026-09-27". Requiere el archivo
  *     ConsumoClientes (consumo-clientes.gs) en este mismo proyecto.
+ *
+ * CAMBIO 2026-10-08:
+ *   - Cada cliente de master_ico_full.clients trae price y price_src: en
+ *     contratos el precio de contrato (col T "Price Per KG" del Drilldown); si
+ *     no lo tiene, o en spot, el Pallet Price (col R). Lo usa la seccion 04
+ *     (Detalle de Reservas y Disponibilidad) para mostrar el precio.
  */
 
 // ⚠️ Si el ID del archivo "parser" (Drilldown de Posiciones) cambia algún día,
@@ -259,14 +265,22 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
     // casos, pero mezclarlos dejaría la columna ambigua).
     const tipo = toStr(row['Spot/Contrato?']);
     const key = ico+'||'+cliente+'||'+tipo;
-    if(!clientsByIco[key]) clientsByIco[key] = {ico, cliente, tipo, bags:0, kg:0};
+    // Precio de la reserva (2026-10-08): en contratos el precio de contrato
+    // (col T "Price Per KG" del Drilldown); si no lo tiene, o en spot, el
+    // Pallet Price (col R). Si una misma clave junta varias filas, gana la
+    // primera con precio.
+    const precioT = toNum(row['Price Per KG']), precioR = toNum(row['Pallet Price']);
+    const usaT = String(tipo).toUpperCase()==='CONTRACT' && precioT>0;
+    const precio = usaT ? precioT : precioR;
+    if(!clientsByIco[key]) clientsByIco[key] = {ico, cliente, tipo, bags:0, kg:0, price:0, price_src:''};
     clientsByIco[key].bags += bags;
     clientsByIco[key].kg += kg;
+    if(!clientsByIco[key].price && precio>0){ clientsByIco[key].price = precio; clientsByIco[key].price_src = usaT ? 'Contrato' : 'Pallet'; }
   });
   const clientListByIco = {};
   Object.values(clientsByIco).forEach(c=>{
     if(!clientListByIco[c.ico]) clientListByIco[c.ico] = [];
-    clientListByIco[c.ico].push({cliente:c.cliente, tipo:c.tipo, bags:c.bags, kg:c.kg});
+    clientListByIco[c.ico].push({cliente:c.cliente, tipo:c.tipo, bags:c.bags, kg:c.kg, price:c.price, price_src:c.price_src});
   });
   Object.values(clientListByIco).forEach(arr=>arr.sort((a,b)=>b.bags-a.bags));
 
