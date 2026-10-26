@@ -1440,6 +1440,12 @@ const COLS = [
   { key:'contenedor',   label:'Contenedor',        w:100, cls:'c-mono' },
   { key:'serie',        label:'Categoría',         w:120, cls:'c-mono' },
   { key:'pallet_price', label:'Pallet Price',      w:100, cls:'c-num',    align:'right', precio:true },
+  // Precio del contrato: columna T del Drilldown, que sale del cruce con
+  // CONSOLIDADO CONTRATOS. Va al lado del Pallet Price (col R, el de spot)
+  // porque son cosas distintas y conviene verlas juntas: en una reserva por
+  // contrato el que manda es este, y antes no se veía en ninguna parte — solo
+  // alimentaba el finance fee por dentro. Queda en "—" cuando no hay contrato.
+  { key:'precio_kg',    label:'Precio contrato',   w:110, cls:'c-num',    align:'right', precio:true },
   { key:'eta',          label:'ETA Bodega',        w:100, cls:'c-mono' },
   // Status: si el café ya está en bodega (Spot) o viene en tránsito (On float).
   // La clave sigue siendo 'container' por compatibilidad con el resto del código.
@@ -1470,7 +1476,7 @@ const resKey = r => `${(r.cliente||'').trim()}|${(r.ico||'').trim()}|${((r.contr
 // los compromisos sin tanto scroll. Se alternan con el botón "Ver detalle".
 // Factura y Contenedor salen de aquí: se piden visibles también en la vista
 // compacta, no solo al pulsar "Ver detalle".
-const DETAIL_COLS = new Set(['tipo','serie','pallet_price','eta','dias','warehouse_fee','finance_fee','fee_en']);
+const DETAIL_COLS = new Set(['tipo','serie','pallet_price','precio_kg','eta','dias','warehouse_fee','finance_fee','fee_en']);
 COLS.forEach((c,i)=>{ c._idx=i; if(DETAIL_COLS.has(c.key)) c.detail=true; });
 let resVista = localStorage.getItem('forest_res_vista') || 'compacto';   // 'compacto' | 'completo'
 // Columnas visibles según la vista: en compacto se ocultan las de detalle/finanzas
