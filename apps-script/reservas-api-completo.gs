@@ -1,9 +1,27 @@
 // ═══════════════════════════════════════════════════════════════
-// FOREST RESERVAS — Apps Script API v13
-// Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container).
+// FOREST RESERVAS — Apps Script API v14
+// Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container) + AC (Status).
 // Calcula W, X, Y, Z, AA directamente en JavaScript.
 //
-// CAMBIOS RESPECTO A v12:
+// CAMBIOS RESPECTO A v13:
+//   1. Se expone "status" (columna AC, índice 28): el estado REAL del lote
+//      ("On Spot" / "On Float") tal como lo escribe el Drilldown v10 desde la
+//      columna Status del Offering.
+//      Por qué: el tablero venía deduciendo ese estado de la ETA Bodega, con la
+//      regla "sin ETA → asumir en bodega". Los contenedores recién creados aún
+//      no tienen ETA, así que café que está navegando salía como Spot. Ahora el
+//      estado viaja como dato y no hay que adivinarlo.
+//      → 4 puntos marcados con "AC" más abajo.
+//      Si AC viene vacía (el Drilldown todavía no corrió, o esa bodega no tiene
+//      columna Status), el campo sale como "" — vacío significa "no se sabe",
+//      nunca un valor inventado.
+//   2. Las llaves del caché pasan de fv11_ a fv14_. Es a propósito: el caché
+//      guarda el JSON ya armado, así que sin cambiar la llave el /exec seguiría
+//      devolviendo las filas viejas (sin "status") hasta 6 h después de publicar.
+//      Con la llave nueva, la primera petición relee la hoja y el campo aparece
+//      de una vez.
+//
+// CAMBIOS DE v13 RESPECTO A v12:
 //   Storage y Finance Fee siguen la política por bodega (ver "Política de
 //   fees" más abajo): tarifas por bodega con tramos, cobro por día mes vencido, inicio
 //   según SPOT / CONTRACT, y cada fee con su moneda (wh_cur / fin_cur).
@@ -25,7 +43,7 @@
 const SHEET_ID  = "1UYREKkSoUPOX2hKfiZNxfgr2tylNDxNn6pzrsZ3tcqw";
 const SHEET_GID = "1973971668";
 
-// Índices en el array leído (A=0 … V=21, AB=27)
+// Índices en el array leído (A=0 … V=21, AB=27, AC=28)
 const C = {
   bodega:         0,  // A
   cliente:        1,  // B
@@ -46,11 +64,13 @@ const C = {
   first_delivery: 20, // U
   last_delivery:  21, // V  ← last_delivery: si existe, cambia lógica de fees
   contenedor:     27, // AB ← Container                                  NUEVA
+  status:         28, // AC ← Status real del lote (On Spot / On Float)  AC
 };
 
 // Caché en chunks (límite Apps Script: 100 KB por key)
-const CACHE_PREFIX = 'fv11_chunk_';
-const CACHE_META   = 'fv11_meta';
+// v14: fv11_ → fv14_ para que el JSON viejo (sin "status") no se siga sirviendo.
+const CACHE_PREFIX = 'fv14_chunk_';
+const CACHE_META   = 'fv14_meta';
 const CACHE_SECS   = 60 * 60 * 6; // 6 horas — máximo que permite CacheService  MARGEN
 const CHUNK_SIZE   = 90000;
 
@@ -126,7 +146,7 @@ function out(json) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LECTURA: UNA SOLA llamada getValues(), A–AB (28 cols)
+// LECTURA: UNA SOLA llamada getValues(), A–AC (29 cols)
 // ─────────────────────────────────────────────────────────────
 function leerSheet() {
   const ss     = SpreadsheetApp.openById(SHEET_ID);
@@ -137,9 +157,10 @@ function leerSheet() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return vacío();
 
-  // ✅ UNA sola llamada — hasta AB (28 columnas) para incluir Container.      NUEVA
-  // Si la hoja tuviera menos columnas, se lee lo que haya en vez de fallar.
-  const nCols = Math.min(28, sheet.getLastColumn());
+  // ✅ UNA sola llamada — hasta AC (29 columnas) para incluir Container y Status.  AC
+  // Si la hoja tuviera menos columnas, se lee lo que haya en vez de fallar:
+  // con 28 columnas, r[28] queda undefined y el status sale como "".
+  const nCols = Math.min(29, sheet.getLastColumn());
   const data  = sheet.getRange(2, 1, lastRow - 1, nCols).getValues();
 
   const today = new Date();
@@ -270,6 +291,9 @@ function leerSheet() {
       comercial:      String(r[C.comercial] || '').trim(),
       factura,
       contenedor:     String(r[C.contenedor] || '').trim(),   //              NUEVA
+      // Estado real del lote, no deducido de la ETA. "" = el Drilldown aún no
+      // lo trae para esa fila; quien lo consuma debe tratarlo como desconocido.
+      status:         String(r[C.status]     || '').trim(),   //              AC
       serie:          String(r[C.serie]     || '').trim(),
       pallet_price:   palletPrice,
       bag_size:       bagSize,
@@ -302,6 +326,9 @@ function leerSheet() {
   }
 
   Logger.log("✅ Rows: " + rows.length);
+  // AC: cuántas filas traen el estado real. Si sale 0 después de correr el
+  // Drilldown v10, la columna AC está vacía o la hoja no llega hasta ahí.
+  Logger.log("📍 Con status real: " + rows.filter(r => r.status).length + " de " + rows.length);
   return {
     rows,
     updated: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd MMM yyyy HH:mm"),
@@ -432,4 +459,38 @@ function testLeer() {
   data.rows.filter(r => r.warehouse_fee > 0).slice(0, 3).forEach((r, i) => {
     Logger.log(`[${i+1}] ${r.cliente} | dr=${r.dias_reserva} | wh=${r.warehouse_fee} | fin=${r.finance_fee} | fee_en=${r.fee_en}`);
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// TEST AC — ejecutar desde el editor después de correr el Drilldown v10.
+// Muestra cuántas reservas traen el estado real y en cuáles la ETA daba
+// otra cosa (la regla vieja: sin ETA → Spot, ETA futura → On float).
+// ─────────────────────────────────────────────────────────────
+function testStatus() {
+  const data = leerSheet();
+  const hoy  = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+  const conteo = {}, difs = [];
+  data.rows.forEach(r => {
+    const k = r.status || '(vacío)';
+    conteo[k] = (conteo[k] || 0) + 1;
+    if (!r.status) return;
+    const deducido = !r.eta ? 'On Spot' : (r.eta > hoy ? 'On Float' : 'On Spot');
+    if (deducido !== r.status) difs.push(r);
+  });
+
+  Logger.log("Reservas por status real:");
+  Object.keys(conteo).sort().forEach(k => Logger.log(`   ${k}: ${conteo[k]}`));
+
+  const sacos = difs.reduce((s, r) => s + r.cantidad, 0);
+  Logger.log(`\nDonde la ETA daba otro estado: ${difs.length} reservas · ${sacos} sacos`);
+  const porCont = {};
+  difs.forEach(r => {
+    const c = r.contenedor || '(sin contenedor)';
+    porCont[c] = porCont[c] || { n: 0, sacos: 0 };
+    porCont[c].n++;
+    porCont[c].sacos += r.cantidad;
+  });
+  Object.keys(porCont).sort().forEach(c =>
+    Logger.log(`   ${c}: ${porCont[c].n} reservas · ${porCont[c].sacos} sacos`));
 }
