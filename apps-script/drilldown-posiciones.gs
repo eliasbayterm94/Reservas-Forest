@@ -1,7 +1,41 @@
 // =============================================================================
-// generarDrilldownPosiciones — v6 (sobre v4)
+// generarDrilldownPosiciones — v10 (sobre v9)
 //
-// CAMBIOS RESPECTO A v4:
+// CAMBIOS RESPECTO A v9:
+//   - Se agrega el campo "Status" en la columna AC (29): el estado REAL del
+//     lote tal como lo trae el Offering ("On Spot" / "On Float"), no deducido
+//     de la ETA.
+//     Por que: quien consume el Drilldown venia infiriendo el estado a partir
+//     de la ETA Bodega (col J), con la regla "sin ETA -> asumir en bodega".
+//     Los contenedores recien creados no tienen ETA todavia, asi que lotes que
+//     estan navegando se mostraban como Spot. Con AC el estado viaja como dato,
+//     no como suposicion.
+//     Se detecta, lee, escribe y limpia igual que Container (AB).
+//   - Si alguna hoja del Offering no tiene columna Status, AC queda vacia para
+//     esas filas (vacio = no se sabe, nunca un valor inventado) y la celda de
+//     status del script avisa en que bodegas falto.
+//   - DRILL_normClient_: el rango de tildes combinantes se escribe como
+//     ̀-ͯ en vez de los caracteres literales. Es exactamente lo mismo
+//     para el motor, pero sobrevive a copiar y pegar el archivo.
+//
+// CAMBIOS DE v9 RESPECTO A v8:
+//   - First/Last Delivery se leen del texto que muestra la celda en CONSOLIDADO
+//     ("15-jul-2026"), no del valor Date. Segun la celda trajera hora o no, la
+//     conversion de zona horaria corria la fecha un dia (v6 y v8 fallaban en
+//     casos distintos).
+//
+// CAMBIOS DE v8 RESPECTO A v7 (reemplazado por v9):
+//   - First/Last Delivery se pasan a texto en la zona horaria de la hoja de
+//     contratos, no en UTC. Una fecha con hora (p. ej. 14-jul 8 p. m.) salia
+//     un dia despues (15-jul).
+//
+// CAMBIOS DE v7 RESPECTO A v6:
+//   - Si CONSOLIDADO CONTRATOS no carga, T/U/V ya no se dejan en la misma
+//     fila: se toma una foto por reserva antes de limpiar y se devuelven a
+//     cada reserva sus propios valores. Antes, si entraban o salian reservas,
+//     las filas se corrian y cada una quedaba con el precio y fechas de otra.
+//
+// CAMBIOS DE v6 RESPECTO A v4:
 //   - T (Price Per KG) y U/V (First/Last Delivery) se buscan en CONSOLIDADO
 //     CONTRATOS por codigo padre + cafe (col H, Reference). Antes se buscaba
 //     solo por contrato y la ultima linea del contrato pisaba a las demas: en
@@ -80,8 +114,11 @@ function generarDrilldownPosiciones() {
   out.getRange(1, 21, 1, 1).setValue("First Delivery");
   out.getRange(1, 22, 1, 1).setValue("Last Delivery");
   out.getRange(1, 28, 1, 1).setValue("Container"); // AB
+  out.getRange(1, 29, 1, 1).setValue("Status");    // AC — v10, estado real del lote
   // Formato de texto para toda la columna AB, asi Sheets nunca la
   // reinterpreta como fecha/numero (incluye filas ya existentes).
+  // AC no lo necesita: "On Spot" / "On Float" no se parecen a una fecha ni a
+  // un numero, asi que no hay nada que Sheets pueda reinterpretar.
   if (out.getMaxRows() > 1) {
     out.getRange(2, 28, out.getMaxRows() - 1, 1).setNumberFormat("@");
   }
@@ -90,16 +127,31 @@ function generarDrilldownPosiciones() {
   // Col K (11) = Estado tiene formulas propias → se salta.
   // Se limpia A-J (1-10) y L-M (12-13) por separado.
   // T-V (20-22) solo se limpian si contractData carga OK (ver mas abajo).
-  // AB (28) = Container se limpia junto con O-S ya que no tiene formulas propias.
+  // AB (28) = Container y AC (29) = Status se limpian junto con O-S ya que no
+  // tienen formulas propias.
   const maxRows = out.getMaxRows();
+
+  // v7: foto de T/U/V POR RESERVA antes de limpiar. Si CONSOLIDADO no carga,
+  // se devuelven a cada reserva sus propios valores. Antes se dejaban en la
+  // misma fila, y si entraban o salian reservas las filas se corrian y cada
+  // reserva quedaba con el precio y las fechas de otra.
+  const fotoTUV = {};
+  if (out.getLastRow() > 1) {
+    out.getRange(2, 1, out.getLastRow() - 1, 22).getValues().forEach(p => {
+      const k = DRILL_claveReserva_(p[0], p[1], p[2], p[3], p[11], p[7]);
+      if (k && !(k in fotoTUV)) fotoTUV[k] = [p[19], p[20], p[21]];
+    });
+  }
+
   if (maxRows > 1) {
     out.getRange(2, 1,  maxRows - 1, 10).clearContent(); // A-J  (cols  1-10)
     out.getRange(2, 12, maxRows - 1,  2).clearContent(); // L-M  (cols 12-13)
     out.getRange(2, 15, maxRows - 1,  5).clearContent(); // O-S  (cols 15-19)
-    out.getRange(2, 28, maxRows - 1,  1).clearContent(); // AB   (col  28)
+    out.getRange(2, 28, maxRows - 1,  2).clearContent(); // AB-AC (cols 28-29)
   }
 
   let drillAvisoContratos = ""; // v6: aviso de cafes que no estan en su contrato
+  const sinColStatus = [];      // v10: bodegas cuya hoja no tiene columna Status
   const events = [];
   const clientsByRegion = {};
 
@@ -116,6 +168,14 @@ function generarDrilldownPosiciones() {
     const palletPriceCol = DRILL_detectarPalletPriceCol_(sheet);
     const bagSizeCol     = DRILL_detectarBagSizeCol_(sheet);
     const containerCol   = DRILL_detectarContainerCol_(sheet);
+    const statusCol      = DRILL_detectarStatusCol_(sheet);
+
+    // v10: si la columna no esta, AC queda vacia para esta bodega. Vacio
+    // significa "no se sabe"; es preferible a rellenarlo con una suposicion.
+    if (!statusCol) {
+      sinColStatus.push(cfg.region);
+      Logger.log("Sin columna Status en la hoja de " + cfg.region + " — AC queda vacia para esas filas.");
+    }
 
     const lastRow = sheet.getLastRow();
     if (lastRow < DATA_START_ROW) continue;
@@ -138,6 +198,9 @@ function generarDrilldownPosiciones() {
     const palletPriceVals = palletPriceCol ? sheet.getRange(DATA_START_ROW, palletPriceCol, rowCount, 1).getValues() : [];
     const bagSizeVals     = bagSizeCol     ? sheet.getRange(DATA_START_ROW, bagSizeCol,     rowCount, 1).getValues() : [];
     const containerVals   = containerCol   ? sheet.getRange(DATA_START_ROW, containerCol,   rowCount, 1).getValues() : [];
+    // v10: se lee el texto que muestra la celda. Si el Status viene de una
+    // formula o de una lista desplegable, getDisplayValues trae lo que se ve.
+    const statusVals      = statusCol      ? sheet.getRange(DATA_START_ROW, statusCol,      rowCount, 1).getDisplayValues() : [];
 
     const oS = cfg.primeraOrders;
     const oE = cfg.ultimaOrders;
@@ -158,6 +221,7 @@ function generarDrilldownPosiciones() {
       const palletPrice = palletPriceVals.length ? palletPriceVals[r][0] : "";
       const bagSize     = bagSizeVals.length     ? bagSizeVals[r][0]     : "";
       const container   = containerVals.length   ? containerVals[r][0]   : "";
+      const status      = statusVals.length      ? DRILL_statusTexto_(statusVals[r][0]) : "";
 
       if (!ico && !cafe) continue;
 
@@ -196,9 +260,10 @@ function generarDrilldownPosiciones() {
             palletPrice,                                   // 15 R  Pallet Price
             bagSize,                                       // 16 S  Bag Size
             container,                                     // 17 AB Container
-            // 18 T Price Per KG   → se rellena despues si contractData OK
-            // 19 U First Delivery → se rellena despues si contractData OK
-            // 20 V Last Delivery  → se rellena despues si contractData OK
+            status,                                        // 18 AC Status
+            // 19 T Price Per KG   → se rellena despues si contractData OK
+            // 20 U First Delivery → se rellena despues si contractData OK
+            // 21 V Last Delivery  → se rellena despues si contractData OK
           ]);
 
           clientsByRegion[cfg.region] = clientsByRegion[cfg.region] || new Set();
@@ -240,6 +305,7 @@ function generarDrilldownPosiciones() {
             palletPrice,
             bagSize,
             container,
+            status,
           ]);
 
           clientsByRegion[cfg.region] = clientsByRegion[cfg.region] || new Set();
@@ -275,6 +341,7 @@ function generarDrilldownPosiciones() {
     // Se fuerza a texto explicitamente para que Sheets no interprete el
     // valor de Container como fecha/numero (ej. "10/12" o numeros largos).
     const containerCol = finalRows.map(r => [DRILL_asText_(r[17])]); // AB - Container
+    const statusOut    = finalRows.map(r => [DRILL_asText_(r[18])]); // AC - Status
 
     out.getRange(2, 1,  left.length,  10).setValues(left);
     out.getRange(2, 12, right.length,  2).setValues(right);
@@ -284,6 +351,7 @@ function generarDrilldownPosiciones() {
     // puede re-interpretar el valor recien puesto segun su formato previo.
     out.getRange(2, 28, containerCol.length, 1).setNumberFormat("@");
     out.getRange(2, 28, containerCol.length, 1).setValues(containerCol);
+    out.getRange(2, 29, statusOut.length,    1).setValues(statusOut);
 
     // ── FORMULAS COLUMNA K (Estado) ──────────────────────────────────────
     // Se reescribe la formula en cada fila del rango actual.
@@ -300,7 +368,7 @@ function generarDrilldownPosiciones() {
     const filasFinal = finalRows.length + 1; // +1 encabezado
     if (maxRows > filasFinal) {
       out.getRange(filasFinal + 1, 11, maxRows - filasFinal, 1).clearContent();
-      out.getRange(filasFinal + 1, 28, maxRows - filasFinal, 1).clearContent(); // AB
+      out.getRange(filasFinal + 1, 28, maxRows - filasFinal, 2).clearContent(); // AB-AC
     }
 
     // ── T/U/V: SOLO SE ESCRIBEN SI EL MAPA DE CONTRATOS CARGO BIEN ───────
@@ -334,14 +402,23 @@ function generarDrilldownPosiciones() {
       out.getRange(2, 22, lastDelCol.length,  1).setValues(lastDelCol);
 
     } else {
-      Logger.log("ADVERTENCIA: contractData vacio — columnas T/U/V no modificadas.");
+      // v7: sin mapa de contratos, T/U/V vuelven desde la foto, por reserva.
+      if (maxRows > 1) out.getRange(2, 20, maxRows - 1, 3).clearContent();
+      let conservadas = 0;
+      const tuv = finalRows.map(r => {
+        const v = fotoTUV[DRILL_claveReserva_(r[0], r[1], r[2], r[3], r[10], r[7])];
+        if (v) conservadas++;
+        return v || ["", "", ""];
+      });
+      out.getRange(2, 20, tuv.length, 3).setValues(tuv);
+      Logger.log(`ADVERTENCIA: contractData vacio — T/U/V conservados de la ultima carga para ${conservadas} de ${finalRows.length} reservas (las nuevas quedan vacias).`);
     }
 
   } else {
-    // Sin datos: limpiar K y AB completas
+    // Sin datos: limpiar K, AB y AC completas
     if (maxRows > 1) {
       out.getRange(2, 11, maxRows - 1, 1).clearContent();
-      out.getRange(2, 28, maxRows - 1, 1).clearContent();
+      out.getRange(2, 28, maxRows - 1, 2).clearContent(); // AB-AC
     }
   }
 
@@ -359,20 +436,35 @@ function generarDrilldownPosiciones() {
     try {
       const filterAntesDeCrear = out.getFilter();
       if (filterAntesDeCrear) filterAntesDeCrear.remove();
-      out.getRange(1, 1, filterRows, 28).createFilter(); // ampliado hasta AB (28)
+      out.getRange(1, 1, filterRows, 29).createFilter(); // ampliado hasta AC (29)
     } catch (e) {
       Logger.log("No se pudo recrear el filtro: " + e.message);
     }
   }
 
   // ── STATUS FINAL ──────────────────────────────────────────────────────────
+  // v10: si a alguna bodega le falto la columna Status, se dice cual. Es un
+  // aviso, no un error: el resto del Drilldown quedo bien.
+  const avisoStatus = sinColStatus.length
+    ? ` · sin columna Status en: ${[...new Set(sinColStatus)].join(", ")} (AC vacia para esas filas)`
+    : "";
+
   if (!contractsLoaded && contractError) {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos no actualizados — " + contractError + ")");
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos no actualizados — " + contractError + "; T/U/V conservados por reserva)" + avisoStatus);
   } else if (!contractsLoaded) {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios, T/U/V sin cambios)");
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK (advertencia: contratos vacios; T/U/V conservados por reserva)" + avisoStatus);
   } else {
-    ss.getRange(DRILL_STATUS_CELL).setValue("OK" + drillAvisoContratos);
+    ss.getRange(DRILL_STATUS_CELL).setValue("OK" + drillAvisoContratos + avisoStatus);
   }
+}
+
+// =============================================================================
+// Helper v7: identifica una reserva (no su fila) para conservar T/U/V
+// =============================================================================
+function DRILL_claveReserva_(bodega, cliente, cafe, ico, contrato, tipo) {
+  if (!cliente && !cafe) return "";
+  return [bodega, cliente, cafe, ico, DRILL_contratoKey_(contrato), tipo]
+    .map(x => DRILL_norm_(x)).join("|");
 }
 
 // =============================================================================
@@ -461,14 +553,18 @@ function DRILL_buildContractDataMap_() {
       if (lastRow < 2) return { map: {}, error: null };
 
       const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      // v9: las fechas se toman del TEXTO que muestra la celda ("15-jul-2026"),
+      // no del valor Date: segun traiga hora o no, la conversion de zona horaria
+      // las corria un dia hacia adelante o hacia atras.
+      const fechasTxt = sheet.getRange(2, 15, lastRow - 1, 2).getDisplayValues(); // O, P
       const map  = {};
 
-      data.forEach(row => {
+      data.forEach((row, i) => {
         const rawId         = row[0]  ? row[0].toString().trim() : "";
         const reference     = row[7];  // col H - Reference (cafe)
         const pricePerKg    = row[11]; // col L
-        const firstDelivery = row[14]; // col O
-        const lastDelivery  = row[15]; // col P
+        const firstDelivery = DRILL_fechaDeTexto_(fechasTxt[i][0], row[14]); // col O
+        const lastDelivery  = DRILL_fechaDeTexto_(fechasTxt[i][1], row[15]); // col P
 
         if (!rawId) return;
 
@@ -581,6 +677,41 @@ function DRILL_detectarContainerCol_(sheet) {
   }
 
   return null;
+}
+
+// =============================================================================
+// DRILL_detectarStatusCol_ — v10
+// Detecta la columna "Status" en la hoja de origen (Offering Lists): el estado
+// real del lote, "On Spot" (ya en bodega) u "On Float" (navegando).
+//
+// Solo coincidencia EXACTA, a proposito. Un fallback por "includes" se tragaria
+// columnas vecinas como "Status Invoice" o "Status 2026", y una columna de
+// estado equivocada es peor que ninguna: se veria correcta y seria falsa.
+// Si no aparece, el llamador deja AC vacia y lo avisa.
+// =============================================================================
+function DRILL_detectarStatusCol_(sheet) {
+  const headers = sheet.getRange(HEADER_ROW, 1, 1, sheet.getLastColumn()).getValues()[0];
+  for (let i = 0; i < headers.length; i++) {
+    const h = DRILL_norm_(headers[i]);
+    if (h === "status" || h === "estado") return i + 1;
+  }
+  return null;
+}
+
+// =============================================================================
+// DRILL_statusTexto_ — v10
+// Normaliza el estado a "On Spot" / "On Float" sin importar como venga escrito
+// ("ON SPOT", "on  float", "On-Float"). Cualquier otro valor pasa tal cual:
+// si manana aparece un estado nuevo, se ve en la columna en vez de perderse.
+// =============================================================================
+function DRILL_statusTexto_(v) {
+  if (v == null) return "";
+  const s = v.toString().trim();
+  if (!s) return "";
+  const n = DRILL_norm_(s);              // minusculas, sin signos, espacios simples
+  if (n === "on spot"  || n === "onspot"  || n === "spot")  return "On Spot";
+  if (n === "on float" || n === "onfloat" || n === "float") return "On Float";
+  return s;
 }
 
 function DRILL_getSheetConfigsFromMapping_(ss) {
@@ -706,13 +837,25 @@ function DRILL_asText_(v) {
   return v.toString().trim();
 }
 
+// v9: texto de fecha como se ve en la celda → "dd/mm/yyyy".
+// Acepta "15-jul-2026", "15/07/2026", "15-07-2026" (meses en español o
+// inglés). Si no lo entiende, usa el valor Date de la celda.
+function DRILL_fechaDeTexto_(txt, valor) {
+  const s = String(txt || "").trim().toLowerCase().replace(/\./g, "");
+  if (!s) return valor instanceof Date ? DRILL_formatDate_(valor) : "";
+  const MESES = { ene:1, jan:1, feb:2, mar:3, abr:4, apr:4, may:5, jun:6, jul:7,
+                  ago:8, aug:8, sep:9, set:9, oct:10, nov:11, dic:12, dec:12 };
+  let m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*[-\/ ](\d{4})$/);
+  if (m && MESES[m[2]]) return `${m[1].padStart(2, "0")}/${String(MESES[m[2]]).padStart(2, "0")}/${m[3]}`;
+  m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (m) return `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${m[3]}`;
+  return valor instanceof Date ? DRILL_formatDate_(valor) : String(txt).trim();
+}
+
 function DRILL_formatDate_(v) {
   if (!v || v === "") return "";
   if (!(v instanceof Date)) return v.toString().trim();
-  const d = String(v.getUTCDate()).padStart(2, "0");
-  const m = String(v.getUTCMonth() + 1).padStart(2, "0");
-  const y = v.getUTCFullYear();
-  return d + "/" + m + "/" + y;
+  return Utilities.formatDate(v, Session.getScriptTimeZone(), "dd/MM/yyyy");
 }
 
 // =============================================================================
@@ -744,4 +887,43 @@ function diagCafesSinPrecio() {
     Logger.log(`${k} | busca: "${r[2]}" | el contrato tiene: ${refs[k] ? refs[k].map(x => `"${x}"`).join(", ") : "(no está en CONSOLIDADO)"}`);
   });
   Logger.log(`Total: ${n} combinaciones contrato + cafe sin precio`);
+}
+
+// =============================================================================
+// diagStatusDrilldown — diagnostico v10 (solo lee, no modifica nada)
+// Cuenta como quedo la columna AC y compara, lote por lote, el estado real
+// contra el que se deduciria de la ETA (col J) con la regla vieja
+// "sin ETA -> asumir en bodega". Sirve para ver cuanto cambia el tablero.
+// Ejecutar a mano DESPUES de generarDrilldownPosiciones.
+// =============================================================================
+function diagStatusDrilldown() {
+  const out  = SpreadsheetApp.getActive().getSheetByName(DRILL_OUTPUT_SHEET);
+  const n    = out.getLastRow() - 1;
+  if (n < 1) { Logger.log("Drilldown vacio"); return; }
+
+  const datos = out.getRange(2, 1, n, 29).getValues();
+  const hoy   = new Date(); hoy.setHours(0, 0, 0, 0);
+
+  const conteo = {}, difs = [];
+  datos.forEach((r, i) => {
+    const estado = String(r[10] || "").trim();                 // K  Estado
+    if (estado !== "RESERVADO" && estado !== "FACTURADO SIN ROTAR") return;
+
+    const real = String(r[28] || "").trim();                   // AC Status
+    conteo[real || "(vacio)"] = (conteo[real || "(vacio)"] || 0) + 1;
+    if (!real) return;
+
+    const eta       = r[9] instanceof Date ? r[9] : null;      // J  ICO ETA
+    const deducido  = !eta ? "On Spot" : (eta.getTime() > hoy.getTime() ? "On Float" : "On Spot");
+    if (deducido !== real) {
+      difs.push(`fila ${i + 2}: ${r[3]} · ${r[2]} (${r[1]}) — real ${real}, la ETA diria ${deducido}` +
+                (eta ? ` [ETA ${Utilities.formatDate(eta, Session.getScriptTimeZone(), "dd/MM/yyyy")}]` : " [sin ETA]"));
+    }
+  });
+
+  Logger.log("Reservas activas por Status real (AC):");
+  Object.keys(conteo).sort().forEach(k => Logger.log(`   ${k}: ${conteo[k]}`));
+  Logger.log(`\nReservas donde la ETA daba un estado distinto al real: ${difs.length}`);
+  difs.slice(0, 200).forEach(d => Logger.log("   " + d));
+  if (difs.length > 200) Logger.log(`   ... y ${difs.length - 200} mas`);
 }
