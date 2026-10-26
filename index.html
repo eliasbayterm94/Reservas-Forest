@@ -612,6 +612,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <div class="fi"><span class="fi-icon"><i data-lucide="search"></i></span><input id="fQ" type="text" placeholder="Cliente…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="coffee"></i></span><input id="fCafe" type="text" placeholder="Café / Referencia…" oninput="onFilterDebounced()"></div>
   <div class="fi"><span class="fi-icon"><i data-lucide="bookmark"></i></span><input id="fIco" type="text" placeholder="ICO…" oninput="onFilterDebounced()"></div>
+  <!-- Contenedor: se escribe o se elige de la lista (se arma con los que haya en
+       los datos). Busca por coincidencia parcial, así "26-08" trae 26-080 y 26-083. -->
+  <div class="fi"><span class="fi-icon"><i data-lucide="container"></i></span>
+    <input id="fContenedor" type="text" list="dlContenedores" placeholder="Contenedor…" oninput="onFilterDebounced()">
+    <datalist id="dlContenedores"></datalist>
+  </div>
   <div class="fi"><span class="fi-icon"><i data-lucide="warehouse"></i></span>
     <select id="fBodega" onchange="onFilter()"><option value="">Bodega</option></select>
   </div>
@@ -1502,7 +1508,7 @@ const DOM = {};
 ['sRows','sBags','sClientes','resCount','fBags','fClientes','fWH','footerTs','brandSub',
  'statusPill','statusText','btnRefresh','refreshIcon',
  'pgCurrent','pgTotal','pgFrom','pgTo','pgAll','pgFirst','pgPrev','pgNext','pgLast','pgNums',
- 'fQ','fCafe','fIco','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer','fResSeg','fAccion',
+ 'fQ','fCafe','fIco','fContenedor','dlContenedores','fBodega','fContrato','fFactura','fComercial','fSerie','fDias','fContainer','fResSeg','fAccion',
  'thead','tbody','tfoot','colgroup',
  'ovLoading','ovError','ovEmpty','ovErrorMsg','tw'
 ].forEach(id=>DOM[id]=$( id));
@@ -1568,7 +1574,11 @@ async function cargarDatos(forzar=false){
       r.finance_salida   = Number(r.finance_salida)||0;
       r.wh_cur       = r.wh_cur  || curPorBodega(r.bodega);
       r.fin_cur      = r.fin_cur || curPorBodega(r.bodega);
-      r.container    = containerStatus(r.eta);   // Spot / On float, derivado de la ETA
+      // Status del lote: primero el dato real del Offering (col AC → r.status).
+      // Solo si viene vacío se deduce de la ETA, como se hacía antes.
+      const stReal   = statusDelOffering(r.status);
+      r._statusReal  = stReal !== null;
+      r.container    = stReal !== null ? stReal : containerStatus(r.eta);
       r.comercial    = normComercial(r.comercial);// unifica variantes (ej. los 3 "Sebastian")
       r._rkey        = resKey(r);                 // llave para el seguimiento de reservas
     });
@@ -1736,9 +1746,12 @@ function badgeHTML(col, r){
     return `<span class="fee-badge-${e.c}" title="${e.t}">${e.l}</span>`;
   }
   if(col.containerBadge){
+    // El tooltip dice de dónde salió el estado: dato del Offering o, si esa
+    // columna venía vacía, deducido de la ETA (que puede equivocarse).
+    const fuente = r._statusReal ? 'dato del Offering' : 'deducido de la ETA · sin estado en el Offering';
     return r.container==='On float'
-      ? '<span class="badge float" title="En tránsito (ETA a bodega futura)">On float</span>'
-      : '<span class="badge landed" title="En bodega (ETA cumplida)">Spot</span>';
+      ? `<span class="badge float" title="En tránsito · ${fuente}">On float</span>`
+      : `<span class="badge landed" title="En bodega · ${fuente}">Spot</span>`;
   }
   return '';
 }
@@ -2048,6 +2061,23 @@ function actualizarFiltrosDinamicos(){
   selS.innerHTML='<option value="">Categoría</option>';
   series.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;selS.appendChild(o);});
   selS.value=pvS;
+
+  // Contenedores: van en un datalist, no en un <select>. Son muchos (del orden
+  // de 70) y vienen numerados, así que escribir "26-08" es más rápido que bajar
+  // por la lista; el datalist deja las dos cosas.
+  // Orden: primero los que empiezan por número (26-083, 26-080, …) de mayor a
+  // menor, que son los recientes y los que más se consultan; después los que
+  // llevan prefijo (A26-009, RW26-001), que si no se quedaban encabezando la
+  // lista solo por ser letras. 'es' con numeric ordena 26-080 después de
+  // 26-079 en vez de alfabéticamente.
+  const cmp=(a,b)=>String(a).localeCompare(String(b),'es',{numeric:true,sensitivity:'base'});
+  const todos=[...new Set(DATA.map(r=>r.contenedor).filter(Boolean))];
+  const contenedores=[
+    ...todos.filter(c=>/^\d/.test(c)).sort((a,b)=>cmp(b,a)),
+    ...todos.filter(c=>!/^\d/.test(c)).sort(cmp),
+  ];
+  DOM.dlContenedores.innerHTML='';
+  contenedores.forEach(c=>{const o=document.createElement('option');o.value=c;DOM.dlContenedores.appendChild(o);});
 }
 
 // ═══════════════════════════════════════════════════
@@ -2123,6 +2153,7 @@ function aplicarFiltros(){
   const q    = DOM.fQ.value.toLowerCase().trim();
   const fcaf = DOM.fCafe.value.toLowerCase().trim();
   const fico = DOM.fIco.value.toLowerCase().trim();
+  const fcon = DOM.fContenedor.value.toLowerCase().trim();
   const fb = DOM.fBodega.value;
   const fc = DOM.fContrato.value.toLowerCase();
   const ff = DOM.fFactura.value.toLowerCase();
@@ -2141,6 +2172,7 @@ function aplicarFiltros(){
     if(fm && r.comercial !== fm) return false;
     if(fs && r.serie     !== fs) return false;
     if(fcont && r.container !== fcont) return false;
+    if(fcon && !(r.contenedor||'').toLowerCase().includes(fcon)) return false;
     if(frs && frs.slice(0,4)==='est:'){ if((r.rEstado||'Sin gestión')!==frs.slice(4)) return false; }
     if(facc){
       if(facc==='Por rotar'){ if(!(r.rAccion && r.rAccion.s>=70)) return false; }        // urgente o agendar
@@ -2522,7 +2554,24 @@ function normalizeDate(v){
   return s.slice(0,10);
 }
 
-// Status del contenedor del lote, derivado de la ETA a bodega:
+// Status del lote: 'Spot' (ya en bodega) u 'On float' (navegando).
+//
+// La fuente de verdad es la columna Status del Offering: el Drilldown la escribe
+// en AC y el API la publica como r.status. Antes esto se deducía de la ETA, y
+// como los contenedores recién creados todavía no la tienen, café que estaba en
+// el mar aparecía como Spot — 65 reservas y 910 sacos el 25-oct-2026, en los
+// contenedores 26-073, 26-080 y 26-083.
+//
+// Devuelve null cuando no hay dato. Ahí, y solo ahí, se cae a containerStatus().
+function statusDelOffering(status){
+  const s = String(status||'').trim().toLowerCase().replace(/[^a-z]/g,'');
+  if(s==='onfloat' || s==='float') return 'On float';
+  if(s==='onspot'  || s==='spot')  return 'Spot';
+  return null;
+}
+
+// Respaldo: sin estado real, se deduce de la ETA a bodega. Es una suposición —
+// "sin ETA" se asume en bodega — y por eso solo corre cuando no hay dato.
 //   ETA futura  → On float (en tránsito)   ·   ETA cumplida / sin ETA → Spot (en bodega)
 function containerStatus(eta){
   const iso = normalizeDate(eta);
