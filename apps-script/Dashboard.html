@@ -753,7 +753,10 @@ function activeMasterIco(){
 }
 
 function aggregateInventory(f){
-  const acc = {lots:0, kg_total:0, kg_free:0, kg_reserved:0,
+  // kg_spot: los kg que YA están en bodega. Es el denominador de la vejez y de
+  // la rotación; kg_total sigue siendo todo el inventario, incluido el que viene
+  // navegando, porque ese café existe y los totales deben mostrarlo.
+  const acc = {lots:0, kg_total:0, kg_spot:0, kg_free:0, kg_reserved:0,
     bags_total_sacos:0, bags_total_cajas:0, bags_free_sacos:0, bags_free_cajas:0,
     bags_reserved_sacos:0, bags_reserved_cajas:0, vejez_sum:0, vejez_dist:{}};
   activeMasterIco().forEach(m=>{
@@ -768,8 +771,17 @@ function aggregateInventory(f){
     acc.kg_reserved += resBags*(m.bag_size||0);
     if(caja){ acc.bags_total_cajas += m.total_bags||0; acc.bags_free_cajas += m.free_bags||0; acc.bags_reserved_cajas += resBags; }
     else{ acc.bags_total_sacos += m.total_bags||0; acc.bags_free_sacos += m.free_bags||0; acc.bags_reserved_sacos += resBags; }
-    acc.vejez_sum += (m.vejez_dias||0)*(m.total_kg||0);
-    if(m.vejez_grupo) acc.vejez_dist[m.vejez_grupo] = (acc.vejez_dist[m.vejez_grupo]||0) + (m.total_kg||0);
+    // La vejez y la rotación solo cuentan el café que ya llegó. Un lote On Float
+    // no lleva días en bodega y todavía no se puede vender, así que suma en los
+    // totales de inventario pero no en estos dos indicadores.
+    // Además, un lote en tránsito suele no tener ETA todavía, y restar una celda
+    // vacía da 46.3xx días: los días transcurridos desde el 30-dic-1899, que es
+    // la fecha cero de Google Sheets. Eso solo contaminaba los promedios.
+    if(m.status === 'On Spot'){
+      acc.kg_spot += m.total_kg||0;
+      acc.vejez_sum += (m.vejez_dias||0)*(m.total_kg||0);
+      if(m.vejez_grupo) acc.vejez_dist[m.vejez_grupo] = (acc.vejez_dist[m.vejez_grupo]||0) + (m.total_kg||0);
+    }
   });
   return acc;
 }
@@ -788,17 +800,20 @@ function aggregateSales(f){
 function buildStatsRow(baseFields, f){
   const inv = aggregateInventory(f);
   const sales = aggregateSales(f);
-  const rotation = inv.kg_total>0 ? sales.kg/inv.kg_total : null;
+  // Rotación = lo vendido en 12 meses sobre el inventario que SE PUEDE vender.
+  // Dividir entre kg_total metía el café en tránsito en el denominador y la
+  // dejaba subestimada (hoy On Float es ~25% del total).
+  const rotation = inv.kg_spot>0 ? sales.kg/inv.kg_spot : null;
   return {
     ...baseFields,
-    lots: inv.lots, kg_total: inv.kg_total, kg_free: inv.kg_free, kg_reserved: inv.kg_reserved,
+    lots: inv.lots, kg_total: inv.kg_total, kg_spot: inv.kg_spot, kg_free: inv.kg_free, kg_reserved: inv.kg_reserved,
     bags_total_sacos: inv.bags_total_sacos, bags_total_cajas: inv.bags_total_cajas,
     bags_free_sacos: inv.bags_free_sacos, bags_free_cajas: inv.bags_free_cajas,
     bags_reserved_sacos: inv.bags_reserved_sacos, bags_reserved_cajas: inv.bags_reserved_cajas,
     pct_reserved: inv.kg_total>0 ? inv.kg_reserved/inv.kg_total*100 : null,
     sold_kg_12m: sales.kg, bags_sold_sacos: sales.sacos, bags_sold_cajas: sales.cajas,
     rotation_12m: rotation, dias_inventario: rotation ? 365/rotation : null,
-    weighted_vejez_days: inv.kg_total>0 ? inv.vejez_sum/inv.kg_total : null,
+    weighted_vejez_days: inv.kg_spot>0 ? inv.vejez_sum/inv.kg_spot : null,
     vejez_dist_kg: inv.vejez_dist,
   };
 }
@@ -837,8 +852,8 @@ function renderStatusFilterBar(){
   const note = document.getElementById('statusFilterNote');
   if(note){
     if(statusFilter==='on_spot') note.textContent = `${onFloat.length} lotes en tránsito (${fmtKg(kg)} / ${fmtUnitsSplit(sacos,cajas)}) excluidos del reporte.`;
-    else if(statusFilter==='on_float') note.textContent = `Mostrando SOLO en tránsito: ${onFloat.length} lotes (${fmtKg(kg)} / ${fmtUnitsSplit(sacos,cajas)}).`;
-    else note.textContent = `Incluyendo los ${onFloat.length} lotes en tránsito (${fmtKg(kg)} / ${fmtUnitsSplit(sacos,cajas)}) junto con el físico.`;
+    else if(statusFilter==='on_float') note.textContent = `Mostrando SOLO en tránsito: ${onFloat.length} lotes (${fmtKg(kg)} / ${fmtUnitsSplit(sacos,cajas)}). La vejez y la rotación salen en blanco: ese café no lleva días en bodega ni se puede vender todavía.`;
+    else note.textContent = `Incluyendo los ${onFloat.length} lotes en tránsito (${fmtKg(kg)} / ${fmtUnitsSplit(sacos,cajas)}) junto con el físico · la vejez y la rotación cuentan solo el físico.`;
   }
 }
 
@@ -850,8 +865,8 @@ function renderKpis(){
     <div class="kpi"><div class="label">Inventario Total</div><div class="value">${fmtKg(g.kg_total)}</div><div class="unit-line">${fmtUnitsSplit(g.bags_total_sacos,g.bags_total_cajas)}</div><div class="note">${g.lots} lotes activos</div></div>
     <div class="kpi"><div class="label">Reservado</div><div class="value clickable" id="kpiReservado">${fmtKg(g.kg_reserved)}</div><div class="unit-line">${fmtUnitsSplit(g.bags_reserved_sacos,g.bags_reserved_cajas)}</div><div class="note">${fmt(g.pct_reserved,1)}% del inventario · click para ver el detalle</div></div>
     <div class="kpi"><div class="label">Disponible Libre</div><div class="value clickable" id="kpiLibre">${fmtKg(g.kg_free)}</div><div class="unit-line">${fmtUnitsSplit(g.bags_free_sacos,g.bags_free_cajas)}</div><div class="note">Spot sin comprometer · click para ver el detalle</div></div>
-    <div class="kpi"><div class="label">Rotación Global</div><div class="value">${fmt(g.rotation_12m,2)}<small>x/año</small></div><div class="note">≈ ${fmt(g.dias_inventario,0)} días de inventario</div></div>
-    <div class="kpi"><div class="label">Vejez Promedio</div><div class="value">${fmt(g.weighted_vejez_days,0)}<small>días</small></div><div class="note">Ponderado por KG · ${nClientes} clientes con reservas</div></div>
+    <div class="kpi"><div class="label">Rotación Global</div><div class="value">${fmt(g.rotation_12m,2)}<small>x/año</small></div><div class="note">≈ ${fmt(g.dias_inventario,0)} días · sobre ${fmtKg(g.kg_spot)} en bodega</div></div>
+    <div class="kpi"><div class="label">Vejez Promedio</div><div class="value">${fmt(g.weighted_vejez_days,0)}<small>días</small></div><div class="note">Ponderado por KG en bodega · el café en tránsito no cuenta</div></div>
   `;
   document.getElementById('kpiReservado').addEventListener('click', ()=> openDetail({mode:'reservado'}));
   document.getElementById('kpiLibre').addEventListener('click', ()=> openDetail({mode:'libre'}));
@@ -947,7 +962,7 @@ function renderRegionCards(){
       <div class="rline-stack"><span class="rlabel">Reservado</span><span class="clickable" data-act="res" data-region="${r.region}"><b>${fmt(r.pct_reserved,1)}%</b> · ${fmtKg(r.kg_reserved)} <span class="unit">(${fmtUnitsSplit(r.bags_reserved_sacos,r.bags_reserved_cajas)})</span></span></div>
       <div class="rline-stack"><span class="rlabel">Libre</span><span class="clickable" data-act="free" data-region="${r.region}">${fmtKg(r.kg_free)} <span class="unit">(${fmtUnitsSplit(r.bags_free_sacos,r.bags_free_cajas)})</span></span></div>
       <div class="rline"><span>Vejez prom.</span><span>${fmt(r.weighted_vejez_days,0)} días</span></div>
-      ${renderAgeBar(r.vejez_dist_kg, r.kg_total)}
+      ${renderAgeBar(r.vejez_dist_kg, r.kg_spot)}
     </div>
   `).join('');
   el.querySelectorAll('.region-card').forEach(card=>{
@@ -984,13 +999,14 @@ function filterLabel(){
 
 
 function computeRowsTotal(rows){
-  const t = {lots:0, kg_total:0, kg_free:0, kg_reserved:0,
+  const t = {lots:0, kg_total:0, kg_spot:0, kg_free:0, kg_reserved:0,
              bags_total_sacos:0, bags_total_cajas:0, bags_free_sacos:0, bags_free_cajas:0,
              bags_reserved_sacos:0, bags_reserved_cajas:0,
              sold_kg_12m:0, bags_sold_sacos:0, bags_sold_cajas:0, vejez_w:0};
   rows.forEach(r=>{
     t.lots += r.lots||0;
     t.kg_total += r.kg_total||0;
+    t.kg_spot += r.kg_spot||0;
     t.kg_free += r.kg_free||0;
     t.kg_reserved += r.kg_reserved||0;
     t.bags_total_sacos += r.bags_total_sacos||0;
@@ -1002,18 +1018,19 @@ function computeRowsTotal(rows){
     t.sold_kg_12m += r.sold_kg_12m||0;
     t.bags_sold_sacos += r.bags_sold_sacos||0;
     t.bags_sold_cajas += r.bags_sold_cajas||0;
-    t.vejez_w += (r.weighted_vejez_days||0)*(r.kg_total||0);
+    // Se repondera con kg_spot, el mismo denominador con que se calculó cada fila.
+    t.vejez_w += (r.weighted_vejez_days||0)*(r.kg_spot||0);
   });
-  const rotation = t.kg_total>0 ? t.sold_kg_12m/t.kg_total : null;
+  const rotation = t.kg_spot>0 ? t.sold_kg_12m/t.kg_spot : null;
   return {
-    lots: t.lots, kg_total: t.kg_total, kg_free: t.kg_free, kg_reserved: t.kg_reserved,
+    lots: t.lots, kg_total: t.kg_total, kg_spot: t.kg_spot, kg_free: t.kg_free, kg_reserved: t.kg_reserved,
     bags_total_sacos: t.bags_total_sacos, bags_total_cajas: t.bags_total_cajas,
     bags_free_sacos: t.bags_free_sacos, bags_free_cajas: t.bags_free_cajas,
     bags_reserved_sacos: t.bags_reserved_sacos, bags_reserved_cajas: t.bags_reserved_cajas,
     pct_reserved: t.kg_total>0 ? t.kg_reserved/t.kg_total*100 : null,
     sold_kg_12m: t.sold_kg_12m, bags_sold_sacos: t.bags_sold_sacos, bags_sold_cajas: t.bags_sold_cajas,
     rotation_12m: rotation, dias_inventario: rotation ? 365/rotation : null,
-    weighted_vejez_days: t.kg_total>0 ? t.vejez_w/t.kg_total : null,
+    weighted_vejez_days: t.kg_spot>0 ? t.vejez_w/t.kg_spot : null,
   };
 }
 
@@ -1035,7 +1052,7 @@ function renderWarehouseTable(){
       <td class="num"><span class="clickable" data-act="res" data-region="${w.region}" data-wh="${w.warehouse}">${fmt(w.kg_reserved)}<div class="unit-line">${fmtUnitsSplit(w.bags_reserved_sacos,w.bags_reserved_cajas)}</div></span></td>
       <td class="num">${fmt(w.pct_reserved,1)}%</td>
       <td class="num">${fmt(w.sold_kg_12m)}<div class="unit-line">${fmtUnitsSplit(w.bags_sold_sacos,w.bags_sold_cajas)}</div></td>
-      <td class="num">${fmt(w.rotation_12m,2)}${w.rotation_12m!=null?`<div class="unit-line">${fmt(w.sold_kg_12m)}÷${fmt(w.kg_total)}</div>`:''}</td>
+      <td class="num">${fmt(w.rotation_12m,2)}${w.rotation_12m!=null?`<div class="unit-line">${fmt(w.sold_kg_12m)}÷${fmt(w.kg_spot)}</div>`:''}</td>
       <td class="num">${coverageTag(w.dias_inventario)}</td>
       <td class="num">${ageTag(w.weighted_vejez_days)}</td>
     </tr>
@@ -2098,7 +2115,7 @@ function renderVejez(){
   document.getElementById('vejezList').innerHTML = rows.map(w=>`
     <div class="vejez-row" data-whrow="${w.warehouse}" title="Clic para filtrar todo el tablero por esta bodega">
       <div class="wname"><b style="color:${REGION_COLORS[w.region]}">${w.warehouse}</b><small>${w.region} · ${fmtKg(w.kg_total)}</small></div>
-      ${renderAgeBar(w.vejez_dist_kg, w.kg_total, 20, true)}
+      ${renderAgeBar(w.vejez_dist_kg, w.kg_spot, 20, true)}
       <div class="wavg">${fmt(w.weighted_vejez_days,0)}d</div>
     </div>
   `).join('');
@@ -2146,7 +2163,7 @@ function renderInsights(){
     oldestRegion ? `<b>${oldestRegion.region}</b> tiene la vejez promedio más alta (${fmt(oldestRegion.weighted_vejez_days,0)} días) y su rotación es de ${fmt(oldestRegion.rotation_12m,2)}x/año — vale la pena revisar su mezcla de contratos vs. spot.` : '',
     slowestWh ? `<b>${slowestWh.warehouse}</b> (${slowestWh.region}) es la bodega más lenta: ${fmt(slowestWh.rotation_12m,2)}x/año, equivalente a ${fmt(slowestWh.dias_inventario,0)} días de inventario.` : '',
     slowestCat ? `La categoría <b>${slowestCat.category}</b> combina baja rotación (${fmt(slowestCat.rotation_12m,2)}x/año) con vejez alta (${fmt(slowestCat.weighted_vejez_days,0)} días) — es el segmento con mayor riesgo de inmovilización.` : '',
-    `<b>${fmtKg(oldKg)}</b> del inventario ${statusFilter==='all'?'(incl. On Float) ':''}(${fmt(oldKg/g.kg_total*100,1)}%) tiene más de 240 días en bodega.`,
+    `<b>${fmtKg(oldKg)}</b> del café en bodega (${fmt(oldKg/g.kg_spot*100,1)}%) tiene más de 240 días.`,
     `<b>${fmt(g.pct_reserved,1)}%</b> del inventario ${activeRegion? 'de '+activeRegion : 'global'} ya está comprometido con clientes; solo <b>${fmtKg(g.kg_free)}</b> sigue libre para vender en spot.`,
     leaderByRegion.length ? `Café más vendido (12 meses) por región: ${leaderByRegion.join(' · ')}.` : '',
   ].filter(Boolean);
