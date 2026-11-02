@@ -3368,7 +3368,8 @@ function emailVencidas90(){
 // Excel para el día 1, con TODAS las reservas (no aplica filtros):
 //   1. Resumen por cliente: storage + finance del último mes cerrado, por moneda.
 //   2. A facturar (detalle): cada reserva que cobra, con su periodo y la cuenta.
-//   3. Avisar día 1: reservas cuyo aviso cae el próximo día 1 (o hoy, si hoy es 1).
+//   3. Acumulado a corte: mismas columnas, con todos los días desde el inicio del cobro.
+//   4. Avisar día 1: reservas cuyo aviso cae el próximo día 1 (o hoy, si hoy es 1).
 function exportFacturacionMes(){
   if(!DATA || !DATA.length){ alert('Aún no hay datos cargados.'); return; }
   const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -3423,28 +3424,47 @@ function exportFacturacionMes(){
   //  O Regla storage P Tarifa/saco Q Storage/mes (=I*P) R Storage (=ROUND(Q/30*N,2)) S Moneda
   //  T Precio U Fuente V Factor lb W Valor contrato (=T*J*I*V) X Tasa Y Finance/mes (=W*X)
   //  Z Finance (=ROUND(Y/30*N,2)) AA Moneda
-  const cobran=DATA.filter(r=>r.fee_estado==='COBRA' && (r.fee_mes_dias||0)>0)
-    .sort((a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato)));
-  const det=[[ 'Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Factura','Sacos','Kg por saco',
+  const porCliente=(a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato));
+  const cobran=DATA.filter(r=>r.fee_estado==='COBRA' && (r.fee_mes_dias||0)>0).sort(porCliente);
+  const encDet=()=>[[ 'Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Factura','Sacos','Kg por saco',
     'Cobra desde','Desde','Hasta','Días','Regla storage','Tarifa storage por saco/mes','Storage/mes','Storage','Moneda storage',
     'Precio','Fuente precio','Factor lb→kg','Valor contrato','Tasa mensual','Finance/mes','Finance','Moneda finance'].map(H)];
-  cobran.forEach((r,i)=>{
-    const R=i+2, ini=fecha(r.fee_inicio)||mesIni, desde=ini>mesIni?ini:mesIni;
+  // Una fila del detalle; desdeDe(ini) da el primer día que se cobra en esa hoja.
+  const filasDet=(lista,desdeDe)=>{ const out=encDet(); lista.forEach((r,i)=>{
+    const R=i+2, ini=fecha(r.fee_inicio)||mesIni, desde=desdeDe(ini);
     const dias=Math.round((mesFin-desde)/864e5)+1;
     const rg=reglaStorage(r), kg=Number(r.bag_size)||0;
     const tarifa = rg.f ? kg*2.2046*0.132 : rg.v;
     const precio = Number(r.precio_base)||Number(r.pallet_price)||0;
     const factor = esUSA(r)?2.2046:1, tasa=esAU(r)?0.0103:0.0072;
     const stMes=r.cantidad*tarifa, valor=precio*kg*r.cantidad*factor, finMes=valor*tasa;
-    det.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),T(r.factura||''),
+    out.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),T(r.factura||''),
       N(r.cantidad,'0'),N(kg,'0'),D(fecha(r.fee_inicio)),D(desde),D(mesFin),F(`M${R}-L${R}+1`,dias,'0'),
       T(rg.t), rg.f?F(`J${R}*2.2046*0.132`,tarifa,'#,##0.0000'):N(tarifa,'#,##0.00'),
       F(`I${R}*P${R}`,stMes), F(`ROUND(Q${R}/30*N${R},2)`,r2(stMes/30*dias)), T(r.wh_cur),
       N(precio,'#,##0.00'), T(r.precio_fuente==='T'?'Precio contrato':'Pallet Price'), N(factor,'0.0000'),
       F(`T${R}*J${R}*I${R}*V${R}`,valor), N(tasa,'0.00%'), F(`W${R}*X${R}`,finMes), F(`ROUND(Y${R}/30*N${R},2)`,r2(finMes/30*dias)), T(r.fin_cur)]);
-  });
+  }); return out; };
+  const det=filasDet(cobran, ini=>ini>mesIni?ini:mesIni);
   const nDet=cobran.length+1;                       // última fila con datos
   const rngD=c=>`'A facturar (detalle)'!$${c}$2:$${c}$${Math.max(nDet,2)}`;
+
+  // ── Hoja 3: Acumulado a corte — mismos campos, pero cada reserva sin retirar
+  //    paga todos sus días desde "Cobra desde" hasta el cierre del mes anterior.
+  const acumulan=DATA.filter(r=>(r.fee_estado==='COBRA'||r.fee_estado==='ACUMULA') && r.fee_inicio && fecha(r.fee_inicio)<=mesFin)
+    .sort(porCliente);
+  const acu=filasDet(acumulan, ini=>ini);
+  const nAcu=acumulan.length+1;
+  if(acumulan.length){
+    acu.push([]);
+    const sumaPor=(col,colCur,cur)=>{ let s=0; acu.slice(1,nAcu).forEach(f=>{ if(f[colCur].v===cur) s+=f[col].v; }); return s; };
+    const monAcu=[...new Set(acumulan.flatMap(r=>[r.wh_cur,r.fin_cur]))].sort();
+    monAcu.forEach(c=>{ const R=acu.length+1, fila=new Array(27).fill(null);
+      fila[0]=T('TOTAL '+c); fila[18]=T(c); fila[26]=T(c);
+      fila[17]=F(`SUMIF($S$2:$S$${nAcu},"${c}",$R$2:$R$${nAcu})`,sumaPor(17,18,c));
+      fila[25]=F(`SUMIF($AA$2:$AA$${nAcu},"${c}",$Z$2:$Z$${nAcu})`,sumaPor(25,26,c));
+      acu.push(fila); });
+  }
 
   // ── Hoja 1: Resumen por cliente (SUMIFS sobre el detalle) ──
   const claves={};
@@ -3473,7 +3493,7 @@ function exportFacturacionMes(){
       F(`D${R}+E${R}`,st+fi), T('')]);
   });
 
-  // ── Hoja 3: Avisar día 1 ──
+  // ── Hoja 4: Avisar día 1 ──
   const avisar=DATA.filter(r=>r.fee_notif===avisoIso && (r.fee_estado==='ACUMULA'||r.fee_estado==='GRATIS'||r.fee_estado==='COBRA'))
     .sort((a,b)=>a.cliente.localeCompare(b.cliente));
   const avi=[['Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Sacos','Cobra desde','Fecha aviso',
@@ -3482,9 +3502,10 @@ function exportFacturacionMes(){
     N(r.cantidad,'0'),D(fecha(r.fee_inicio)),D(fecha(r.fee_notif)),N(r.fee_dias||0,'0'),N(r.wh_mensual),T(r.wh_cur),N(r.fin_mensual),T(r.fin_cur),
     T(`Su periodo libre terminó; desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan todos los días desde el ${dmy(r.fee_inicio)}.`)]));
 
-  // ── Hoja 4: Cómo se calcula ──
+  // ── Hoja 5: Cómo se calcula ──
   const ayuda=[['Cómo se calcula'],[''],
-    [`Periodo facturado: ${dmy(iso(mesIni))} a ${dmy(iso(mesFin))} (último mes cerrado).`],[''],
+    [`Periodo facturado: ${dmy(iso(mesIni))} a ${dmy(iso(mesFin))} (último mes cerrado).`],
+    [`Hoja "Acumulado a corte": lo que sumaría cada reserva sin retirar si se cobraran todos sus días, desde "Cobra desde" hasta el ${dmy(iso(mesFin))}. Mismas fórmulas; solo cambia "Desde". Es una referencia, no reemplaza la facturación del mes.`],[''],
     ['Días = Hasta − Desde + 1. "Desde" es el día 1 del mes, o el primer día de cobro si empezó a cobrar en ese mes.'],
     ['Storage = Sacos × Tarifa por saco / mes ÷ 30 × Días.'],
     ['Finance = Precio × Kg por saco × Sacos × Factor lb→kg × Tasa mensual ÷ 30 × Días.'],
@@ -3508,7 +3529,9 @@ function exportFacturacionMes(){
 
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,hoja(resu,[30,24,9,14,14,16,10]),'Resumen por cliente');
-  XLSX.utils.book_append_sheet(wb,hoja(det,[26,16,10,9,18,24,10,12,7,9,12,11,11,6,40,12,12,12,9,10,15,9,14,9,12,12,9]),'A facturar (detalle)');
+  const anchosDet=[26,16,10,9,18,24,10,12,7,9,12,11,11,6,40,12,12,12,9,10,15,9,14,9,12,12,9];
+  XLSX.utils.book_append_sheet(wb,hoja(det,anchosDet),'A facturar (detalle)');
+  XLSX.utils.book_append_sheet(wb,hoja(acu,anchosDet),'Acumulado a corte');
   XLSX.utils.book_append_sheet(wb,hoja(avi,[26,16,10,9,18,24,10,7,12,12,10,12,9,12,9,90]),'Avisar día 1');
   XLSX.utils.book_append_sheet(wb,hoja(ayuda,[120]),'Cómo se calcula');
   XLSX.writeFile(wb,`Forest_Facturacion_Fees_${iso(mesIni).slice(0,7)}.xlsx`);
