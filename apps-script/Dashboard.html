@@ -317,13 +317,14 @@
   }
   .filter-actions{margin-left:auto;display:flex;align-items:center;gap:16px;}
   .filter-actions .filter-clear{margin-left:0;align-self:auto;}
-  #exportExcelBtn{
+  #exportExcelBtn, #old150Btn{
     display:inline-flex;align-items:center;gap:6px;
     font-family:'IBM Plex Sans';font-size:12px;color:var(--stamp-dark);cursor:pointer;
     background:#fff;border:1px solid var(--paper-line);padding:7px 11px;line-height:1;
   }
-  #exportExcelBtn svg{display:block;}
-  #exportExcelBtn:hover{background:var(--paper-3);border-color:var(--stamp-dark);}
+  #exportExcelBtn svg, #old150Btn svg{display:block;}
+  #exportExcelBtn:hover, #old150Btn:hover{background:var(--paper-3);border-color:var(--stamp-dark);}
+  #old150Btn{margin-left:auto;align-self:center;}
   .active-filters{padding:10px 18px;background:var(--paper-3);border:1px solid var(--paper-line);border-top:none;font-size:12.5px;color:var(--ink-soft);display:none;}
   .active-filters.show{display:block;}
   .active-filters b{color:var(--ink);}
@@ -445,6 +446,7 @@
       <h2><span class="section-num">02</span>Detalle por Bodega</h2>
       <div class="section-desc" id="whFilterLabel">Mostrando todas las regiones · KG Libre y KG Reservado son clicables</div>
     </div>
+    <div class="chiprow" id="whPeriodChips"></div>
     <div class="panel table-scroll">
       <table id="whTable">
         <thead>
@@ -456,9 +458,9 @@
             <th class="num" data-key="kg_free">KG Libre</th>
             <th class="num" data-key="kg_reserved">KG Reservado</th>
             <th class="num" data-key="pct_reserved">% Reservado</th>
-            <th class="num" data-key="sold_kg_12m">KG Vendido (12m)</th>
-            <th class="num" data-key="rotation_12m">Rotación (x/año)</th>
-            <th class="num" data-key="dias_inventario">Días Inv.</th>
+            <th class="num" data-key="sold_per" id="whSoldHead">KG Vendido (12m)</th>
+            <th class="num" data-key="rot_per">Rotación (x/año)</th>
+            <th class="num" data-key="dias_per" title="Días de inventario + 2 días por cada ICO libre con más de 150 días">Días Inv.</th>
             <th class="num" data-key="weighted_vejez_days">Vejez Prom. (días)</th>
           </tr>
         </thead>
@@ -758,7 +760,7 @@ function aggregateInventory(f){
   // navegando, porque ese café existe y los totales deben mostrarlo.
   const acc = {lots:0, kg_total:0, kg_spot:0, kg_free:0, kg_reserved:0,
     bags_total_sacos:0, bags_total_cajas:0, bags_free_sacos:0, bags_free_cajas:0,
-    bags_reserved_sacos:0, bags_reserved_cajas:0, vejez_sum:0, vejez_dist:{}};
+    bags_reserved_sacos:0, bags_reserved_cajas:0, vejez_sum:0, vejez_dist:{}, old150:new Set()};
   activeMasterIco().forEach(m=>{
     if(f.region && m.region!==f.region) return;
     if(f.warehouse && m.warehouse!==f.warehouse) return;
@@ -781,18 +783,46 @@ function aggregateInventory(f){
       acc.kg_spot += m.total_kg||0;
       acc.vejez_sum += (m.vejez_dias||0)*(m.total_kg||0);
       if(m.vejez_grupo) acc.vejez_dist[m.vejez_grupo] = (acc.vejez_dist[m.vejez_grupo]||0) + (m.total_kg||0);
+      // Penalidad de rotación: cada ICO con café libre y más de 150 días suma
+      // 2 días, sin importar cuántos sacos tenga.
+      if((m.free_bags||0)>0 && (m.vejez_dias||0)>PENAL_VEJEZ_DIAS) acc.old150.add(m.ico);
     }
   });
   return acc;
 }
 
-function aggregateSales(f){
+// Periodo del Detalle por Bodega: 12 meses móviles, o a cierre de mes los
+// 3 últimos meses cerrados (90 días) y el último mes cerrado (mensual).
+// suf = sufijo de los campos de warehouse_category_sales para ese periodo;
+// los días y las fechas exactas vienen en meta.sales_periods.
+const WH_PERIODOS = [
+  {key:'12m', label:'12 meses', dias:365, suf:''},
+  {key:'90d', label:'90 días (3 meses cerrados)', dias:90, suf:'_90d'},
+  {key:'30d', label:'Mensual (último mes cerrado)', dias:30, suf:'_30d'},
+];
+const PENAL_VEJEZ_DIAS = 150, PENAL_DIAS_POR_ICO = 2;
+let whPeriodo = '12m';
+function whPeriodoActual(){
+  const p = WH_PERIODOS.find(p=>p.key===whPeriodo) || WH_PERIODOS[0];
+  const sp = DATA.meta && DATA.meta.sales_periods && DATA.meta.sales_periods[p.key];
+  return sp ? {...p, dias: sp.dias, desde: sp.desde, hasta: sp.hasta} : p;
+}
+function fechaCorta(iso){
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const [y,m,d] = iso.split('-').map(Number);
+  return `${d} ${MESES[m-1]}`;
+}
+// Un caché calculado antes de este cambio no trae las ventas de 90/30 días.
+function hayVentasPorPeriodo(){ return DATA.warehouse_category_sales.some(s=>s.kg_90d!==undefined); }
+
+function aggregateSales(f, suf){
+  suf = suf || '';
   let kg=0, sacos=0, cajas=0;
   DATA.warehouse_category_sales.forEach(s=>{
     if(f.region && s.region!==f.region) return;
     if(f.warehouse && s.warehouse!==f.warehouse) return;
     if(!categoryFilterPass(s.category, f.category)) return;
-    kg += s.kg; sacos += (s.bags_sacos||0); cajas += (s.bags_cajas||0);
+    kg += s['kg'+suf]||0; sacos += (s['bags_sacos'+suf]||0); cajas += (s['bags_cajas'+suf]||0);
   });
   return {kg, sacos, cajas};
 }
@@ -804,6 +834,11 @@ function buildStatsRow(baseFields, f){
   // Dividir entre kg_total metía el café en tránsito en el denominador y la
   // dejaba subestimada (hoy On Float es ~25% del total).
   const rotation = inv.kg_spot>0 ? sales.kg/inv.kg_spot : null;
+  // Mismo cálculo en el periodo elegido. La rotación se anualiza para poder
+  // compararla con la de 12 meses; los días salen del propio periodo.
+  const per = whPeriodoActual();
+  const sp = per.suf ? aggregateSales(f, per.suf) : sales;
+  const diasBase = (inv.kg_spot>0 && sp.kg>0) ? per.dias*inv.kg_spot/sp.kg : null;
   return {
     ...baseFields,
     lots: inv.lots, kg_total: inv.kg_total, kg_spot: inv.kg_spot, kg_free: inv.kg_free, kg_reserved: inv.kg_reserved,
@@ -815,6 +850,10 @@ function buildStatsRow(baseFields, f){
     rotation_12m: rotation, dias_inventario: rotation ? 365/rotation : null,
     weighted_vejez_days: inv.kg_spot>0 ? inv.vejez_sum/inv.kg_spot : null,
     vejez_dist_kg: inv.vejez_dist,
+    sold_per: sp.kg, bags_sold_per_sacos: sp.sacos, bags_sold_per_cajas: sp.cajas,
+    rot_per: inv.kg_spot>0 ? sp.kg/inv.kg_spot*365/per.dias : null,
+    dias_base: diasBase, old150_icos: [...inv.old150],
+    dias_per: diasBase!=null ? diasBase + inv.old150.size*PENAL_DIAS_POR_ICO : null,
   };
 }
 
@@ -1002,8 +1041,14 @@ function computeRowsTotal(rows){
   const t = {lots:0, kg_total:0, kg_spot:0, kg_free:0, kg_reserved:0,
              bags_total_sacos:0, bags_total_cajas:0, bags_free_sacos:0, bags_free_cajas:0,
              bags_reserved_sacos:0, bags_reserved_cajas:0,
-             sold_kg_12m:0, bags_sold_sacos:0, bags_sold_cajas:0, vejez_w:0};
+             sold_kg_12m:0, bags_sold_sacos:0, bags_sold_cajas:0, vejez_w:0,
+             sold_per:0, bags_sold_per_sacos:0, bags_sold_per_cajas:0};
+  const old150 = new Set();
   rows.forEach(r=>{
+    t.sold_per += r.sold_per||0;
+    t.bags_sold_per_sacos += r.bags_sold_per_sacos||0;
+    t.bags_sold_per_cajas += r.bags_sold_per_cajas||0;
+    (r.old150_icos||[]).forEach(i=>old150.add(i));
     t.lots += r.lots||0;
     t.kg_total += r.kg_total||0;
     t.kg_spot += r.kg_spot||0;
@@ -1022,7 +1067,13 @@ function computeRowsTotal(rows){
     t.vejez_w += (r.weighted_vejez_days||0)*(r.kg_spot||0);
   });
   const rotation = t.kg_spot>0 ? t.sold_kg_12m/t.kg_spot : null;
+  const per = whPeriodoActual();
+  const diasBase = (t.kg_spot>0 && t.sold_per>0) ? per.dias*t.kg_spot/t.sold_per : null;
   return {
+    sold_per: t.sold_per, bags_sold_per_sacos: t.bags_sold_per_sacos, bags_sold_per_cajas: t.bags_sold_per_cajas,
+    rot_per: t.kg_spot>0 ? t.sold_per/t.kg_spot*365/per.dias : null,
+    dias_base: diasBase, old150_icos: [...old150],
+    dias_per: diasBase!=null ? diasBase + old150.size*PENAL_DIAS_POR_ICO : null,
     lots: t.lots, kg_total: t.kg_total, kg_spot: t.kg_spot, kg_free: t.kg_free, kg_reserved: t.kg_reserved,
     bags_total_sacos: t.bags_total_sacos, bags_total_cajas: t.bags_total_cajas,
     bags_free_sacos: t.bags_free_sacos, bags_free_cajas: t.bags_free_cajas,
@@ -1034,7 +1085,30 @@ function computeRowsTotal(rows){
   };
 }
 
+// Celda de Días Inv.: total con penalidad, y debajo de dónde sale.
+function diasPerCell(w){
+  const n = (w.old150_icos||[]).length;
+  if(w.dias_per==null) return w.rot_per===0 ? '<span title="Sin ventas en el periodo">sin ventas</span>' : '—';
+  const det = n ? `${fmt(w.dias_base,0)} + ${n} ICO${n===1?'':'s'} × ${PENAL_DIAS_POR_ICO}` : 'sin ICOs >150 d';
+  return `${coverageTag(w.dias_per)}<div class="unit-line" title="${n?'ICOs libres con más de '+PENAL_VEJEZ_DIAS+' días: '+w.old150_icos.join(', '):''}">${det}</div>`;
+}
+function renderWhPeriodChips(){
+  const el = document.getElementById('whPeriodChips');
+  const per = whPeriodoActual();
+  const aviso = (per.suf && !hayVentasPorPeriodo())
+    ? '<span style="align-self:center;font-size:12.5px;color:var(--stamp)">Las ventas de 90 y 30 días llegan cuando se recalcule el caché (botón Actualizar).</span>' : '';
+  const rango = per.desde ? `<span style="align-self:center;font-size:12.5px;color:var(--ink-soft)">Ventas del ${fechaCorta(per.desde)} al ${fechaCorta(per.hasta)} (${per.dias} días) · inventario y ICOs &gt;150 d a hoy</span>` : '';
+  const btnOld = `<button id="old150Btn" title="Excel con todos los ICOs en bodega con más de ${PENAL_VEJEZ_DIAS} días de vejez">
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1v8m0 0L5 6m3 3l3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v3h12v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>ICOs &gt;${PENAL_VEJEZ_DIAS} días</button>`;
+  el.innerHTML = WH_PERIODOS.map(p=>`<div class="chip ${p.key===whPeriodo?'active':''}" data-per="${p.key}">${p.label}</div>`).join('') + (aviso || rango) + btnOld;
+  el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ whPeriodo = c.dataset.per; renderWarehouseTable(); }));
+  document.getElementById('old150Btn').addEventListener('click', descargarIcosViejos);
+  document.getElementById('whSoldHead').textContent = per.desde
+    ? `KG Vendido (${fechaCorta(per.desde)}–${fechaCorta(per.hasta)})` : `KG Vendido (${per.key==='12m'?'12m':per.dias+' d'})`;
+}
+
 function renderWarehouseTable(){
+  renderWhPeriodChips();
   document.getElementById('whFilterLabel').textContent = filterLabel() + ' · KG Libre y KG Reservado son clicables';
   let rows = currentWarehouseRows();
   rows = rows.slice().sort((a,b)=>{
@@ -1051,9 +1125,9 @@ function renderWarehouseTable(){
       <td class="num"><span class="clickable" data-act="free" data-region="${w.region}" data-wh="${w.warehouse}">${fmt(w.kg_free)}<div class="unit-line">${fmtUnitsSplit(w.bags_free_sacos,w.bags_free_cajas)}</div></span></td>
       <td class="num"><span class="clickable" data-act="res" data-region="${w.region}" data-wh="${w.warehouse}">${fmt(w.kg_reserved)}<div class="unit-line">${fmtUnitsSplit(w.bags_reserved_sacos,w.bags_reserved_cajas)}</div></span></td>
       <td class="num">${fmt(w.pct_reserved,1)}%</td>
-      <td class="num">${fmt(w.sold_kg_12m)}<div class="unit-line">${fmtUnitsSplit(w.bags_sold_sacos,w.bags_sold_cajas)}</div></td>
-      <td class="num">${fmt(w.rotation_12m,2)}${w.rotation_12m!=null?`<div class="unit-line">${fmt(w.sold_kg_12m)}÷${fmt(w.kg_spot)}</div>`:''}</td>
-      <td class="num">${coverageTag(w.dias_inventario)}</td>
+      <td class="num">${fmt(w.sold_per)}<div class="unit-line">${fmtUnitsSplit(w.bags_sold_per_sacos,w.bags_sold_per_cajas)}</div></td>
+      <td class="num">${fmt(w.rot_per,2)}${w.rot_per!=null?`<div class="unit-line">${fmt(w.sold_per)}÷${fmt(w.kg_spot)}</div>`:''}</td>
+      <td class="num">${diasPerCell(w)}</td>
       <td class="num">${ageTag(w.weighted_vejez_days)}</td>
     </tr>
   `).join('');
@@ -1067,9 +1141,9 @@ function renderWarehouseTable(){
         <td class="num"><span class="clickable" data-act="free" data-region="${activeRegion||''}" data-wh="">${fmt(tot.kg_free)}<div class="unit-line">${fmtUnitsSplit(tot.bags_free_sacos,tot.bags_free_cajas)}</div></span></td>
         <td class="num"><span class="clickable" data-act="res" data-region="${activeRegion||''}" data-wh="">${fmt(tot.kg_reserved)}<div class="unit-line">${fmtUnitsSplit(tot.bags_reserved_sacos,tot.bags_reserved_cajas)}</div></span></td>
         <td class="num"><b>${fmt(tot.pct_reserved,1)}%</b></td>
-        <td class="num"><b>${fmt(tot.sold_kg_12m)}</b><div class="unit-line">${fmtUnitsSplit(tot.bags_sold_sacos,tot.bags_sold_cajas)}</div></td>
-        <td class="num"><b>${fmt(tot.rotation_12m,2)}</b></td>
-        <td class="num"><b>${fmt(tot.dias_inventario)}</b></td>
+        <td class="num"><b>${fmt(tot.sold_per)}</b><div class="unit-line">${fmtUnitsSplit(tot.bags_sold_per_sacos,tot.bags_sold_per_cajas)}</div></td>
+        <td class="num"><b>${fmt(tot.rot_per,2)}</b></td>
+        <td class="num"><b>${fmt(tot.dias_per,0)}</b>${tot.dias_per!=null?`<div class="unit-line">${fmt(tot.dias_base,0)} + ${tot.old150_icos.length} × ${PENAL_DIAS_POR_ICO}</div>`:''}</td>
         <td class="num"><b>${fmt(tot.weighted_vejez_days,0)}</b></td>
       </tr>`;
   }
@@ -1799,6 +1873,37 @@ function descargarDetalleExcel(){
 }
 document.getElementById('exportExcelBtn').addEventListener('click', descargarDetalleExcel);
 
+// Todos los ICOs en bodega (On Spot) con vejez > 150 días, de todas las
+// regiones y sin filtros, del más viejo al más nuevo. "Penalidad" marca los
+// que suman 2 días en Días Inv.: los que todavía tienen café libre.
+function descargarIcosViejos(){
+  const btn = document.getElementById('old150Btn');
+  const antes = btn.innerHTML;
+  const lotes = DATA.master_ico_full
+    .filter(m=>m.status==='On Spot' && (m.vejez_dias||0)>PENAL_VEJEZ_DIAS)
+    .sort((a,b)=>(b.vejez_dias||0)-(a.vejez_dias||0));
+  if(!lotes.length){
+    btn.innerHTML = 'No hay ICOs >'+PENAL_VEJEZ_DIAS+' días';
+    setTimeout(()=>{ btn.innerHTML = antes; }, 1800);
+    return;
+  }
+  const r2 = v => Math.round((v||0)*100)/100;
+  const encabezados = ['ICO','Región','Bodega','Producto','Categoría','Vejez (días)','Grupo vejez','Unidad',
+    'Total','Libres','Reservados','KG total','KG libre','KG reservado','Clientes con reserva','Penalidad (+2 días)'];
+  const filas = lotes.map(m=>{
+    const res = (m.reserved_orders_bags||0)+(m.reserved_contracts_bags||0), bs = m.bag_size||0;
+    return [m.ico, m.region, m.warehouse, m.product||'', m.series||'', Math.round(m.vejez_dias||0), m.vejez_grupo||'',
+      isCaja(bs) ? 'caja' : 'saco', m.total_bags||0, m.free_bags||0, res,
+      r2(m.total_kg), r2((m.free_bags||0)*bs), r2(res*bs),
+      (m.clients||[]).map(c=>c.cliente).join(', '),
+      (m.free_bags||0)>0 ? 'Sí' : 'No'];
+  });
+  const fecha = (DATA.meta && DATA.meta.generated_for_date) || new Date().toISOString().slice(0,10);
+  descargarArchivo(xlsxBlob(encabezados, filas, 'ICOs >'+PENAL_VEJEZ_DIAS+' dias'), 'ICOs mas de '+PENAL_VEJEZ_DIAS+' dias ' + fecha + '.xlsx');
+  btn.innerHTML = '✓ ' + filas.length + ' ICOs';
+  setTimeout(()=>{ btn.innerHTML = antes; }, 2200);
+}
+
 function renderDetail(){
   renderActiveFiltersLine();
   const source = detState.mode==='reservado' ? RESERVED_ROWS : FREE_ROWS;
@@ -2326,12 +2431,29 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   });
 
   // ---------- 8. warehouse_category_sales (con split sacos/cajas) ----------
+  // Además de los 12 meses, lleva lo vendido a cierre de mes para el selector
+  // del Detalle por Bodega: los 3 últimos meses cerrados (_90d) y el último
+  // mes cerrado (_30d). El 6-nov, por ejemplo: 1-ago a 31-oct y 1-oct a 31-oct.
   const wcsMap = {};
+  const hasta = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  const desde90 = new Date(TODAY.getFullYear(), TODAY.getMonth()-3, 1);
+  const desde30 = new Date(TODAY.getFullYear(), TODAY.getMonth()-1, 1);
+  const isoDia = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const diasEntre = (a, b) => Math.round((b - a) / 86400000) + 1;
+  const sales_periods = {
+    '90d': {desde: isoDia(desde90), hasta: isoDia(hasta), dias: diasEntre(desde90, hasta)},
+    '30d': {desde: isoDia(desde30), hasta: isoDia(hasta), dias: diasEntre(desde30, hasta)},
+  };
   trailing12.forEach(v=>{
     const key = v.region+'|'+v.warehouse+'|'+v.category;
-    if(!wcsMap[key]) wcsMap[key] = {region:v.region, warehouse:v.warehouse, category:v.category, kg:0, bags_sacos:0, bags_cajas:0};
-    wcsMap[key].kg += v.kg;
-    if(v.size<=24) wcsMap[key].bags_cajas += v.qty; else wcsMap[key].bags_sacos += v.qty;
+    if(!wcsMap[key]) wcsMap[key] = {region:v.region, warehouse:v.warehouse, category:v.category, kg:0, bags_sacos:0, bags_cajas:0,
+      kg_90d:0, bags_sacos_90d:0, bags_cajas_90d:0, kg_30d:0, bags_sacos_30d:0, bags_cajas_30d:0};
+    const o = wcsMap[key], caja = v.size<=24;
+    o.kg += v.kg;
+    if(caja) o.bags_cajas += v.qty; else o.bags_sacos += v.qty;
+    if(v.date>hasta) return;
+    if(v.date>=desde90){ o.kg_90d += v.kg; if(caja) o.bags_cajas_90d += v.qty; else o.bags_sacos_90d += v.qty; }
+    if(v.date>=desde30){ o.kg_30d += v.kg; if(caja) o.bags_cajas_30d += v.qty; else o.bags_sacos_30d += v.qty; }
   });
   const warehouse_category_sales = Object.values(wcsMap);
 
@@ -2480,7 +2602,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   reservas_vencidas.sort((a,b)=>b.dias_vencida-a.dias_vencida);
 
   return {
-    meta: {generated_for_date: TODAY.toISOString().slice(0,10), currency_note:'Amounts en USD donde aplica', source:'live-refresh'},
+    meta: {generated_for_date: TODAY.toISOString().slice(0,10), currency_note:'Amounts en USD donde aplica', source:'live-refresh', sales_periods},
     top5_by_region, master_ico_full, warehouse_category_sales, monthly_by_region_category,
     sales_vejez_by_region_category, reservas_vencidas, product_monthly_trend, monthly_vejez_venta,
     leadtime_summary: [],

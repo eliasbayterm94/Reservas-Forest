@@ -298,12 +298,29 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   });
 
   // ---------- 8. warehouse_category_sales (con split sacos/cajas) ----------
+  // Además de los 12 meses, lleva lo vendido a cierre de mes para el selector
+  // del Detalle por Bodega: los 3 últimos meses cerrados (_90d) y el último
+  // mes cerrado (_30d). El 6-nov, por ejemplo: 1-ago a 31-oct y 1-oct a 31-oct.
   const wcsMap = {};
+  const hasta = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  const desde90 = new Date(TODAY.getFullYear(), TODAY.getMonth()-3, 1);
+  const desde30 = new Date(TODAY.getFullYear(), TODAY.getMonth()-1, 1);
+  const isoDia = d => Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const diasEntre = (a, b) => Math.round((b - a) / 86400000) + 1;
+  const sales_periods = {
+    '90d': {desde: isoDia(desde90), hasta: isoDia(hasta), dias: diasEntre(desde90, hasta)},
+    '30d': {desde: isoDia(desde30), hasta: isoDia(hasta), dias: diasEntre(desde30, hasta)},
+  };
   trailing12.forEach(v=>{
     const key = v.region+'|'+v.warehouse+'|'+v.category;
-    if(!wcsMap[key]) wcsMap[key] = {region:v.region, warehouse:v.warehouse, category:v.category, kg:0, bags_sacos:0, bags_cajas:0};
-    wcsMap[key].kg += v.kg;
-    if(v.size<=24) wcsMap[key].bags_cajas += v.qty; else wcsMap[key].bags_sacos += v.qty;
+    if(!wcsMap[key]) wcsMap[key] = {region:v.region, warehouse:v.warehouse, category:v.category, kg:0, bags_sacos:0, bags_cajas:0,
+      kg_90d:0, bags_sacos_90d:0, bags_cajas_90d:0, kg_30d:0, bags_sacos_30d:0, bags_cajas_30d:0};
+    const o = wcsMap[key], caja = v.size<=24;
+    o.kg += v.kg;
+    if(caja) o.bags_cajas += v.qty; else o.bags_sacos += v.qty;
+    if(v.date>hasta) return;
+    if(v.date>=desde90){ o.kg_90d += v.kg; if(caja) o.bags_cajas_90d += v.qty; else o.bags_sacos_90d += v.qty; }
+    if(v.date>=desde30){ o.kg_30d += v.kg; if(caja) o.bags_cajas_30d += v.qty; else o.bags_sacos_30d += v.qty; }
   });
   const warehouse_category_sales = Object.values(wcsMap);
 
@@ -467,7 +484,7 @@ function buildDataFromRaw(consolidadoRows, ventasRows, drilldownRows){
   reservas_vencidas.sort((a,b)=>b.dias_vencida-a.dias_vencida);
 
   return {
-    meta: {generated_for_date: TODAY.toISOString().slice(0,10), currency_note:'Amounts en USD donde aplica', source:'live-refresh'},
+    meta: {generated_for_date: TODAY.toISOString().slice(0,10), currency_note:'Amounts en USD donde aplica', source:'live-refresh', sales_periods},
     top5_by_region, master_ico_full, warehouse_category_sales, monthly_by_region_category,
     sales_vejez_by_region_category, reservas_vencidas, product_monthly_trend, monthly_vejez_venta,
     leadtime_summary: [],
