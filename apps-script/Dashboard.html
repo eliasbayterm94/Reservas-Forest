@@ -1769,6 +1769,9 @@ function letraColumna(i){
   while(k>0){ const r = (k-1)%26; s = String.fromCharCode(65+r)+s; k = Math.floor((k-1)/26); }
   return s;
 }
+// Las URLs dentro de cadenas van como http:\/\/ y no http://: Apps Script le
+// quita los comentarios a la plantilla al servirla (?format=tpl) y a veces
+// confunde un // dentro de una cadena con un comentario y corta la línea.
 function xlsxBlob(encabezados, filas, nombreHoja){
   const celdas = (valores, fila, estilo) => valores.map((v,i)=>{
     const ref = letraColumna(i)+fila;
@@ -1782,7 +1785,7 @@ function xlsxBlob(encabezados, filas, nombreHoja){
   const rango = 'A1:'+ultima+(filas.length+1);
   const hoja =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<worksheet xmlns="http:\/\/schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<dimension ref="'+rango+'"/>' +
     '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
     '<cols><col min="1" max="'+encabezados.length+'" width="18" customWidth="1"/></cols>' +
@@ -1791,7 +1794,7 @@ function xlsxBlob(encabezados, filas, nombreHoja){
     '</worksheet>';
   const estilos =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<styleSheet xmlns="http:\/\/schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>' +
     '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
     '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
@@ -1804,7 +1807,7 @@ function xlsxBlob(encabezados, filas, nombreHoja){
   return zipSinComprimir([
     {nombre:'[Content_Types].xml', contenido:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Types xmlns="http:\/\/schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
@@ -1813,19 +1816,19 @@ function xlsxBlob(encabezados, filas, nombreHoja){
       '</Types>'},
     {nombre:'_rels/.rels', contenido:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '<Relationships xmlns="http:\/\/schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http:\/\/schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
       '</Relationships>'},
     {nombre:'xl/workbook.xml', contenido:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
-      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<workbook xmlns="http:\/\/schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http:\/\/schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<sheets><sheet name="'+xmlEsc(nombreHoja)+'" sheetId="1" r:id="rId1"/></sheets></workbook>'},
     {nombre:'xl/_rels/workbook.xml.rels', contenido:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationships xmlns="http:\/\/schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http:\/\/schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http:\/\/schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
       '</Relationships>'},
     {nombre:'xl/styles.xml', contenido:estilos},
     {nombre:'xl/worksheets/sheet1.xml', contenido:hoja}
@@ -2285,7 +2288,7 @@ const WAREHOUSE_TO_REGION = {
 const VEJEZ_ORDER_LIVE = ['0 - 30 Días','31 - 60 Días','61 - 90 Días','91 - 180 Días','180 - 240 Días','241 - 365 Días','+365 Días'];
 
 function gvizCsvUrl(sheetId, sheetName){
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  return `https:\/\/docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 }
 
 function toNum(v){
