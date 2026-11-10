@@ -1,9 +1,24 @@
 // ═══════════════════════════════════════════════════════════════
-// FOREST RESERVAS — Apps Script API v14
+// FOREST RESERVAS — Apps Script API v15
 // Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container) + AC (Status).
 // Calcula W, X, Y, Z, AA directamente en JavaScript.
 //
-// CAMBIOS RESPECTO A v13:
+// CAMBIOS RESPECTO A v14:
+//   1. CONTRACT que llega a bodega MÁS DE 25 DÍAS después de su Last Delivery:
+//      antes cobraba desde el mismo día de llegada (cero días libres). Ahora tiene
+//      60 días libres contados desde la llegada (DIAS_LIBRES.LLEGADA_TARDIA).
+//      Con 25 días o menos de atraso sigue la regla normal (LLEGADA_TARDIA_MIN_DIAS).
+//      Ej.: FC-26-OA-4a7e, última entrega 31-may, llegó 26-oct → cobra desde 26-dic.
+//      Supuesto provisional (9-nov-2026): el retraso es de Forest (despachamos
+//      tarde), no del cliente. Si más adelante se sabe que el cliente pidió
+//      aplazar, ese caso debería ir por la regla normal (días tras Last Delivery).
+//   2. toNum lee precios escritos como texto ("£18.50", "9,07"); antes daban 0.
+//   3. Sin ETA no corren fees (el café no ha llegado). Antes un contrato sin ETA
+//      cobraba desde Last Delivery + 30 aunque siguiera navegando.
+//   4. Llaves del caché fv14_ → fv15d_, para que al publicar no se siga sirviendo
+//      el JSON con los fees viejos.
+//
+// CAMBIOS DE v14 RESPECTO A v13:
 //   1. Se expone "status" (columna AC, índice 28): el estado REAL del lote
 //      ("On Spot" / "On Float") tal como lo escribe el Drilldown v10 desde la
 //      columna Status del Offering.
@@ -40,8 +55,9 @@
 //      ⚠️ El cambio del trigger solo aplica al volver a ejecutar setupTrigger().
 // ═══════════════════════════════════════════════════════════════
 
-const SHEET_ID  = "1UYREKkSoUPOX2hKfiZNxfgr2tylNDxNn6pzrsZ3tcqw";
-const SHEET_GID = "1973971668";
+// v15: RES_ al inicio porque otro archivo del proyecto ya declara SHEET_ID.
+const RES_SHEET_ID  = "1UYREKkSoUPOX2hKfiZNxfgr2tylNDxNn6pzrsZ3tcqw";
+const RES_SHEET_GID = "1973971668";
 
 // Índices en el array leído (A=0 … V=21, AB=27, AC=28)
 const C = {
@@ -69,8 +85,8 @@ const C = {
 
 // Caché en chunks (límite Apps Script: 100 KB por key)
 // v14: fv11_ → fv14_ para que el JSON viejo (sin "status") no se siga sirviendo.
-const CACHE_PREFIX = 'fv14_chunk_';
-const CACHE_META   = 'fv14_meta';
+const CACHE_PREFIX = 'fv15d_chunk_';
+const CACHE_META   = 'fv15d_meta';
 const CACHE_SECS   = 60 * 60 * 6; // 6 horas — máximo que permite CacheService  MARGEN
 const CHUNK_SIZE   = 90000;
 
@@ -79,12 +95,16 @@ const CHUNK_SIZE   = 90000;
 //   SPOT:     60 días libres tras la reserva (sin fecha de reserva no se cobra)
 //   CONTRACT: con Last Delivery → 30 días libres tras V; si U y V están a 30 días
 //             o menos (entrega única), 60 días libres tras V
+//             si llegó a bodega más de 25 días después de V → 60 días libres
+//             tras la llegada (v15)
 //             sin Last Delivery → 180 días libres tras la llegada (ETA)
 //             (la fecha de reserva no cuenta en CONTRACT)
 //   SPOT: si la reserva es anterior a la llegada, se cuenta desde la llegada.
 // Tarifas mensuales, cobradas por día (tarifa / 30). Solo se cobra si el café
 // sigue en bodega el día 1 siguiente al inicio (aviso): ver fee_estado.
-const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60, TRAS_LAST_DELIVERY: 30 };
+const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60, TRAS_LAST_DELIVERY: 30, LLEGADA_TARDIA: 60 };
+// La regla de llegada tardía aplica solo si el café llegó MÁS de estos días después del Last Delivery
+const LLEGADA_TARDIA_MIN_DIAS = 25;
 // Tasa mensual del finance fee sobre el valor del contrato (AU tiene la suya)
 const FIN_RATE    = { AU: 0.0103, DEFAULT: 0.0072 };
 const LB_POR_KG   = 2.2046;
@@ -149,9 +169,9 @@ function out(json) {
 // LECTURA: UNA SOLA llamada getValues(), A–AC (29 cols)
 // ─────────────────────────────────────────────────────────────
 function leerSheet() {
-  const ss     = SpreadsheetApp.openById(SHEET_ID);
+  const ss     = SpreadsheetApp.openById(RES_SHEET_ID);
   const sheets = ss.getSheets();
-  let sheet    = sheets.find(s => String(s.getSheetId()) === String(SHEET_GID));
+  let sheet    = sheets.find(s => String(s.getSheetId()) === String(RES_SHEET_GID));
   if (!sheet) sheet = sheets[0];
 
   const lastRow = sheet.getLastRow();
@@ -224,15 +244,25 @@ function leerSheet() {
     // fecha base (reserva 22 jul + 60 → libre hasta 20 sep, cobra desde 21 sep)
     const baseReserva = (fechaReservaDate && etaDate && fechaReservaDate < etaDate) ? etaDate : fechaReservaDate;
     let inicioMs = null;
-    if (tipo === "SPOT") {
+    // v15: sin ETA el café no ha llegado a bodega (o no se sabe cuándo llegó):
+    // no corren fees. Antes un contrato sin ETA cobraba desde Last Delivery + 30.
+    if (!etaDate) {
+      // inicioMs queda null → sin fee
+    } else if (tipo === "SPOT") {
       if (baseReserva) inicioMs = diaMs(baseReserva) + (DIAS_LIBRES.SPOT + 1) * 86400000;
+    } else if (lastDeliveryDate && etaDate &&
+               Math.round((diaMs(etaDate) - diaMs(lastDeliveryDate)) / 86400000) > LLEGADA_TARDIA_MIN_DIAS) {
+      // v15: llegó a bodega más de 25 días DESPUÉS de la última entrega pactada →
+      // el cliente no pudo retirarlo a tiempo; los días libres se cuentan desde la llegada.
+      // Con 25 días o menos de atraso sigue la regla normal (días tras Last Delivery).
+      inicioMs = diaMs(etaDate) + (DIAS_LIBRES.LLEGADA_TARDIA + 1) * 86400000;
     } else if (lastDeliveryDate) {
       // Entrega única (U = V o a 30 días o menos): 60 días libres tras V; si no, 30
       const ventanaCorta = firstDeliveryDate &&
         Math.round((diaMs(lastDeliveryDate) - diaMs(firstDeliveryDate)) / 86400000) <= 30;
       inicioMs = diaMs(lastDeliveryDate) + ((ventanaCorta ? DIAS_LIBRES.ENTREGA_UNICA : DIAS_LIBRES.TRAS_LAST_DELIVERY) + 1) * 86400000;
-      if (etaDate) inicioMs = Math.max(inicioMs, diaMs(etaDate));  // no antes de llegar a bodega
-    } else if (etaDate) {                                          // CONTRACT: la reserva no cuenta
+      inicioMs = Math.max(inicioMs, diaMs(etaDate));               // no antes de llegar a bodega
+    } else {                                                       // CONTRACT: la reserva no cuenta
       inicioMs = diaMs(etaDate) + (DIAS_LIBRES.CONTRACT + 1) * 86400000;
     }
 
@@ -347,7 +377,11 @@ function vacío() {
 function toNum(v) {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === 'number') return v;
-  const n = parseFloat(String(v).replace(/,/g, '').trim());
+  // v15: acepta precios escritos como texto ("£18.50", "€ 9,07", "USD 6.5"):
+  // se quitan símbolos de moneda y espacios; una coma sin punto es decimal.
+  let s = String(v).replace(/[^\d,.\-]/g, '');
+  s = (s.includes(',') && !s.includes('.')) ? s.replace(',', '.') : s.replace(/,/g, '');
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 

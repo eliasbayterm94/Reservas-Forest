@@ -3496,11 +3496,21 @@ function exportFacturacionMes(){
   // ── Hoja 4: Avisar día 1 ──
   const avisar=DATA.filter(r=>r.fee_notif===avisoIso && (r.fee_estado==='ACUMULA'||r.fee_estado==='GRATIS'||r.fee_estado==='COBRA'))
     .sort((a,b)=>a.cliente.localeCompare(b.cliente));
+  // Lo que se factura en el aviso son los días a prorrata del mes que cierra, desde
+  // "Cobra desde" (o el día 1 de ese mes) hasta el último día del mes; no el mes completo.
+  // Storage/mes y Finance/mes quedan como referencia de lo que pagará cada mes siguiente.
+  //  K Días a cobrar  L Storage a cobrar (=ROUND(P/30*K,2))  M Finance a cobrar (=ROUND(Q/30*K,2))
+  //  P Storage/mes  Q Finance/mes
+  const mesAviso0=new Date(aviso.getFullYear(),aviso.getMonth()-1,1);   // mes que se cobra en el aviso
   const avi=[['Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Sacos','Cobra desde','Fecha aviso',
-    'Días acumulados hoy','Storage/mes','Moneda storage','Finance/mes','Moneda finance','Mensaje'].map(H)];
-  avisar.forEach(r=>avi.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),
-    N(r.cantidad,'0'),D(fecha(r.fee_inicio)),D(fecha(r.fee_notif)),N(r.fee_dias||0,'0'),N(r.wh_mensual),T(r.wh_cur),N(r.fin_mensual),T(r.fin_cur),
-    T(`Su periodo libre terminó; desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan todos los días desde el ${dmy(r.fee_inicio)}.`)]));
+    'Días a cobrar','Storage a cobrar','Finance a cobrar','Moneda storage','Moneda finance',
+    'Storage/mes (mes completo)','Finance/mes (mes completo)','Mensaje'].map(H)];
+  avisar.forEach((r,i)=>{ const R=i+2, ini=fecha(r.fee_inicio), desde=ini&&ini>mesAviso0?ini:mesAviso0;
+    const dias=Math.max(0,Math.round((aviso-desde)/864e5)), st=Number(r.wh_mensual)||0, fi=Number(r.fin_mensual)||0;
+    avi.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),
+      N(r.cantidad,'0'),D(ini),D(fecha(r.fee_notif)),N(dias,'0'),
+      F(`ROUND(P${R}/30*K${R},2)`,r2(st/30*dias)),F(`ROUND(Q${R}/30*K${R},2)`,r2(fi/30*dias)),T(r.wh_cur),T(r.fin_cur),N(st),N(fi),
+      T(`Desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan ${dias} días a prorrata (del ${dmy(iso(desde))} al ${dmy(iso(new Date(aviso.getTime()-864e5)))}).`)]); });
 
   // ── Hoja 5: Cómo se calcula ──
   const ayuda=[['Cómo se calcula'],[''],
@@ -3523,8 +3533,9 @@ function exportFacturacionMes(){
     ['   SPOT: 60 días libres desde la fecha de reserva.'],
     ['   CONTRACT entrega única (First y Last Delivery a 30 días o menos): 60 días libres tras el Last Delivery.'],
     ['   CONTRACT ventana larga o sin First Delivery: 30 días libres tras el Last Delivery.'],
+    ['   CONTRACT que llega a bodega más de 25 días después del Last Delivery: 60 días libres desde la llegada.'],
     ['   CONTRACT sin Last Delivery: 180 días libres desde la llegada a bodega.'],
-    ['   Aviso el día 1 siguiente: si el café ya salió no paga; si sigue, se factura desde el primer día de cobro.'],
+    ['   Aviso el día 1 siguiente: si el café ya salió no paga; si sigue, se facturan a prorrata los días del mes desde el primer día de cobro (hoja "Avisar día 1").'],
     ['   Al sacar el café, los días del mes en curso van en la factura del café.']].map(f=>f.map(T));
 
   const wb=XLSX.utils.book_new();
@@ -3532,7 +3543,7 @@ function exportFacturacionMes(){
   const anchosDet=[26,16,10,9,18,24,10,12,7,9,12,11,11,6,40,12,12,12,9,10,15,9,14,9,12,12,9];
   XLSX.utils.book_append_sheet(wb,hoja(det,anchosDet),'A facturar (detalle)');
   XLSX.utils.book_append_sheet(wb,hoja(acu,anchosDet),'Acumulado a corte');
-  XLSX.utils.book_append_sheet(wb,hoja(avi,[26,16,10,9,18,24,10,7,12,12,10,12,9,12,9,90]),'Avisar día 1');
+  XLSX.utils.book_append_sheet(wb,hoja(avi,[26,16,10,9,18,24,10,7,12,12,9,12,12,9,9,14,14,90]),'Avisar día 1');
   XLSX.utils.book_append_sheet(wb,hoja(ayuda,[120]),'Cómo se calcula');
   XLSX.writeFile(wb,`Forest_Facturacion_Fees_${iso(mesIni).slice(0,7)}.xlsx`);
 }
