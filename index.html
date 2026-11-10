@@ -3386,16 +3386,17 @@ function exportFacturacionMes(){
 
   // Regla de storage de la fila (misma lógica que el API) → texto + tarifa por saco.
   // En Canadá con 8 sacos o menos la tarifa por saco es una fórmula (kg × 2.2046 × 0.132).
+  // lote:true = tarifa plana por lote (Dupuy/Annex/NJ con 10 sacos o menos: 10 USD/mes el lote).
   const reglaStorage=r=>{
     const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,''), n=r.cantidad, kg=Number(r.bag_size)||0;
-    if(b.includes('DUP'))   return n<=10?{t:'Dupuy, 10 sacos o menos: 10 USD/saco',v:10}:{t:'Dupuy, más de 10 sacos: 1.00 USD/saco',v:1};
+    if(b.includes('DUP'))   return n<=10?{t:'Dupuy, 10 sacos o menos: 10 USD/lote',v:10,lote:true}:{t:'Dupuy, más de 10 sacos: 1.00 USD/saco',v:1};
     if(b.includes('CANAD')) return n<=8 ?{t:'Canadá, 8 sacos o menos: 0.132 USD/lb',f:true}:{t:'Canadá, más de 8 sacos: 1.72 USD/saco',v:1.72};
     if(b==='EU'||b.includes('ROTTERDAM')||b.includes('BARCELONA')) return kg>=60?{t:'Rotterdam, saco de 70 kg: 1.37 EUR',v:1.37}:{t:'Rotterdam, 35 kg / caja 24 kg: 1.05 EUR',v:1.05};
     if(b==='UK')            return n<7?{t:'UK, menos de 7 sacos: 1.40 GBP/saco',v:1.4}:{t:'UK, 7 sacos o más: 0.70 GBP/saco',v:0.7};
     if(b==='AU'||b.includes('AUSTRAL')||b.includes('MELBOURNE')) return {t:'Australia: 2.5 AUD/saco',v:2.5};
     if(b==='MENA'||b.includes('DUBAI')||b==='DXB') return {t:'MENA: 4 AED/saco',v:4};
     const nom=b.includes('ANNEX')?'Annex':(b==='NJ'||b.includes('CONTINENTAL'))?'Continental (NJ)':String(r.bodega||'Otra');
-    return n<=10?{t:`${nom}, 10 sacos o menos: 10 USD/saco`,v:10}:{t:`${nom}, más de 10 sacos: 1.05 USD/saco`,v:1.05};
+    return n<=10?{t:`${nom}, 10 sacos o menos: 10 USD/lote`,v:10,lote:true}:{t:`${nom}, más de 10 sacos: 1.05 USD/saco`,v:1.05};
   };
   const esUSA=r=>{ const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
     return !(b==='EU'||b==='UK'||b==='AU'||b==='MENA'||b==='DXB'||b.includes('ROTTERDAM')||b.includes('BARCELONA')||b.includes('AUSTRAL')||b.includes('MELBOURNE')||b.includes('DUBAI')); };
@@ -3427,7 +3428,7 @@ function exportFacturacionMes(){
   const porCliente=(a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato));
   const cobran=DATA.filter(r=>r.fee_estado==='COBRA' && (r.fee_mes_dias||0)>0).sort(porCliente);
   const encDet=()=>[[ 'Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Factura','Sacos','Kg por saco',
-    'Cobra desde','Desde','Hasta','Días','Regla storage','Tarifa storage por saco/mes','Storage/mes','Storage','Moneda storage',
+    'Cobra desde','Desde','Hasta','Días','Regla storage','Tarifa storage/mes (por saco o por lote)','Storage/mes','Storage','Moneda storage',
     'Precio','Fuente precio','Factor lb→kg','Valor contrato','Tasa mensual','Finance/mes','Finance','Moneda finance'].map(H)];
   // Una fila del detalle; desdeDe(ini) da el primer día que se cobra en esa hoja.
   const filasDet=(lista,desdeDe)=>{ const out=encDet(); lista.forEach((r,i)=>{
@@ -3437,11 +3438,11 @@ function exportFacturacionMes(){
     const tarifa = rg.f ? kg*2.2046*0.132 : rg.v;
     const precio = Number(r.precio_base)||Number(r.pallet_price)||0;
     const factor = esUSA(r)?2.2046:1, tasa=esAU(r)?0.0103:0.0072;
-    const stMes=r.cantidad*tarifa, valor=precio*kg*r.cantidad*factor, finMes=valor*tasa;
+    const stMes=rg.lote?tarifa:r.cantidad*tarifa, valor=precio*kg*r.cantidad*factor, finMes=valor*tasa;
     out.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),T(r.factura||''),
       N(r.cantidad,'0'),N(kg,'0'),D(fecha(r.fee_inicio)),D(desde),D(mesFin),F(`M${R}-L${R}+1`,dias,'0'),
       T(rg.t), rg.f?F(`J${R}*2.2046*0.132`,tarifa,'#,##0.0000'):N(tarifa,'#,##0.00'),
-      F(`I${R}*P${R}`,stMes), F(`ROUND(Q${R}/30*N${R},2)`,r2(stMes/30*dias)), T(r.wh_cur),
+      F(rg.lote?`P${R}`:`I${R}*P${R}`,stMes), F(`ROUND(Q${R}/30*N${R},2)`,r2(stMes/30*dias)), T(r.wh_cur),
       N(precio,'#,##0.00'), T(r.precio_fuente==='T'?'Precio contrato':'Pallet Price'), N(factor,'0.0000'),
       F(`T${R}*J${R}*I${R}*V${R}`,valor), N(tasa,'0.00%'), F(`W${R}*X${R}`,finMes), F(`ROUND(Y${R}/30*N${R},2)`,r2(finMes/30*dias)), T(r.fin_cur)]);
   }); return out; };
@@ -3517,16 +3518,16 @@ function exportFacturacionMes(){
     [`Periodo facturado: ${dmy(iso(mesIni))} a ${dmy(iso(mesFin))} (último mes cerrado).`],
     [`Hoja "Acumulado a corte": lo que sumaría cada reserva sin retirar si se cobraran todos sus días, desde "Cobra desde" hasta el ${dmy(iso(mesFin))}. Mismas fórmulas; solo cambia "Desde". Es una referencia, no reemplaza la facturación del mes.`],[''],
     ['Días = Hasta − Desde + 1. "Desde" es el día 1 del mes, o el primer día de cobro si empezó a cobrar en ese mes.'],
-    ['Storage = Sacos × Tarifa por saco / mes ÷ 30 × Días.'],
+    ['Storage = Sacos × Tarifa por saco / mes ÷ 30 × Días (en lotes de tarifa plana: Tarifa del lote / mes ÷ 30 × Días).'],
     ['Finance = Precio × Kg por saco × Sacos × Factor lb→kg × Tasa mensual ÷ 30 × Días.'],
     ['   · Factor lb→kg = 2.2046 en EE. UU. (precio por libra); 1 en las demás regiones (precio por kg).'],
     ['   · Tasa mensual = 0.72% (1.03% en Australia).'],
     ['   · Precio = precio de contrato (Price per KG de CONSOLIDADO) en contratos; Pallet Price en SPOT o si el contrato no tiene precio.'],
-    [''],['Tarifas de storage por saco / mes:'],
-    ['   Dupuy: 10 USD (10 sacos o menos) · 1.00 USD (más de 10)'],
-    ['   Annex / Continental (NJ): 10 USD (10 sacos o menos) · 1.05 USD (más de 10)'],
+    [''],['Tarifas de storage / mes:'],
+    ['   Dupuy: 10 USD por lote (10 sacos o menos) · 1.00 USD por saco (más de 10)'],
+    ['   Annex / Continental (NJ): 10 USD por lote (10 sacos o menos) · 1.05 USD por saco (más de 10)'],
     ['   Canadá: 0.132 USD por libra (8 sacos o menos) · 1.72 USD por saco (más de 8)'],
-    ['   Rotterdam: 1.37 EUR (saco de 70 kg) · 1.05 EUR (35 kg / caja de 24 kg)'],
+    ['   Rotterdam: 1.37 EUR por saco (70 kg) · 1.05 EUR (35 kg / caja de 24 kg)'],
     ['   UK: 1.40 GBP (menos de 7 sacos) · 0.70 GBP (7 o más)'],
     ['   Australia: 2.5 AUD · MENA: 4 AED'],
     [''],['Inicio del cobro:'],

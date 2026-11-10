@@ -1,9 +1,15 @@
 // ═══════════════════════════════════════════════════════════════
-// FOREST RESERVAS — Apps Script API v15
+// FOREST RESERVAS — Apps Script API v16
 // Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container) + AC (Status).
 // Calcula W, X, Y, Z, AA directamente en JavaScript.
 //
-// CAMBIOS RESPECTO A v14:
+// CAMBIOS RESPECTO A v15:
+//   1. Dupuy / Annex / Continental con 10 sacos o menos: USD 10 al mes POR LOTE
+//      (tarifa plana), no USD 10 por saco. Ej.: FC-25-HOU-006, 5 sacos → USD 10/mes,
+//      no USD 50. Con más de 10 sacos sigue por saco (1.00 Dupuy, 1.05 NJ/Annex).
+//   2. Llaves del caché fv15d_ → fv16_.
+//
+// CAMBIOS DE v15 RESPECTO A v14:
 //   1. CONTRACT que llega a bodega MÁS DE 25 DÍAS después de su Last Delivery:
 //      antes cobraba desde el mismo día de llegada (cero días libres). Ahora tiene
 //      60 días libres contados desde la llegada (DIAS_LIBRES.LLEGADA_TARDIA).
@@ -85,8 +91,8 @@ const C = {
 
 // Caché en chunks (límite Apps Script: 100 KB por key)
 // v14: fv11_ → fv14_ para que el JSON viejo (sin "status") no se siga sirviendo.
-const CACHE_PREFIX = 'fv15d_chunk_';
-const CACHE_META   = 'fv15d_meta';
+const CACHE_PREFIX = 'fv16_chunk_';
+const CACHE_META   = 'fv16_meta';
 const CACHE_SECS   = 60 * 60 * 6; // 6 horas — máximo que permite CacheService  MARGEN
 const CHUNK_SIZE   = 90000;
 
@@ -130,13 +136,13 @@ function bodegaInfo(raw) {
 // Storage de UN mes para la fila → { monto, moneda }
 function storageMensual(wh, sacos, bagKg) {
   switch (wh) {
-    case 'DUPUY':  return { monto: sacos * (sacos <= 10 ? 10 : 1.00), moneda:'USD' };
+    case 'DUPUY':  return { monto: sacos <= 10 ? 10 : sacos * 1.00, moneda:'USD' };   // ≤10 sacos: 10 USD por lote
     case 'CANADA': return { monto: sacos <= 8 ? sacos * bagKg * LB_POR_KG * 0.132 : sacos * 1.72, moneda:'USD' };
     case 'EU':     return { monto: sacos * (bagKg >= 60 ? 1.37 : 1.05), moneda:'EUR' }; // 70 kg vs 35 kg / caja 24 kg
     case 'UK':     return { monto: sacos * (sacos < 7 ? 1.40 : 0.70),   moneda:'GBP' };
     case 'AU':     return { monto: sacos * 2.5, moneda:'AUD' };
     case 'MENA':   return { monto: sacos * 4,   moneda:'AED' };
-    default:       return { monto: sacos * (sacos <= 10 ? 10 : 1.05), moneda:'USD' }; // ANNEX, CONTINENTAL, OTRA
+    default:       return { monto: sacos <= 10 ? 10 : sacos * 1.05, moneda:'USD' };   // ANNEX, CONTINENTAL, OTRA; ≤10 sacos: 10 USD por lote
   }
 }
 
