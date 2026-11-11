@@ -6580,6 +6580,8 @@ const VM_FX_TAB = 'FX', VM_FX_GID = '';
 const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
 const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
 const VM_REP_TAB = 'SALES REP', VM_REP_GID = '';   // Customer → Comercial (col A → D)
+// Respaldo por región cuando el cliente no cruza en SALES REP.
+const VM_REGION_REP = { 'Dubai':'Ricardo', 'Australia':'Samuel' };
 const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
 // Servicios facturados (NO café): se excluyen del revenue, margen y detalle.
 // Se puede ir ampliando con lo que vaya apareciendo.
@@ -6786,8 +6788,9 @@ async function cargarVentasMargenes(){
           // (el traspaso de clientes de Pablo fue de USA). Otras regiones: siempre col D.
           const _rep=vmClientRep[vmNormCli(cliente)];
           const _useHO = region==='USA' && ((year>2026) || (year===2026 && month>=8));
-          const _com = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || 'Sin asignar')) : 'Sin asignar';
-          const comercial = normComercial(_com);   // homologa nombres (Juan David = JUAN DAVID ARANGO…)
+          let _com = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || '')) : '';
+          if(!_com && VM_REGION_REP[region]) _com = VM_REGION_REP[region];   // respaldo por región (MENA→Ricardo, AU→Samuel)
+          const comercial = normComercial(_com || 'Sin asignar');   // homologa nombres (Juan David = JUAN DAVID ARANGO…)
           all.push({
             region, cliente, comercial,
             factura:g(iDoc), producto:P.prod||'—', item:itemName, cat, size:D.size, qty,
