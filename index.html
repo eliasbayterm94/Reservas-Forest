@@ -6661,6 +6661,9 @@ async function cargarVentasMargenes(){
         const iFM=vmCol(head,['final margin']);
         const iFG=vmCol(head,['final gmc $$','final gmc']);
         const iMR=vmCol(head,['margin']);   // margen real del lote (MENA no la trae)
+        dg.idx=`item=${iItem} yr=${iYr} mon=${iMon} kg=${iKg} usd=${iUsd} amt=${iAmt} cur=${iCur} cat=${iCat} ico=${iIco}`;
+        dg.ncol=head.length;
+        { const s=aoa[hi+1]||[]; dg.sample=`YR="${(s[iYr]||'').toString().slice(0,12)}" KG="${(s[iKg]||'').toString().slice(0,10)}" USD="${(s[iUsd]||'').toString().slice(0,12)}" ITEM="${(s[iItem]||'').toString().slice(0,24)}"`; }
 
         const before=all.length;
         for(let r=hi+1;r<aoa.length;r++){
@@ -6731,9 +6734,11 @@ function renderVentasMargenes(){
   if(!vmRows.length){
     let d='<div class="vm-panel" style="max-width:720px;margin:20px auto"><h3>No pude leer las ventas todavía</h3>'
       +'<p class="nt">Diagnóstico por pestaña (lo que devolvió Google):</p>'
-      +'<table class="vm-tbl"><thead><tr><th>Pestaña</th><th class="r">Filas</th><th class="r">Tomadas 2026</th><th>Estado / headers</th></tr></thead><tbody>';
+      +'<table class="vm-tbl"><thead><tr><th>Pestaña</th><th class="r">Filas</th><th class="r">2026</th><th>Índices · muestra</th></tr></thead><tbody>';
     (vmDiag.length?vmDiag:VM_REGIONS.map(r=>({tab:r.tab,raw:0,taken:0,err:'sin respuesta',headSample:''}))).forEach(x=>{
-      d+=`<tr><td class="cl">${vmEsc(x.tab)}</td><td class="r">${x.raw||0}</td><td class="r">${x.taken||0}</td><td style="font-size:12px">${x.err?('<span class="vm-neg">'+vmEsc(x.err)+'</span>'):vmEsc(x.headSample||'ok')}</td></tr>`;
+      const detail = x.err?('<span class="vm-neg">'+vmEsc(x.err)+'</span>')
+        : `<div class="vm-mono" style="font-size:11px">ncol=${x.ncol||'?'} · ${vmEsc(x.idx||'')}</div><div class="vm-mono" style="font-size:11px;color:var(--muted)">${vmEsc(x.sample||'')}</div>`;
+      d+=`<tr><td class="cl">${vmEsc(x.tab)}</td><td class="r">${x.raw||0}</td><td class="r">${x.taken||0}</td><td>${detail}</td></tr>`;
     });
     d+='</tbody></table><p class="nt" style="margin-top:10px">Si dice <b>«gviz no devolvió esta pestaña»</b>, el parámetro de nombre no aplicó: pásame el <b>gid</b> de cada pestaña (el número tras <code>#gid=</code> al abrirla) y lo fijo.</p></div>';
     body.innerHTML=d; return;
