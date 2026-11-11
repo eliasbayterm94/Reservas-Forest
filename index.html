@@ -2561,7 +2561,12 @@ const titleCase = s => String(s||'').trim().toLowerCase().replace(/\b\w/g, c=>c.
 // Normaliza nombres de comercial que son la misma persona (variantes/typos)
 const COMERCIAL_ALIAS = {
   'sebastian':'Sebastian', 'sebastian c':'Sebastian', 'sebastian c.':'Sebastian',
-  'sebatian':'Sebastian', 'sebastian carrasquilla':'Sebastian'
+  'sebatian':'Sebastian', 'sebastian carrasquilla':'Sebastian',
+  // homologación nombre corto (SALES REP) ↔ nombre completo (CONTRACTS)
+  'juan david arango':'Juan David', 'juan david':'Juan David',
+  'santiago carvajal':'Santiago', 'santiago':'Santiago',
+  'samuel janna':'Samuel', 'samuel':'Samuel',
+  'shady bayter':'Shady', 'shady':'Shady'
 };
 function normComercial(n){
   const s=String(n||'').trim();
@@ -6764,7 +6769,8 @@ async function cargarVentasMargenes(){
           // Comercial: desde Ago-2026 prima el "Hand Over Pablo" (traspaso de clientes de Pablo).
           const _rep=vmClientRep[cliente.toUpperCase()];
           const _useHO = (year>2026) || (year===2026 && month>=8);
-          const comercial = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || 'Sin asignar')) : 'Sin asignar';
+          const _com = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || 'Sin asignar')) : 'Sin asignar';
+          const comercial = normComercial(_com);   // homologa nombres (Juan David = JUAN DAVID ARANGO…)
           all.push({
             region, cliente, comercial,
             factura:g(iDoc), producto:P.prod||'—', item:itemName, cat, size:D.size, qty,
@@ -6884,10 +6890,15 @@ function renderVentasMargenes(){
 
   const sortArrow=k=>vmSort.key===k?(vmSort.dir<0?' ▾':' ▴'):'';
 
+  // Comercial: gerencia ve "Todos"; los comerciales eligen su nombre (autoservicio, sin "Todos").
+  const comSel = gerOK
+    ? vmOpts(comerciales, vmF.comercial)
+    : ('<option value="">Elige tu comercial…</option>' + comerciales.map(v=>`<option value="${vmEsc(v)}"${String(v)===String(vmF.comercial)?' selected':''}>${vmEsc(v)}</option>`).join(''));
+
   let html='';
   // Filtros
   html+='<div class="vm-filters">'
-    +`<div class="vm-fi me"><label>Comercial</label><select onchange="vmOnFilter('comercial',this.value)">${vmOpts(comerciales,vmF.comercial)}</select></div>`
+    +`<div class="vm-fi me"><label>Comercial</label><select onchange="vmOnFilter('comercial',this.value)">${comSel}</select></div>`
     +`<div class="vm-fi"><label>Cliente</label><select onchange="vmOnFilter('cliente',this.value)">${vmOpts(clientes,vmF.cliente)}</select></div>`
     +`<div class="vm-fi"><label>Región</label><select onchange="vmOnFilter('region',this.value)">${vmOpts(regiones,vmF.region)}</select></div>`
     +`<div class="vm-fi"><label>Categoría</label><select onchange="vmOnFilter('categoria',this.value)">${vmOpts(cats,vmF.categoria)}</select></div>`
@@ -6895,7 +6906,14 @@ function renderVentasMargenes(){
     +`<div class="vm-fi"><label>Mes</label><select onchange="vmOnFilter('month',this.value)"><option value="">Todos</option>${months.map(m=>`<option value="${m}"${String(m)===vmF.month?' selected':''}>${VM_MESES[m]||m}</option>`).join('')}</select></div>`
     +`<div class="vm-fi"><label>Buscar</label><input type="text" placeholder="Cliente / ICO / factura…" value="${vmEsc(vmF.q)}" oninput="vmF.q=this.value; clearTimeout(window._vmq); window._vmq=setTimeout(renderVentasMargenes,250)"></div>`
     +'</div>';
-  html+=`<div class="vm-note-ger">Gerencia (todo ${vmF.year||'2026'}): <b>${money(gVent)}</b> · ${(gRevCost?gMar/gRevCost*100:0).toFixed(1)}% · ${new Set(gerRows.map(r=>r.cliente)).size} clientes</div>`;
+
+  // Autoservicio: un comercial debe elegir su nombre antes de ver nada.
+  if(!gerOK && !vmF.comercial){
+    html+='<div class="vm-panel" style="text-align:center;color:var(--muted);padding:48px 20px"><div style="font-size:15px;font-weight:600;color:var(--text)">👆 Elige tu comercial arriba para ver tus ventas y márgenes</div><div style="font-size:13px;margin-top:6px">Cada comercial ve solo sus clientes.</div></div>';
+    body.innerHTML=html; return;
+  }
+
+  if(gerOK) html+=`<div class="vm-note-ger">Gerencia (todo ${vmF.year||'2026'}): <b>${money(gVent)}</b> · ${(gRevCost?gMar/gRevCost*100:0).toFixed(1)}% · ${new Set(gerRows.map(r=>r.cliente)).size} clientes</div>`;
 
   // KPIs
   html+='<div class="vm-kpis">';
