@@ -1439,7 +1439,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
     .vm-bar .bb{width:66%;background:linear-gradient(180deg,#2a3356,#1b203d);border-radius:5px 5px 0 0;min-height:2px}
     .vm-bar .bp{font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:3px}
-    .vm-bar .bl{font-size:11px;color:var(--muted);margin-top:5px}
+    .vm-bar .bl{font-size:11px;color:var(--muted);margin-top:5px;text-align:center;line-height:1.5}
+    .vm-bar .bv{font-size:11px;font-weight:800;color:var(--text)}
+    .vm-bar{cursor:default}
     .vm-cat{display:flex;flex-direction:column;gap:9px}
     .vm-catrow{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;font-size:13px}
     .vm-catrow .cn{font-weight:700}
@@ -1448,7 +1450,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-catrow .cv{font-size:12.5px;color:var(--muted);white-space:nowrap}
     table.vm-tbl{width:100%;border-collapse:collapse;font-size:13px}
     table.vm-tbl th{text-align:left;color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
-    table.vm-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+    table.vm-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:normal;overflow:visible;text-overflow:clip;height:auto;border-right:none}
     table.vm-tbl th.r,table.vm-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
     table.vm-tbl tbody tr:hover{background:var(--row-hover)}
     table.vm-tbl tbody tr:last-child td{border-bottom:none}
@@ -1457,7 +1459,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
     .vm-tag.com{background:var(--spot-bg);color:var(--spot-fg)}.vm-tag.inn{background:var(--res-bg);color:var(--res-fg)}
     .vm-tag.res{background:var(--fsr-bg);color:var(--fsr-fg)}.vm-tag.mic{background:var(--ctr-bg);color:var(--ctr-fg)}.vm-tag.rw{background:#e9e0f5;color:#5b3a8a}
-    .vm-ctag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;background:var(--spot-bg);color:var(--spot-fg);border:1px solid var(--spot-bd);padding:1px 5px;border-radius:5px;vertical-align:middle}
+    .vm-ctag{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;background:var(--spot-bg);color:var(--spot-fg);border:1px solid var(--spot-bd);padding:1px 5px;border-radius:5px;margin-top:3px;line-height:1.3}
     .vm-admin{border:1px solid #e6c9c0;background:var(--warn-bg);border-radius:14px;padding:16px 18px;margin-top:16px}
     .vm-admin h3{font-size:16px;margin:0 0 3px}
     .vm-xcards{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:10px 0 4px}
@@ -6639,6 +6641,7 @@ let vmDrill = 'alert';   // tarjeta admin abierta: sinico | sincosteo | sinmarge
 const vmGviz = (name,gid) => `https://docs.google.com/spreadsheets/d/${VM_SHEET_ID}/gviz/tq?tqx=out:csv&`
   + (gid ? ('gid='+gid) : ('sheet='+encodeURIComponent(name))) + '&_=' + Date.now();
 
+const vmAbbr = n => { n=Math.round(Number(n)||0); const s=n<0?'-':''; n=Math.abs(n); return s+(n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+Math.round(n/1e3)+'K':'$'+n); };
 function vmPct(s){
   if(s==null) return null;
   let t=String(s).trim(); if(t==='') return null;
@@ -6900,6 +6903,8 @@ function renderVentasMargenes(){
   const nClientes=new Set(rows.map(r=>r.cliente)).size;
   const mpct= revCost? (margen/revCost*100):0;
   const nat={}; rows.forEach(r=>{ if(r.cur&&r.cur!=='USD'){ nat[r.cur]=(nat[r.cur]||0)+r.amt; } });
+  // margen en moneda nativa = margen USD × (monto nativo / revenue USD) por fila
+  const natMg={}; rows.forEach(r=>{ if(r.cur&&r.cur!=='USD'&&r.marginFinal!=null&&r.usd>0){ natMg[r.cur]=(natMg[r.cur]||0)+r.gmcFinal*(r.amt/r.usd); } });
   // total gerencia (todo, ignorando comercial/cliente pero respetando año)
   const gerRows=vmRows.filter(r=>String(r.year)===String(vmF.year||'2026'));
   const gVent=gerRows.reduce((s,r)=>s+r.usd,0);
@@ -6970,7 +6975,9 @@ function renderVentasMargenes(){
   html+=`<div class="vm-kpi"><div class="k">Ventas · Revenue</div><div class="v">${money(ventas)} <span style="font-size:12px;color:var(--muted);font-weight:700">USD</span></div><div class="s">facturado (siempre en USD)</div>`
     + (Object.keys(nat).length?`<div class="vm-nat">${Object.entries(nat).map(([c,v])=>`<span class="vm-pill">${fmtCur(v,c)} ${c}</span>`).join('')}</div>`:'')
     + '</div>';
-  html+=`<div class="vm-kpi mg"><div class="k">Margen $</div><div class="v">${money(margen)}</div><div class="s">GMC Final</div></div>`;
+  html+=`<div class="vm-kpi mg"><div class="k">Margen $</div><div class="v">${money(margen)}</div><div class="s">GMC Final</div>`
+    + (Object.keys(natMg).length?`<div class="vm-nat">${Object.entries(natMg).map(([c,v])=>`<span class="vm-pill">${fmtCur(v,c)} ${c}</span>`).join('')}</div>`:'')
+    + '</div>';
   html+=`<div class="vm-kpi"><div class="k">Margen %</div><div class="v">${mpct.toFixed(1)}%</div><div class="s">ponderado</div></div>`;
   html+=`<div class="vm-kpi"><div class="k">KG vendidos</div><div class="v">${Math.round(kg).toLocaleString('en-US')}</div><div class="s">café verde</div></div>`;
   html+=`<div class="vm-kpi"><div class="k">Clientes</div><div class="v">${nClientes}</div><div class="s">distintos</div></div>`;
@@ -6981,7 +6988,7 @@ function renderVentasMargenes(){
   html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
   if(!monthsPresent.length) html+='<div class="vm-msg" style="width:100%">Sin datos para el filtro.</div>';
   monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.vc?o.g/o.vc*100:0;
-    html+=`<div class="vm-bar"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}</div></div>`; });
+    html+=`<div class="vm-bar" title="${VM_MESES[m]||m} · Ventas ${money(o.v)} · Margen ${p.toFixed(1)}%"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}<br><span class="bv">${vmAbbr(o.v)}</span></div></div>`; });
   html+='</div></div>';
   html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
   catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100);
@@ -7018,7 +7025,7 @@ function renderVentasMargenes(){
       +`<td class="r">${r.qty?Math.round(r.qty):'—'}</td>`
       +`<td class="r">${r.kg?Math.round(r.kg).toLocaleString('en-US'):'—'}</td>`
       +`<td class="r">${money(r.usd)}</td>`
-      +`<td class="r ${mcls}" style="white-space:nowrap">${r.overrideApplied?'<span class="vm-ctag" title="Margen tomado del contrato">contrato</span> ':''}${mp==null?'—':mp.toFixed(1)+'%'}</td>`
+      +`<td class="r ${mcls}"><span style="display:block">${mp==null?'—':mp.toFixed(1)+'%'}</span>${r.overrideApplied?'<span class="vm-ctag" title="Margen tomado del contrato">contrato</span>':''}</td>`
       +`<td class="vm-mono">${vmEsc(r.ico)||'<span style="color:var(--warn)">— sin ICO</span>'}</td></tr>`;
   });
   html+='</tbody></table></div>';
