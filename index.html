@@ -6555,12 +6555,17 @@ function exportHistorial(){
 // Acceso: autoservicio (el comercial elige su nombre) · Admin solo gerencia (gerOK).
 // ═══════════════════════════════════════════════════
 const VM_SHEET_ID = '19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg';
+// gid por pestaña (más confiable que sheet=NOMBRE, que en este Sheet a veces
+// devuelve AR_TAB). Si el gid está vacío uso sheet=; apenas tengas los gid
+// (número tras #gid= al abrir cada pestaña) los pongo aquí y queda 100% fijo.
 const VM_REGIONS = [
-  { tab:'USA',       region:'USA' },
-  { tab:'EU',        region:'EU&UK' },
-  { tab:'MENA',      region:'Dubai' },
-  { tab:'Australia', region:'Australia' },
+  { tab:'USA',       region:'USA',       gid:'' },
+  { tab:'EU',        region:'EU&UK',     gid:'' },
+  { tab:'MENA',      region:'Dubai',     gid:'' },
+  { tab:'Australia', region:'Australia', gid:'' },
 ];
+const VM_FX_GID = '';
+let vmDiag = [];
 const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
 const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -6568,7 +6573,8 @@ let vmRows = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
 let vmF = { comercial:'', cliente:'', region:'', categoria:'', year:'2026', month:'', q:'' };
 let vmSort = { key:'usd', dir:-1 };
 let vmDrill = 'alert';   // tarjeta admin abierta: sinico | sincosteo | sinmargen | alert
-const vmGviz = name => `https://docs.google.com/spreadsheets/d/${VM_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}&_=${Date.now()}`;
+const vmGviz = (name,gid) => `https://docs.google.com/spreadsheets/d/${VM_SHEET_ID}/gviz/tq?tqx=out:csv&`
+  + (gid ? ('gid='+gid) : ('sheet='+encodeURIComponent(name))) + '&_=' + Date.now();
 
 function vmPct(s){
   if(s==null) return null;
@@ -6597,11 +6603,11 @@ function vmColAll(head, cands){
 const vmCol = (head,cands)=>{ const a=vmColAll(head,cands); return a.length?a[0]:-1; };
 
 async function cargarVentasMargenes(){
-  if(vmLoading) return; vmLoading=true; vmError='';
+  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[];
   try{
     // 1) FX
     try{
-      const rfx=await fetch(vmGviz('FX'));
+      const rfx=await fetch(vmGviz('FX',VM_FX_GID));
       const fx=parseCSV(await rfx.text());
       const hi=vmHeaderIdx(fx,['month','mes']);
       const H=fx[hi].map(h=>String(h||'').trim().toLowerCase());
@@ -6618,13 +6624,21 @@ async function cargarVentasMargenes(){
 
     // 2) regiones
     const all=[];
-    await Promise.all(VM_REGIONS.map(async ({tab,region})=>{
+    await Promise.all(VM_REGIONS.map(async ({tab,region,gid})=>{
+      const dg={tab, region, ok:false, raw:0, taken:0, headSample:'', err:''};
       try{
-        const resp=await fetch(vmGviz(tab));
+        const resp=await fetch(vmGviz(tab,gid));
         if(!resp.ok) throw new Error('HTTP '+resp.status);
         const aoa=parseCSV(await resp.text());
+        dg.raw=aoa.length;
         const hi=vmHeaderIdx(aoa,['item name','customer name']);
         const head=aoa[hi].map(h=>String(h||'').trim().toLowerCase());
+        dg.headSample=head.filter(Boolean).slice(0,6).join(' | ');
+        if(!head.some(h=>h.includes('item name'))){
+          // gviz devolvió otra pestaña (típico de sheet=NOMBRE → AR_TAB). Sin 'item name' no hay nada que parsear.
+          dg.err='gviz no devolvió esta pestaña (headers sin "item name"). Necesito el gid de '+tab+'.';
+          vmDiag.push(dg); return;
+        }
         const iCust=vmCol(head,['customer','customer name (customer reference)']);
         const iDoc =vmCol(head,['doc number','invoice','factura']);
         const iItem=vmCol(head,['item name (line > sales item line detail > item reference)','item name']);
@@ -6648,6 +6662,7 @@ async function cargarVentasMargenes(){
         const iFG=vmCol(head,['final gmc $$','final gmc']);
         const iMR=vmCol(head,['margin']);   // margen real del lote (MENA no la trae)
 
+        const before=all.length;
         for(let r=hi+1;r<aoa.length;r++){
           const row=aoa[r]||[]; if(!row.length) continue;
           const g=i=>(i>=0&&i<row.length)?String(row[i]||'').trim():'';
@@ -6676,7 +6691,8 @@ async function cargarVentasMargenes(){
             marginFinal, gmcFinal, marginReal, cost:cleanNum(g(iCost)),
           });
         }
-      }catch(e){ console.warn('Región '+tab+' no disponible', e); }
+        dg.taken=all.length-before; dg.ok=true; vmDiag.push(dg);
+      }catch(e){ dg.err=(e&&e.message)||String(e); vmDiag.push(dg); console.warn('Región '+tab+' no disponible', e); }
     }));
     vmRows=all; vmLoaded=true; vmLoading=false;
     if(activeTab==='ventas') renderVentasMargenes();
@@ -6712,7 +6728,16 @@ function renderVentasMargenes(){
   const body=document.getElementById('vmBody'); if(!body) return;
   if(!vmLoaded){ body.innerHTML='<div class="vm-msg">Cargando ventas…</div>'; return; }
   if(vmError){ body.innerHTML='<div class="vm-msg">⚠️ '+vmEsc(vmError)+'</div>'; return; }
-  if(!vmRows.length){ body.innerHTML='<div class="vm-msg">No encontré líneas de 2026 en las pestañas USA / EU / MENA / Australia.</div>'; return; }
+  if(!vmRows.length){
+    let d='<div class="vm-panel" style="max-width:720px;margin:20px auto"><h3>No pude leer las ventas todavía</h3>'
+      +'<p class="nt">Diagnóstico por pestaña (lo que devolvió Google):</p>'
+      +'<table class="vm-tbl"><thead><tr><th>Pestaña</th><th class="r">Filas</th><th class="r">Tomadas 2026</th><th>Estado / headers</th></tr></thead><tbody>';
+    (vmDiag.length?vmDiag:VM_REGIONS.map(r=>({tab:r.tab,raw:0,taken:0,err:'sin respuesta',headSample:''}))).forEach(x=>{
+      d+=`<tr><td class="cl">${vmEsc(x.tab)}</td><td class="r">${x.raw||0}</td><td class="r">${x.taken||0}</td><td style="font-size:12px">${x.err?('<span class="vm-neg">'+vmEsc(x.err)+'</span>'):vmEsc(x.headSample||'ok')}</td></tr>`;
+    });
+    d+='</tbody></table><p class="nt" style="margin-top:10px">Si dice <b>«gviz no devolvió esta pestaña»</b>, el parámetro de nombre no aplicó: pásame el <b>gid</b> de cada pestaña (el número tras <code>#gid=</code> al abrirla) y lo fijo.</p></div>';
+    body.innerHTML=d; return;
+  }
 
   const gerOK = sessionStorage.getItem('gerOK')==='1';
   const rows = vmFilter(vmRows);
