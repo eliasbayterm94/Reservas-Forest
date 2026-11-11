@@ -6567,6 +6567,7 @@ const VM_REGIONS = [
 const VM_FX_TAB = 'FX', VM_FX_GID = '';
 const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
 const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
+const VM_REP_TAB = 'SALES REP', VM_REP_GID = '';   // Customer → Comercial (col A → D)
 const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
 let vmCost = {}, vmContracts = {}, vmClientRep = {}, vmDiag = [];
 // ICO numérico (sin prefijo RW): "26-00852". Para unir con BASE COST aunque el prefijo difiera.
@@ -6682,6 +6683,19 @@ async function cargarVentasMargenes(){
         if(cli && rep && !vmClientRep[cli]) vmClientRep[cli]=titleCase(rep);
       }
     }catch(e){ console.warn('CONTRACTS no disponible', e); }
+
+    // 3b) SALES REP → comercial y región por cliente (fuente autoritativa)
+    try{
+      const sr=parseCSV(await (await fetch(vmGviz(VM_REP_TAB,VM_REP_GID))).text());
+      const hi=vmHeaderIdx(sr,['customer','cliente']);
+      const H=sr[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iCli=vmCol(H,['customer','cliente']);
+      const iRep=vmCol(H,['comercial','sales rep','rep']);
+      for(let r=hi+1;r<sr.length;r++){
+        const row=sr[r]||[]; const cli=String(row[iCli]||'').trim().toUpperCase(), rep=String(row[iRep]||'').trim();
+        if(cli && rep) vmClientRep[cli]=titleCase(rep);   // SALES REP manda sobre CONTRACTS
+      }
+    }catch(e){ console.warn('SALES REP no disponible', e); }
 
     // 4) regiones (crudas de QuickBooks) → calcula todo
     const all=[];
