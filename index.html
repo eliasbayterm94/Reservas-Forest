@@ -2111,7 +2111,11 @@ function feeTooltip(r, esWH){
   const hoy=new Date(), ini=r.fee_inicio?new Date(r.fee_inicio+'T00:00:00'):null;
   const m0=new Date(hoy.getFullYear(),hoy.getMonth()-1,1), m1=new Date(hoy.getFullYear(),hoy.getMonth(),0);
   const desde=ini&&ini>m0?ini:m0;
-  const base = esWH ? `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`
+  // Dupuy / Annex / NJ con 10 sacos o menos pagan tarifa plana por lote (igual que el API v16).
+  const bU=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
+  const lotePlano = cur==='USD' && r.cantidad<=10 && !bU.includes('CANAD');
+  const base = esWH ? (lotePlano ? `lote de ${r.cantidad} saco${r.cantidad===1?'':'s'} (10 sacos o menos): ${f2(mensual)}/mes`
+                                 : `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`)
                     : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato`
                       + (r.precio_base ? ` · precio ${r.precio_fuente==='T'?'contrato':'Pallet Price'} ${r.precio_base}` : '') + ')';
   const L=[`${esWH?'Storage':'Finance'} de ${MES[m0.getMonth()]} (${desde.getDate()}–${m1.getDate()} ${MES[m0.getMonth()]}): `
@@ -3422,7 +3426,7 @@ function exportFacturacionMes(){
   // ── Hoja 2: A facturar (detalle), con fórmulas ──
   //  A Cliente B Comercial C Bodega D Tipo E Contrato F Café G ICO H Factura
   //  I Sacos J Kg/saco K Cobra desde L Desde M Hasta N Días (=M-L+1)
-  //  O Regla storage P Tarifa/saco Q Storage/mes (=I*P) R Storage (=ROUND(Q/30*N,2)) S Moneda
+  //  O Regla storage P Tarifa/saco o /lote Q Storage/mes (=I*P, o =P si es tarifa por lote) R Storage (=ROUND(Q/30*N,2)) S Moneda
   //  T Precio U Fuente V Factor lb W Valor contrato (=T*J*I*V) X Tasa Y Finance/mes (=W*X)
   //  Z Finance (=ROUND(Y/30*N,2)) AA Moneda
   const porCliente=(a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato));
