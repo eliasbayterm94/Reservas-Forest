@@ -6609,6 +6609,8 @@ function vmParseItem(item){
   const ms=[...s.matchAll(/(RW[- ]?)?(\d{2}-\d{3,})/gi)];
   let ico='', iconum='';
   if(ms.length){ const m=ms[ms.length-1]; iconum=m[2]; ico=(m[1]?'RW-':'')+m[2]; }
+  // "Direct from Colombia" sin ICO → ICO padre 25-999 (costeo en BASE COST).
+  if(!ico && /direct from colombia/i.test(s)){ ico='25-999'; iconum='25-999'; }
   let cat=''; for(const t of toks){ if(VM_CATS.includes(t.toUpperCase())){ cat=t.toUpperCase(); break; } }
   let prod=toks.length?toks[toks.length-1]:''; prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}\s*$/i,'').trim();
   return { ico, iconum, cat, prod: prod||toks[toks.length-1]||'', container: toks[1]||'' };
