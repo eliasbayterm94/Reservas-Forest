@@ -6687,7 +6687,7 @@ async function cargarVentasMargenes(){
         const row=ct[r]||[]; const code=String(row[iCod]||'').trim().toUpperCase(); if(!code) continue;
         if(!vmContracts[code]) vmContracts[code]={ margin: vmPct(row[iMar]) };
         const cli=String(row[iCli]||'').trim().toUpperCase(), rep=String(row[iRep]||'').trim();
-        if(cli && rep && !vmClientRep[cli]) vmClientRep[cli]=titleCase(rep);
+        if(cli && rep && !vmClientRep[cli]) vmClientRep[cli]={ rep, ho:'' };   // respaldo
       }
     }catch(e){ console.warn('CONTRACTS no disponible', e); }
 
@@ -6698,9 +6698,11 @@ async function cargarVentasMargenes(){
       const H=sr[hi].map(h=>String(h||'').trim().toLowerCase());
       const iCli=vmCol(H,['customer','cliente']);
       const iRep=vmCol(H,['comercial','sales rep','rep']);
+      const iHO=vmCol(H,['hand over']);   // "Hand Over Pablo": comercial válido desde Ago-2026
       for(let r=hi+1;r<sr.length;r++){
-        const row=sr[r]||[]; const cli=String(row[iCli]||'').trim().toUpperCase(), rep=String(row[iRep]||'').trim();
-        if(cli && rep) vmClientRep[cli]=titleCase(rep);   // SALES REP manda sobre CONTRACTS
+        const row=sr[r]||[]; const cli=String(row[iCli]||'').trim().toUpperCase();
+        const rep=String(row[iRep]||'').trim(), ho=String(iHO>=0?(row[iHO]||''):'').trim();
+        if(cli && (rep||ho)) vmClientRep[cli]={ rep, ho };   // SALES REP manda sobre CONTRACTS
       }
     }catch(e){ console.warn('SALES REP no disponible', e); }
 
@@ -6759,7 +6761,10 @@ async function cargarVentasMargenes(){
             marginFinal=cEntry.margin; gmcFinal=usd*cEntry.margin/100; overrideApplied=true;
           }
           const cliente=(g(iCust)||'—');
-          const comercial=vmClientRep[cliente.toUpperCase()] || normComercial('Sin asignar');
+          // Comercial: desde Ago-2026 prima el "Hand Over Pablo" (traspaso de clientes de Pablo).
+          const _rep=vmClientRep[cliente.toUpperCase()];
+          const _useHO = (year>2026) || (year===2026 && month>=8);
+          const comercial = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || 'Sin asignar')) : 'Sin asignar';
           all.push({
             region, cliente, comercial,
             factura:g(iDoc), producto:P.prod||'—', item:itemName, cat, size:D.size, qty,
