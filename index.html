@@ -1416,25 +1416,25 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <!-- ══════════ VISTA: VENTAS & MÁRGENES ══════════ -->
 <div id="viewVentas" class="view hidden" style="overflow-y:auto">
   <style>
-    .vm-wrap{padding:0 0 40px}
-    .vm-filters{display:flex;gap:9px;flex-wrap:wrap;margin:4px 0 14px;align-items:center}
-    .vm-fi{display:flex;flex-direction:column;gap:2px}
+    .vm-wrap{max-width:1180px;margin:0 auto;padding:6px 10px 56px}
+    .vm-filters{display:flex;gap:11px;flex-wrap:wrap;margin:6px 0 18px;align-items:flex-end}
+    .vm-fi{display:flex;flex-direction:column;gap:4px}
     .vm-fi label{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
-    .vm-fi select,.vm-fi input{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:13.5px;font-weight:600;color:var(--text);min-width:120px}
+    .vm-fi select,.vm-fi input{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13.5px;font-weight:600;color:var(--text);min-width:128px}
     .vm-fi.me select{background:var(--fc-navy);color:#fff;border-color:var(--fc-navy)}
-    .vm-kpis{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:6px}
-    .vm-kpi{background:var(--surface);border:1px solid var(--border);border-left:5px solid var(--fc-navy);border-radius:var(--radius);padding:13px 15px}
+    .vm-kpis{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr 1fr;gap:14px;margin-bottom:6px}
+    .vm-kpi{background:var(--surface);border:1px solid var(--border);border-left:5px solid var(--fc-navy);border-radius:var(--radius);padding:16px 18px}
     .vm-kpi .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
-    .vm-kpi .v{font-size:25px;font-weight:800;margin:3px 0 1px;letter-spacing:-.4px}
+    .vm-kpi .v{font-size:26px;font-weight:800;margin:5px 0 2px;letter-spacing:-.4px}
     .vm-kpi .s{font-size:12px;color:var(--muted)}
     .vm-kpi.mg{border-left-color:var(--res-bd)}.vm-kpi.mg .v{color:var(--res-fg)}
-    .vm-nat{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
-    .vm-pill{background:var(--green-l);border:1px solid var(--fee-bd);border-radius:8px;padding:4px 8px;font-size:12.5px;font-weight:700;color:var(--gold)}
-    .vm-note-ger{font-size:12px;color:var(--muted);text-align:right;margin:2px 0 12px}
-    .vm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
-    .vm-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px}
-    .vm-panel h3{font-size:16px;margin:0 0 3px}
-    .vm-panel .nt{color:var(--muted);font-size:12px;margin:0 0 12px}
+    .vm-nat{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+    .vm-pill{background:var(--green-l);border:1px solid var(--fee-bd);border-radius:8px;padding:5px 9px;font-size:12.5px;font-weight:700;color:var(--gold)}
+    .vm-note-ger{font-size:12px;color:var(--muted);text-align:right;margin:4px 2px 14px}
+    .vm-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+    .vm-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-top:18px}
+    .vm-panel h3{font-size:16px;margin:0 0 4px}
+    .vm-panel .nt{color:var(--muted);font-size:12px;margin:0 0 14px}
     .vm-trend{display:flex;align-items:flex-end;gap:10px;height:170px;padding-top:22px}
     .vm-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
     .vm-bar .bb{width:66%;background:linear-gradient(180deg,#2a3356,#1b203d);border-radius:5px 5px 0 0;min-height:2px}
@@ -1447,10 +1447,11 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-fill{height:100%;border-radius:7px}
     .vm-catrow .cv{font-size:12.5px;color:var(--muted);white-space:nowrap}
     table.vm-tbl{width:100%;border-collapse:collapse;font-size:13px}
-    table.vm-tbl th{text-align:left;color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;padding:7px 9px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
-    table.vm-tbl td{padding:8px 9px;border-bottom:1px solid var(--border)}
-    table.vm-tbl th.r,table.vm-tbl td.r{text-align:right}
+    table.vm-tbl th{text-align:left;color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
+    table.vm-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+    table.vm-tbl th.r,table.vm-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
     table.vm-tbl tbody tr:hover{background:var(--row-hover)}
+    table.vm-tbl tbody tr:last-child td{border-bottom:none}
     .vm-tbl .cl{font-weight:700}.vm-mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
     .vm-pos{color:var(--res-fg);font-weight:700}.vm-neg{color:var(--warn);font-weight:800}.vm-warn{color:var(--fsr-fg);font-weight:800}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
@@ -6569,6 +6570,12 @@ const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
 const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
 const VM_REP_TAB = 'SALES REP', VM_REP_GID = '';   // Customer → Comercial (col A → D)
 const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
+// Servicios facturados (NO café): se excluyen del revenue, margen y detalle.
+// Se puede ir ampliando con lo que vaya apareciendo.
+const VM_SERVICES = ['loadout','handling','certificate operation','documents and legal',
+  'legal service','tariff overcost','overcost','freight','storage','re-bagging','rebagging',
+  'sampling fee','courier','logistics'];
+const vmIsService = s => { const t=String(s||'').toLowerCase(); return VM_SERVICES.some(k=>t.includes(k)); };
 let vmCost = {}, vmContracts = {}, vmClientRep = {}, vmDiag = [];
 // ICO numérico (sin prefijo RW): "26-00852". Para unir con BASE COST aunque el prefijo difiera.
 const vmIcoNum = s => { const m=String(s||'').match(/\d{2}-\d{3,}/); return m?m[0]:''; };
@@ -6729,6 +6736,7 @@ async function cargarVentasMargenes(){
           const g=i=>(i>=0&&i<row.length)?String(row[i]||'').trim():'';
           const itemName=g(iItem); const amt=cleanNum(g(iAmt));
           if(!itemName || !(amt>0)) continue;                  // solo líneas reales con venta
+          if(vmIsService(itemName+' '+g(iDesc))) continue;     // servicios facturados: no son café
           const d=normalizeDate(g(iDate)); const year=+(d.slice(0,4))||0;
           if(year<2026) continue;                              // SOLO 2026 en adelante
           const month=+(d.slice(5,7))||0;
@@ -6822,29 +6830,32 @@ function renderVentasMargenes(){
   const years=[...new Set(vmRows.map(r=>r.year))].sort();
   const months=[...new Set(vmFilter(vmRows,'month').map(r=>r.month))].filter(Boolean).sort((a,b)=>a-b);
 
-  // KPIs
+  // KPIs — el margen % se pondera solo sobre ventas CON costo conocido (no lo
+  // arrastran las líneas sin costeo), pero el revenue y KG cuentan todo.
   const ventas=rows.reduce((s,r)=>s+r.usd,0);
-  const margen=rows.reduce((s,r)=>s+r.gmcFinal,0);
+  let margen=0, revCost=0;
+  rows.forEach(r=>{ if(r.marginFinal!=null){ margen+=r.gmcFinal; revCost+=r.usd; } });
   const kg=rows.reduce((s,r)=>s+r.kg,0);
   const nClientes=new Set(rows.map(r=>r.cliente)).size;
-  const mpct= ventas? (margen/ventas*100):0;
+  const mpct= revCost? (margen/revCost*100):0;
   const nat={}; rows.forEach(r=>{ if(r.cur&&r.cur!=='USD'){ nat[r.cur]=(nat[r.cur]||0)+r.amt; } });
   // total gerencia (todo, ignorando comercial/cliente pero respetando año)
   const gerRows=vmRows.filter(r=>String(r.year)===String(vmF.year||'2026'));
-  const gVent=gerRows.reduce((s,r)=>s+r.usd,0), gMar=gerRows.reduce((s,r)=>s+r.gmcFinal,0);
+  const gVent=gerRows.reduce((s,r)=>s+r.usd,0);
+  let gMar=0, gRevCost=0; gerRows.forEach(r=>{ if(r.marginFinal!=null){ gMar+=r.gmcFinal; gRevCost+=r.usd; } });
 
-  // tendencia mensual
-  const byMonth={}; rows.forEach(r=>{ const m=r.month||0; if(!m)return; (byMonth[m]=byMonth[m]||{v:0,g:0}); byMonth[m].v+=r.usd; byMonth[m].g+=r.gmcFinal; });
+  // tendencia mensual (margen % ponderado sobre lo costeado)
+  const byMonth={}; rows.forEach(r=>{ const m=r.month||0; if(!m)return; (byMonth[m]=byMonth[m]||{v:0,g:0,vc:0}); byMonth[m].v+=r.usd; if(r.marginFinal!=null){ byMonth[m].g+=r.gmcFinal; byMonth[m].vc+=r.usd; } });
   const monthsPresent=Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
   const maxV=Math.max(1,...monthsPresent.map(m=>byMonth[m].v));
 
   // top clientes
-  const cMap={}; rows.forEach(r=>{ const k=r.cliente; (cMap[k]=cMap[k]||{v:0,kg:0,g:0}); cMap[k].v+=r.usd; cMap[k].kg+=r.kg; cMap[k].g+=r.gmcFinal; });
-  const top=Object.entries(cMap).map(([n,o])=>({n,...o,p:o.v?o.g/o.v*100:0})).sort((a,b)=>b.v-a.v).slice(0,8);
+  const cMap={}; rows.forEach(r=>{ const k=r.cliente; (cMap[k]=cMap[k]||{v:0,kg:0,g:0,vc:0}); cMap[k].v+=r.usd; cMap[k].kg+=r.kg; if(r.marginFinal!=null){ cMap[k].g+=r.gmcFinal; cMap[k].vc+=r.usd; } });
+  const top=Object.entries(cMap).map(([n,o])=>({n,...o,p:o.vc?o.g/o.vc*100:0})).sort((a,b)=>b.v-a.v).slice(0,8);
 
   // categorías
-  const catMap={}; rows.forEach(r=>{ const k=r.cat||'—'; (catMap[k]=catMap[k]||{v:0,g:0}); catMap[k].v+=r.usd; catMap[k].g+=r.gmcFinal; });
-  const catArr=Object.entries(catMap).map(([n,o])=>({n,...o,p:o.v?o.g/o.v*100:0})).sort((a,b)=>b.v-a.v);
+  const catMap={}; rows.forEach(r=>{ const k=r.cat||'—'; (catMap[k]=catMap[k]||{v:0,g:0,vc:0}); catMap[k].v+=r.usd; if(r.marginFinal!=null){ catMap[k].g+=r.gmcFinal; catMap[k].vc+=r.usd; } });
+  const catArr=Object.entries(catMap).map(([n,o])=>({n,...o,p:o.vc?o.g/o.vc*100:0})).sort((a,b)=>b.v-a.v);
   const maxCat=Math.max(1,...catArr.map(c=>c.v));
   const catColor=n=>n==='COMMUNITY'?'#9c9810':n==='INNOVATION'?'#3d6224':n==='RESERVE'?'#9c5e15':n==='MICROLOT'?'#2e4a63':'#6b6f86';
 
@@ -6861,7 +6872,7 @@ function renderVentasMargenes(){
   const base=gerRows;
   const sinIco=base.filter(r=>!r.ico);
   const sinCosteo=base.filter(r=>r.ico && !r.costFound);
-  const sinMargen=base.filter(r=>r.contract && r.contractMissing);
+  const sinMargen=base.filter(r=>r.cat==='COMMUNITY' && r.contract && r.contractMissing);
   const alert=base.filter(r=>!r.overrideApplied && r.marginReal!=null && r.marginReal<15)
                   .map(r=>({...r, sev: r.marginReal<0?'hi':'md'}))
                   .sort((a,b)=>a.marginReal-b.marginReal);
@@ -6879,7 +6890,7 @@ function renderVentasMargenes(){
     +`<div class="vm-fi"><label>Mes</label><select onchange="vmOnFilter('month',this.value)"><option value="">Todos</option>${months.map(m=>`<option value="${m}"${String(m)===vmF.month?' selected':''}>${VM_MESES[m]||m}</option>`).join('')}</select></div>`
     +`<div class="vm-fi"><label>Buscar</label><input type="text" placeholder="Cliente / ICO / factura…" value="${vmEsc(vmF.q)}" oninput="vmF.q=this.value; clearTimeout(window._vmq); window._vmq=setTimeout(renderVentasMargenes,250)"></div>`
     +'</div>';
-  html+=`<div class="vm-note-ger">Gerencia (todo ${vmF.year||'2026'}): <b>${money(gVent)}</b> · ${(gVent?gMar/gVent*100:0).toFixed(1)}% · ${new Set(gerRows.map(r=>r.cliente)).size} clientes</div>`;
+  html+=`<div class="vm-note-ger">Gerencia (todo ${vmF.year||'2026'}): <b>${money(gVent)}</b> · ${(gRevCost?gMar/gRevCost*100:0).toFixed(1)}% · ${new Set(gerRows.map(r=>r.cliente)).size} clientes</div>`;
 
   // KPIs
   html+='<div class="vm-kpis">';
@@ -6896,7 +6907,7 @@ function renderVentasMargenes(){
   html+='<div class="vm-grid">';
   html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
   if(!monthsPresent.length) html+='<div class="vm-msg" style="width:100%">Sin datos para el filtro.</div>';
-  monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.v?o.g/o.v*100:0;
+  monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.vc?o.g/o.vc*100:0;
     html+=`<div class="vm-bar"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}</div></div>`; });
   html+='</div></div>';
   html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
@@ -6978,9 +6989,7 @@ function renderVentasMargenes(){
       html+='</tbody></table>';
     }
     html+='</div></div>';
-  } else {
-    html+='<div class="vm-panel" style="text-align:center;color:var(--muted);font-size:13px">🔒 El módulo Admin (data por corregir + alertas de margen) es solo para gerencia. Entra con el código en la pestaña <b>Management</b> y vuelve aquí.</div>';
-  }
+  }  // sin gerOK: no se muestra nada del módulo Admin (vista limpia para comerciales)
 
   body.innerHTML=html;
 }
