@@ -6618,9 +6618,15 @@ function vmParseItem(item){
 // Parsea Description → código de contrato y tamaño del saco (KG).
 function vmParseDesc(desc){
   const s=String(desc||'');
-  const cm=s.match(/Contract:\s*([A-Za-z0-9\-]+)/i);
+  // Código de contrato Forest: formato FC-YY-XXX-xxxx. En el Description viene
+  // tras "QC Code:" o "Contract:" (o suelto); lo detectamos por su patrón, no
+  // por la palabra "Contract:" (que no siempre está).
+  let contract='';
+  const fc=s.match(/\bFC-\d{2}-[A-Za-z]+-[A-Za-z0-9]+/i);
+  if(fc) contract=fc[0].trim();
+  else { const cm=s.match(/Contract:\s*([A-Za-z0-9\-]+)/i); if(cm) contract=cm[1].trim(); }
   const sm=s.match(/(\d+(?:\.\d+)?)\s*KG/i);
-  return { contract: cm?cm[1].trim():'', size: sm?+sm[1]:0 };
+  return { contract, size: sm?+sm[1]:0 };
 }
 const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
 const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
