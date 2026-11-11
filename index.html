@@ -6559,13 +6559,36 @@ const VM_SHEET_ID = '19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg';
 // devuelve AR_TAB). Si el gid está vacío uso sheet=; apenas tengas los gid
 // (número tras #gid= al abrir cada pestaña) los pongo aquí y queda 100% fijo.
 const VM_REGIONS = [
-  { tab:'USA',       region:'USA',       gid:'' },
-  { tab:'EU',        region:'EU&UK',     gid:'' },
-  { tab:'MENA',      region:'Dubai',     gid:'' },
-  { tab:'Australia', region:'Australia', gid:'' },
+  { tab:'USA',        region:'USA',       gid:'' },
+  { tab:'EU',         region:'EU&UK',     gid:'' },
+  { tab:'MENA',       region:'Dubai',     gid:'' },
+  { tab:'AUSTRALIA',  region:'Australia', gid:'' },
 ];
-const VM_FX_GID = '';
-let vmDiag = [];
+const VM_FX_TAB = 'FX', VM_FX_GID = '';
+const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
+const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
+const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
+let vmCost = {}, vmContracts = {}, vmClientRep = {}, vmDiag = [];
+// ICO numérico (sin prefijo RW): "26-00852". Para unir con BASE COST aunque el prefijo difiera.
+const vmIcoNum = s => { const m=String(s||'').match(/\d{2}-\d{3,}/); return m?m[0]:''; };
+// Parsea el Item Name crudo → ICO, contenedor, categoría, producto. El ICO es el
+// último token dd-ddddd (puede traer prefijo RW de Rwanda); el 2º token es el contenedor.
+function vmParseItem(item){
+  const s=String(item||''); const toks=s.split(':').map(t=>t.trim());
+  const ms=[...s.matchAll(/(RW[- ]?)?(\d{2}-\d{3,})/gi)];
+  let ico='', iconum='';
+  if(ms.length){ const m=ms[ms.length-1]; iconum=m[2]; ico=(m[1]?'RW-':'')+m[2]; }
+  let cat=''; for(const t of toks){ if(VM_CATS.includes(t.toUpperCase())){ cat=t.toUpperCase(); break; } }
+  let prod=toks.length?toks[toks.length-1]:''; prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}\s*$/i,'').trim();
+  return { ico, iconum, cat, prod: prod||toks[toks.length-1]||'', container: toks[1]||'' };
+}
+// Parsea Description → código de contrato y tamaño del saco (KG).
+function vmParseDesc(desc){
+  const s=String(desc||'');
+  const cm=s.match(/Contract:\s*([A-Za-z0-9\-]+)/i);
+  const sm=s.match(/(\d+(?:\.\d+)?)\s*KG/i);
+  return { contract: cm?cm[1].trim():'', size: sm?+sm[1]:0 };
+}
 const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
 const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -6602,13 +6625,19 @@ function vmColAll(head, cands){
 }
 const vmCol = (head,cands)=>{ const a=vmColAll(head,cands); return a.length?a[0]:-1; };
 
+// busca el costo USD/kg de un ICO en BASE COST (prueba ICO completo y numérico)
+function vmLookupCost(ico, iconum){
+  const k=(ico||'').toUpperCase();
+  if(k && vmCost[k]!=null) return vmCost[k];
+  if(iconum && vmCost['#'+iconum]!=null) return vmCost['#'+iconum];
+  return null;
+}
 async function cargarVentasMargenes(){
-  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[];
+  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[]; vmCost={}; vmContracts={}; vmClientRep={}; vmFX={};
   try{
-    // 1) FX
+    // 1) FX (monto nativo → USD). Si falla, respaldo VM_FX_DEFAULT.
     try{
-      const rfx=await fetch(vmGviz('FX',VM_FX_GID));
-      const fx=parseCSV(await rfx.text());
+      const fx=parseCSV(await (await fetch(vmGviz(VM_FX_TAB||'FX',VM_FX_GID))).text());
       const hi=vmHeaderIdx(fx,['month','mes']);
       const H=fx[hi].map(h=>String(h||'').trim().toLowerCase());
       const iM=vmCol(H,['month','mes']), iY=vmCol(H,['year','año','ano']);
@@ -6622,10 +6651,42 @@ async function cargarVentasMargenes(){
       }
     }catch(e){ console.warn('FX no disponible, uso respaldo', e); }
 
-    // 2) regiones
+    // 2) BASE COST → costo USD/kg por ICO
+    try{
+      const bc=parseCSV(await (await fetch(vmGviz(VM_COST_TAB,VM_COST_GID))).text());
+      const hi=vmHeaderIdx(bc,['ico']);
+      const H=bc[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iIco=vmCol(H,['ico']);
+      const iCk=vmCol(H,['costo kg (usd)','cost kg (usd)','costo kg usd']);
+      for(let r=hi+1;r<bc.length;r++){
+        const row=bc[r]||[]; const ico=String(row[iIco]||'').trim().toUpperCase(); if(!ico) continue;
+        const c=cleanNum(row[iCk]); if(!(c>0)) continue;
+        if(vmCost[ico]==null) vmCost[ico]=c;
+        const num=vmIcoNum(ico); if(num && vmCost['#'+num]==null) vmCost['#'+num]=c;
+      }
+    }catch(e){ console.warn('BASE COST no disponible', e); }
+
+    // 3) CONTRACTS → margen cerrado por código de contrato
+    try{
+      const ct=parseCSV(await (await fetch(vmGviz(VM_CONTRACTS_TAB,VM_CONTRACTS_GID))).text());
+      const hi=vmHeaderIdx(ct,['codigo contrato','contract padre','código contrato']);
+      const H=ct[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iCod=vmCol(H,['codigo contrato','código contrato','contract code']);
+      const iMar=vmCol(H,['margin closed']);
+      const iCli=vmCol(H,['client','cliente']);
+      const iRep=vmCol(H,['sales rep','comercial','rep']);
+      for(let r=hi+1;r<ct.length;r++){
+        const row=ct[r]||[]; const code=String(row[iCod]||'').trim().toUpperCase(); if(!code) continue;
+        if(!vmContracts[code]) vmContracts[code]={ margin: vmPct(row[iMar]) };
+        const cli=String(row[iCli]||'').trim().toUpperCase(), rep=String(row[iRep]||'').trim();
+        if(cli && rep && !vmClientRep[cli]) vmClientRep[cli]=titleCase(rep);
+      }
+    }catch(e){ console.warn('CONTRACTS no disponible', e); }
+
+    // 4) regiones (crudas de QuickBooks) → calcula todo
     const all=[];
     await Promise.all(VM_REGIONS.map(async ({tab,region,gid})=>{
-      const dg={tab, region, ok:false, raw:0, taken:0, headSample:'', err:''};
+      const dg={tab, region, ok:false, raw:0, taken:0, err:''};
       try{
         const resp=await fetch(vmGviz(tab,gid));
         if(!resp.ok) throw new Error('HTTP '+resp.status);
@@ -6633,65 +6694,58 @@ async function cargarVentasMargenes(){
         dg.raw=aoa.length;
         const hi=vmHeaderIdx(aoa,['item name','customer name']);
         const head=aoa[hi].map(h=>String(h||'').trim().toLowerCase());
-        dg.headSample=head.filter(Boolean).slice(0,6).join(' | ');
         if(!head.some(h=>h.includes('item name'))){
-          // gviz devolvió otra pestaña (típico de sheet=NOMBRE → AR_TAB). Sin 'item name' no hay nada que parsear.
           dg.err='gviz no devolvió esta pestaña (headers sin "item name"). Necesito el gid de '+tab+'.';
           vmDiag.push(dg); return;
         }
-        const iCust=vmCol(head,['customer','customer name (customer reference)']);
+        const iCust=vmCol(head,['customer']);
         const iDoc =vmCol(head,['doc number','invoice','factura']);
-        const iItem=vmCol(head,['item name (line > sales item line detail > item reference)','item name']);
-        const iRep =vmCol(head,['sales rep','not assigned','comercial','vendedor','rep']);
-        const iProd=vmCol(head,['product','producto']);
-        const iCat =vmCol(head,['category','categoria','categoría']);
-        const iSize=vmCol(head,['size','tamaño','tamano']);
-        const iQty =vmCol(head,['qty','quantity (line > sales item line detail)']);
-        const iIco =vmCol(head,['ico']);
-        const iContr=vmCol(head,['contract','contrato']);
-        const iKg  =vmCol(head,['kg']);
+        const iItem=vmCol(head,['item name']);
+        const iDesc=vmCol(head,['description']);
+        const iQty =vmCol(head,['quantity','qty']);
         const iAmt =vmCol(head,['amount (line)','amount']);
-        const iCur =vmCol(head,['currency (currency reference)','currency','moneda']);
-        const iMon =vmCol(head,['month','mes']);
-        const iYr  =vmCol(head,['year','año','ano']);
-        const iCost=vmCol(head,['cost usd','costo usd']);
-        // USD: hay dos (nivel factura + por línea tras KG). Tomo la que va DESPUÉS de KG.
-        const usds=vmColAll(head,['usd']).filter(i=>i!==iCost);
-        let iUsd=-1; if(iKg>=0){ iUsd=usds.find(i=>i>iKg); } if(iUsd==null||iUsd<0) iUsd=usds.length?usds[usds.length-1]:-1;
-        const iFM=vmCol(head,['final margin']);
-        const iFG=vmCol(head,['final gmc $$','final gmc']);
-        const iMR=vmCol(head,['margin']);   // margen real del lote (MENA no la trae)
-        dg.idx=`item=${iItem} yr=${iYr} mon=${iMon} kg=${iKg} usd=${iUsd} amt=${iAmt} cur=${iCur} cat=${iCat} ico=${iIco}`;
+        const iCur =vmCol(head,['currency']);
+        const iDate=vmCol(head,['transaction date','date','fecha']);
+        dg.idx=`item=${iItem} desc=${iDesc} qty=${iQty} amt=${iAmt} cur=${iCur} date=${iDate}`;
         dg.ncol=head.length;
-        { const s=aoa[hi+1]||[]; dg.sample=`YR="${(s[iYr]||'').toString().slice(0,12)}" KG="${(s[iKg]||'').toString().slice(0,10)}" USD="${(s[iUsd]||'').toString().slice(0,12)}" ITEM="${(s[iItem]||'').toString().slice(0,24)}"`; }
 
         const before=all.length;
         for(let r=hi+1;r<aoa.length;r++){
           const row=aoa[r]||[]; if(!row.length) continue;
           const g=i=>(i>=0&&i<row.length)?String(row[i]||'').trim():'';
-          const year=Math.round(cleanNum(g(iYr)));
+          const itemName=g(iItem); const amt=cleanNum(g(iAmt));
+          if(!itemName || !(amt>0)) continue;                  // solo líneas reales con venta
+          const d=normalizeDate(g(iDate)); const year=+(d.slice(0,4))||0;
           if(year<2026) continue;                              // SOLO 2026 en adelante
-          const kg=cleanNum(g(iKg));
-          const sheetUsd=cleanNum(g(iUsd));
-          if(!(sheetUsd>0 || kg>0)) continue;                  // descarta sub-filas vacías
+          const month=+(d.slice(5,7))||0;
+          const P=vmParseItem(itemName); const D=vmParseDesc(g(iDesc));
           const cur=(g(iCur)||'USD').toUpperCase();
-          const amt=cleanNum(g(iAmt));
-          const month=Math.round(cleanNum(g(iMon)))|| (function(){ const d=normalizeDate(g(2)); const mm=d&&d.slice(5,7); return mm?+mm:0; })();
-          const rate = cur==='USD'?1 : cur==='AED'?VM_AED : (vmFX[`${year}-${month}-${cur}`] || VM_FX_DEFAULT[cur] || null);
-          let usd = (amt>0 && rate) ? amt*rate : sheetUsd;     // revenue por FX propio; respaldo = USD del Sheet
-          if(!(usd>0)) usd=sheetUsd;
-          const ico=g(iIco), contract=g(iContr);
-          const cat=(g(iCat)||'').toUpperCase();
-          const fmStr=g(iFM);
-          const marginFinal = vmPct(fmStr);
-          const gmcFinal = cleanNum(g(iFG));
-          let marginReal = vmPct(g(iMR)); if(marginReal==null) marginReal=marginFinal;  // MENA: Final==real sin override
-          const isRW = /^rw/i.test(ico) || /\bRW[-: ]?\d/i.test(g(iItem));
+          const rate = cur==='USD'?1 : cur==='AED'?VM_AED : (vmFX[`${year}-${month}-${cur}`] || VM_FX_DEFAULT[cur] || 1);
+          const usd = amt*rate;                                // revenue en USD
+          const qty=cleanNum(g(iQty)); const kg=D.size*qty;
+          const cat=P.cat; const contract=D.contract;
+          // costo del lote (BASE COST)
+          const costKg=vmLookupCost(P.ico, P.iconum);
+          const haveCost = costKg!=null && costKg>0 && kg>0;
+          const costLine = haveCost ? costKg*kg : 0;
+          const gmcReal = haveCost ? usd-costLine : null;
+          const marginReal = (haveCost && usd>0) ? gmcReal/usd*100 : null;
+          // Final: contrato prima SOLO en COMMUNITY con margen cerrado
+          let marginFinal=marginReal, gmcFinal=gmcReal, overrideApplied=false;
+          const cEntry = contract ? vmContracts[contract.toUpperCase()] : null;
+          if(cat==='COMMUNITY' && contract && cEntry && cEntry.margin!=null){
+            marginFinal=cEntry.margin; gmcFinal=usd*cEntry.margin/100; overrideApplied=true;
+          }
+          const cliente=(g(iCust)||'—');
+          const comercial=vmClientRep[cliente.toUpperCase()] || normComercial('Sin asignar');
           all.push({
-            region, cliente:(g(iCust)||'—'), comercial:normComercial(titleCase(g(iRep)||'Sin asignar')),
-            factura:g(iDoc), producto:g(iProd)||'—', item:g(iItem), cat, size:g(iSize), qty:cleanNum(g(iQty)),
-            kg, cur, amt, usd, year, month, ico, contract, isRW,
-            marginFinal, gmcFinal, marginReal, cost:cleanNum(g(iCost)),
+            region, cliente, comercial,
+            factura:g(iDoc), producto:P.prod||'—', item:itemName, cat, size:D.size, qty,
+            kg, cur, amt, usd, year, month, ico:P.ico, iconum:P.iconum, contract, isRW:/^rw/i.test(P.ico),
+            marginFinal, gmcFinal:(gmcFinal==null?0:gmcFinal), marginReal,
+            haveCost, overrideApplied,
+            costFound:(costKg!=null && costKg>0),
+            contractMissing:(!!contract && !(cEntry && cEntry.margin!=null)),
           });
         }
         dg.taken=all.length-before; dg.ok=true; vmDiag.push(dg);
@@ -6792,9 +6846,9 @@ function renderVentasMargenes(){
   // Admin: excepciones (sobre TODO lo del año, no filtrado por comercial/cliente)
   const base=gerRows;
   const sinIco=base.filter(r=>!r.ico);
-  const sinCosteo=base.filter(r=>r.ico && r.cost<=0);
-  const sinMargen=base.filter(r=>r.contract && (r.marginFinal==null));
-  const alert=base.filter(r=>!(r.cat==='COMMUNITY'&&r.contract) && r.marginReal!=null && r.marginReal<15)
+  const sinCosteo=base.filter(r=>r.ico && !r.costFound);
+  const sinMargen=base.filter(r=>r.contract && r.contractMissing);
+  const alert=base.filter(r=>!r.overrideApplied && r.marginReal!=null && r.marginReal<15)
                   .map(r=>({...r, sev: r.marginReal<0?'hi':'md'}))
                   .sort((a,b)=>a.marginReal-b.marginReal);
 
