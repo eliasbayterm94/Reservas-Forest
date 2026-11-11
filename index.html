@@ -600,6 +600,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
   <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
   <button class="tab" id="tabCtrlInv" onclick="switchTab('ctrlinv')"><i data-lucide="boxes"></i> Control Inventario</button>
+  <button class="tab" id="tabVentas" onclick="switchTab('ventas')"><i data-lucide="trending-up"></i> Ventas &amp; Márgenes</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
 </div>
 
@@ -1411,6 +1412,72 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     </div>
   </div>
 </div><!-- /viewGerencia -->
+
+<!-- ══════════ VISTA: VENTAS & MÁRGENES ══════════ -->
+<div id="viewVentas" class="view hidden" style="overflow-y:auto">
+  <style>
+    .vm-wrap{padding:0 0 40px}
+    .vm-filters{display:flex;gap:9px;flex-wrap:wrap;margin:4px 0 14px;align-items:center}
+    .vm-fi{display:flex;flex-direction:column;gap:2px}
+    .vm-fi label{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+    .vm-fi select,.vm-fi input{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:13.5px;font-weight:600;color:var(--text);min-width:120px}
+    .vm-fi.me select{background:var(--fc-navy);color:#fff;border-color:var(--fc-navy)}
+    .vm-kpis{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:6px}
+    .vm-kpi{background:var(--surface);border:1px solid var(--border);border-left:5px solid var(--fc-navy);border-radius:var(--radius);padding:13px 15px}
+    .vm-kpi .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+    .vm-kpi .v{font-size:25px;font-weight:800;margin:3px 0 1px;letter-spacing:-.4px}
+    .vm-kpi .s{font-size:12px;color:var(--muted)}
+    .vm-kpi.mg{border-left-color:var(--res-bd)}.vm-kpi.mg .v{color:var(--res-fg)}
+    .vm-nat{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+    .vm-pill{background:var(--green-l);border:1px solid var(--fee-bd);border-radius:8px;padding:4px 8px;font-size:12.5px;font-weight:700;color:var(--gold)}
+    .vm-note-ger{font-size:12px;color:var(--muted);text-align:right;margin:2px 0 12px}
+    .vm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+    .vm-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px}
+    .vm-panel h3{font-size:16px;margin:0 0 3px}
+    .vm-panel .nt{color:var(--muted);font-size:12px;margin:0 0 12px}
+    .vm-trend{display:flex;align-items:flex-end;gap:10px;height:170px;padding-top:22px}
+    .vm-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+    .vm-bar .bb{width:66%;background:linear-gradient(180deg,#2a3356,#1b203d);border-radius:5px 5px 0 0;min-height:2px}
+    .vm-bar .bp{font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:3px}
+    .vm-bar .bl{font-size:11px;color:var(--muted);margin-top:5px}
+    .vm-cat{display:flex;flex-direction:column;gap:9px}
+    .vm-catrow{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;font-size:13px}
+    .vm-catrow .cn{font-weight:700}
+    .vm-track{height:13px;background:var(--row-alt);border-radius:7px;overflow:hidden}
+    .vm-fill{height:100%;border-radius:7px}
+    .vm-catrow .cv{font-size:12.5px;color:var(--muted);white-space:nowrap}
+    table.vm-tbl{width:100%;border-collapse:collapse;font-size:13px}
+    table.vm-tbl th{text-align:left;color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;padding:7px 9px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
+    table.vm-tbl td{padding:8px 9px;border-bottom:1px solid var(--border)}
+    table.vm-tbl th.r,table.vm-tbl td.r{text-align:right}
+    table.vm-tbl tbody tr:hover{background:var(--row-hover)}
+    .vm-tbl .cl{font-weight:700}.vm-mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+    .vm-pos{color:var(--res-fg);font-weight:700}.vm-neg{color:var(--warn);font-weight:800}.vm-warn{color:var(--fsr-fg);font-weight:800}
+    .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
+    .vm-tag.com{background:var(--spot-bg);color:var(--spot-fg)}.vm-tag.inn{background:var(--res-bg);color:var(--res-fg)}
+    .vm-tag.res{background:var(--fsr-bg);color:var(--fsr-fg)}.vm-tag.mic{background:var(--ctr-bg);color:var(--ctr-fg)}.vm-tag.rw{background:#e9e0f5;color:#5b3a8a}
+    .vm-admin{border:1px solid #e6c9c0;background:var(--warn-bg);border-radius:14px;padding:16px 18px;margin-top:16px}
+    .vm-admin h3{font-size:16px;margin:0 0 3px}
+    .vm-xcards{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:10px 0 4px}
+    .vm-xc{border:1px solid var(--border);border-radius:11px;padding:12px 14px;background:var(--surface);cursor:pointer;transition:outline .1s}
+    .vm-xc .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+    .vm-xc .v{font-size:26px;font-weight:800;margin:3px 0}.vm-xc .s{font-size:11px;color:var(--muted)}
+    .vm-xc.red .v{color:var(--warn)}.vm-xc.al .v{color:var(--fsr-fg)}
+    .vm-xc.sel{outline:2px solid var(--fc-navy);outline-offset:1px}
+    .vm-sev{font-size:10px;font-weight:800;padding:2px 6px;border-radius:5px}
+    .vm-sev.hi{background:#f6dcd5;color:#a5321c}.vm-sev.md{background:var(--fsr-bg);color:var(--fsr-fg)}
+    .vm-msg{padding:40px 20px;text-align:center;color:var(--muted);font-size:14px}
+    @media(max-width:860px){
+      .vm-kpis{grid-template-columns:1fr 1fr}
+      .vm-grid{grid-template-columns:1fr}
+      .vm-xcards{grid-template-columns:1fr 1fr}
+      #viewVentas table.vm-tbl{display:block;overflow-x:auto;white-space:nowrap}
+    }
+  </style>
+  <div class="vm-wrap" id="vmBody">
+    <div class="vm-msg" id="vmMsg">Cargando ventas…</div>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -3676,7 +3743,7 @@ function exportCarteraPDF(){
 // ═══════════════════════════════════════════════════
 function switchTab(tab){
   activeTab = tab;
-  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom', isR90=tab==='rotacion90', isCI=tab==='ctrlinv';
+  const isR=tab==='reservas', isC=tab==='cartera', isH=tab==='historial', isG=tab==='gerencia', isRC=tab==='repcom', isR90=tab==='rotacion90', isCI=tab==='ctrlinv', isVM=tab==='ventas';
   $('viewReservas').classList.toggle('hidden', !isR);
   $('viewCartera').classList.toggle('hidden', !isC);
   $('viewHistorial').classList.toggle('hidden', !isH);
@@ -3684,6 +3751,7 @@ function switchTab(tab){
   $('viewRepcom').classList.toggle('hidden', !isRC);
   $('viewRotacion90').classList.toggle('hidden', !isR90);
   $('viewControlInv').classList.toggle('hidden', !isCI);
+  $('viewVentas').classList.toggle('hidden', !isVM);
   $('tabReservas').classList.toggle('active', isR);
   $('tabCartera').classList.toggle('active', isC);
   $('tabHistorial').classList.toggle('active', isH);
@@ -3691,11 +3759,12 @@ function switchTab(tab){
   $('tabRepcom').classList.toggle('active', isRC);
   $('tabRot90').classList.toggle('active', isR90);
   $('tabCtrlInv').classList.toggle('active', isCI);
+  $('tabVentas').classList.toggle('active', isVM);
   // En móvil, desliza la pestaña activa a la vista (la barra tiene scroll horizontal)
   try{ const at=document.querySelector('.tab.active'); if(at&&at.scrollIntoView) at.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){}
   document.querySelectorAll('.tst.rv').forEach(e=>e.classList.toggle('hidden', !isR));
   document.querySelectorAll('.tst.ct').forEach(e=>e.classList.toggle('hidden', !isC));
-  DOM.brandSub.textContent = isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : isCI ? 'Control de inventario · café verde' : `Posiciones activas · ${DATA.length} registros`;
+  DOM.brandSub.textContent = isVM ? 'Ventas & márgenes · por comercial, cliente y región' : isG ? 'Management · AR summary' : isH ? 'Receivables · closed history' : isC ? 'Receivables · accounts receivable' : isRC ? 'Comisiones · autoservicio del comercial' : isR90 ? 'Rotación y vejez ponderada por región' : isCI ? 'Control de inventario · café verde' : `Posiciones activas · ${DATA.length} registros`;
   { const lbl=document.getElementById('refreshLbl'); if(lbl) lbl.textContent = (isR||isCI) ? 'Actualizar' : 'Refresh'; }
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
@@ -3705,6 +3774,7 @@ function switchTab(tab){
     if(sessionStorage.getItem('gerOK')==='1') mostrarControlInv();
     else { $('ciLock').classList.remove('hidden'); $('ciContent').classList.add('hidden'); $('ciCode').value=''; $('ciErr').textContent=''; setTimeout(()=>{try{$('ciCode').focus();}catch(e){}},60); }
   }
+  if(isVM){ if(!vmLoaded && !vmLoading) cargarVentasMargenes(); renderVentasMargenes(); }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
     cargarSeguimiento();
@@ -6474,6 +6544,347 @@ function exportHistorial(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   XLSX.utils.book_append_sheet(wb,ws,'History');
   XLSX.writeFile(wb,`Forest_Receivables_History_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// VENTAS & MÁRGENES — tab nuevo (fuente: AR Consolidado, pestañas por región)
+// Lee USA / EU / MENA / Australia + FX por gviz. Detecta columnas por NOMBRE
+// (robusto a que cambie la estructura). Solo líneas 2026 en adelante.
+// Revenue USD = monto nativo × FX del mes (AED = peg 0.2740). Margen = Final
+// (el contrato ya prima en COMMUNITY dentro de la columna Final Margin del Sheet).
+// Acceso: autoservicio (el comercial elige su nombre) · Admin solo gerencia (gerOK).
+// ═══════════════════════════════════════════════════
+const VM_SHEET_ID = '19E-_Kj1DjS1q1pTG6MXkvzewRh6oyzIH5cEiyoNCPWg';
+const VM_REGIONS = [
+  { tab:'USA',       region:'USA' },
+  { tab:'EU',        region:'EU&UK' },
+  { tab:'MENA',      region:'Dubai' },
+  { tab:'Australia', region:'Australia' },
+];
+const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
+const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
+const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+let vmRows = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
+let vmF = { comercial:'', cliente:'', region:'', categoria:'', year:'2026', month:'', q:'' };
+let vmSort = { key:'usd', dir:-1 };
+let vmDrill = 'alert';   // tarjeta admin abierta: sinico | sincosteo | sinmargen | alert
+const vmGviz = name => `https://docs.google.com/spreadsheets/d/${VM_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}&_=${Date.now()}`;
+
+function vmPct(s){
+  if(s==null) return null;
+  let t=String(s).trim(); if(t==='') return null;
+  const hasP=t.includes('%');
+  let n=Number(t.replace(/[^0-9.\-]/g,''));
+  if(!isFinite(n)) return null;
+  if(!hasP && Math.abs(n)<=3) n*=100;   // vino como fracción (0.55 → 55%)
+  return n;
+}
+// localiza la fila de encabezados (las pestañas traen "QuickBooks Import" en la fila 1)
+function vmHeaderIdx(aoa, must){
+  for(let i=0;i<Math.min(aoa.length,8);i++){
+    const low=(aoa[i]||[]).map(c=>String(c||'').toLowerCase());
+    if(must.some(m=>low.some(c=>c.includes(m)))) return i;
+  }
+  return 0;
+}
+function vmColAll(head, cands){
+  const out=[];
+  for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i]===c)) out.push(i); }
+  if(out.length) return out;
+  for(let i=0;i<head.length;i++){ if(cands.some(c=>head[i].includes(c))) out.push(i); }
+  return out;
+}
+const vmCol = (head,cands)=>{ const a=vmColAll(head,cands); return a.length?a[0]:-1; };
+
+async function cargarVentasMargenes(){
+  if(vmLoading) return; vmLoading=true; vmError='';
+  try{
+    // 1) FX
+    try{
+      const rfx=await fetch(vmGviz('FX'));
+      const fx=parseCSV(await rfx.text());
+      const hi=vmHeaderIdx(fx,['month','mes']);
+      const H=fx[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iM=vmCol(H,['month','mes']), iY=vmCol(H,['year','año','ano']);
+      const iE=vmCol(H,['eur']), iG=vmCol(H,['gbp']), iA=vmCol(H,['aud']);
+      for(let r=hi+1;r<fx.length;r++){
+        const row=fx[r]||[]; const m=Math.round(cleanNum(row[iM])), y=Math.round(cleanNum(row[iY]));
+        if(!m||!y) continue;
+        if(iE>=0 && cleanNum(row[iE])) vmFX[`${y}-${m}-EUR`]=cleanNum(row[iE]);
+        if(iG>=0 && cleanNum(row[iG])) vmFX[`${y}-${m}-GBP`]=cleanNum(row[iG]);
+        if(iA>=0 && cleanNum(row[iA])) vmFX[`${y}-${m}-AUD`]=cleanNum(row[iA]);
+      }
+    }catch(e){ console.warn('FX no disponible, uso respaldo', e); }
+
+    // 2) regiones
+    const all=[];
+    await Promise.all(VM_REGIONS.map(async ({tab,region})=>{
+      try{
+        const resp=await fetch(vmGviz(tab));
+        if(!resp.ok) throw new Error('HTTP '+resp.status);
+        const aoa=parseCSV(await resp.text());
+        const hi=vmHeaderIdx(aoa,['item name','customer name']);
+        const head=aoa[hi].map(h=>String(h||'').trim().toLowerCase());
+        const iCust=vmCol(head,['customer','customer name (customer reference)']);
+        const iDoc =vmCol(head,['doc number','invoice','factura']);
+        const iItem=vmCol(head,['item name (line > sales item line detail > item reference)','item name']);
+        const iRep =vmCol(head,['sales rep','not assigned','comercial','vendedor','rep']);
+        const iProd=vmCol(head,['product','producto']);
+        const iCat =vmCol(head,['category','categoria','categoría']);
+        const iSize=vmCol(head,['size','tamaño','tamano']);
+        const iQty =vmCol(head,['qty','quantity (line > sales item line detail)']);
+        const iIco =vmCol(head,['ico']);
+        const iContr=vmCol(head,['contract','contrato']);
+        const iKg  =vmCol(head,['kg']);
+        const iAmt =vmCol(head,['amount (line)','amount']);
+        const iCur =vmCol(head,['currency (currency reference)','currency','moneda']);
+        const iMon =vmCol(head,['month','mes']);
+        const iYr  =vmCol(head,['year','año','ano']);
+        const iCost=vmCol(head,['cost usd','costo usd']);
+        // USD: hay dos (nivel factura + por línea tras KG). Tomo la que va DESPUÉS de KG.
+        const usds=vmColAll(head,['usd']).filter(i=>i!==iCost);
+        let iUsd=-1; if(iKg>=0){ iUsd=usds.find(i=>i>iKg); } if(iUsd==null||iUsd<0) iUsd=usds.length?usds[usds.length-1]:-1;
+        const iFM=vmCol(head,['final margin']);
+        const iFG=vmCol(head,['final gmc $$','final gmc']);
+        const iMR=vmCol(head,['margin']);   // margen real del lote (MENA no la trae)
+
+        for(let r=hi+1;r<aoa.length;r++){
+          const row=aoa[r]||[]; if(!row.length) continue;
+          const g=i=>(i>=0&&i<row.length)?String(row[i]||'').trim():'';
+          const year=Math.round(cleanNum(g(iYr)));
+          if(year<2026) continue;                              // SOLO 2026 en adelante
+          const kg=cleanNum(g(iKg));
+          const sheetUsd=cleanNum(g(iUsd));
+          if(!(sheetUsd>0 || kg>0)) continue;                  // descarta sub-filas vacías
+          const cur=(g(iCur)||'USD').toUpperCase();
+          const amt=cleanNum(g(iAmt));
+          const month=Math.round(cleanNum(g(iMon)))|| (function(){ const d=normalizeDate(g(2)); const mm=d&&d.slice(5,7); return mm?+mm:0; })();
+          const rate = cur==='USD'?1 : cur==='AED'?VM_AED : (vmFX[`${year}-${month}-${cur}`] || VM_FX_DEFAULT[cur] || null);
+          let usd = (amt>0 && rate) ? amt*rate : sheetUsd;     // revenue por FX propio; respaldo = USD del Sheet
+          if(!(usd>0)) usd=sheetUsd;
+          const ico=g(iIco), contract=g(iContr);
+          const cat=(g(iCat)||'').toUpperCase();
+          const fmStr=g(iFM);
+          const marginFinal = vmPct(fmStr);
+          const gmcFinal = cleanNum(g(iFG));
+          let marginReal = vmPct(g(iMR)); if(marginReal==null) marginReal=marginFinal;  // MENA: Final==real sin override
+          const isRW = /^rw/i.test(ico) || /\bRW[-: ]?\d/i.test(g(iItem));
+          all.push({
+            region, cliente:(g(iCust)||'—'), comercial:normComercial(titleCase(g(iRep)||'Sin asignar')),
+            factura:g(iDoc), producto:g(iProd)||'—', item:g(iItem), cat, size:g(iSize), qty:cleanNum(g(iQty)),
+            kg, cur, amt, usd, year, month, ico, contract, isRW,
+            marginFinal, gmcFinal, marginReal, cost:cleanNum(g(iCost)),
+          });
+        }
+      }catch(e){ console.warn('Región '+tab+' no disponible', e); }
+    }));
+    vmRows=all; vmLoaded=true; vmLoading=false;
+    if(activeTab==='ventas') renderVentasMargenes();
+  }catch(err){
+    vmError='No se pudo cargar Ventas & Márgenes: '+err.message; vmLoaded=true; vmLoading=false;
+    if(activeTab==='ventas') renderVentasMargenes();
+  }
+}
+
+// aplica filtros (menos el de la dimensión que se esté armando)
+function vmFilter(rows, skip){
+  return rows.filter(r=>{
+    if(skip!=='year' && vmF.year && String(r.year)!==vmF.year) return false;
+    if(skip!=='comercial' && vmF.comercial && r.comercial!==vmF.comercial) return false;
+    if(skip!=='cliente' && vmF.cliente && r.cliente!==vmF.cliente) return false;
+    if(skip!=='region' && vmF.region && r.region!==vmF.region) return false;
+    if(skip!=='categoria' && vmF.categoria && r.cat!==vmF.categoria) return false;
+    if(skip!=='month' && vmF.month && String(r.month)!==vmF.month) return false;
+    if(vmF.q){ const q=vmF.q.toLowerCase(); if(!((r.cliente||'').toLowerCase().includes(q)||(r.producto||'').toLowerCase().includes(q)||(r.ico||'').toLowerCase().includes(q)||(r.factura||'').toLowerCase().includes(q))) return false; }
+    return true;
+  });
+}
+const vmUniq = (rows,key)=>[...new Set(rows.map(r=>r[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+function vmOpts(list, sel){ return ['<option value="">Todos</option>'].concat(list.map(v=>`<option value="${vmEsc(v)}"${String(v)===String(sel)?' selected':''}>${vmEsc(v)}</option>`)).join(''); }
+function vmEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const vmTagCls = cat => cat==='COMMUNITY'?'com':cat==='INNOVATION'?'inn':cat==='RESERVE'?'res':cat==='MICROLOT'?'mic':'';
+
+function vmOnFilter(key,val){ vmF[key]=val; renderVentasMargenes(); }
+function vmSetSort(key){ if(vmSort.key===key) vmSort.dir*=-1; else { vmSort.key=key; vmSort.dir = (key==='cliente'||key==='producto'||key==='region')?1:-1; } renderVentasMargenes(); }
+function vmSetDrill(k){ vmDrill=k; renderVentasMargenes(); }
+
+function renderVentasMargenes(){
+  const body=document.getElementById('vmBody'); if(!body) return;
+  if(!vmLoaded){ body.innerHTML='<div class="vm-msg">Cargando ventas…</div>'; return; }
+  if(vmError){ body.innerHTML='<div class="vm-msg">⚠️ '+vmEsc(vmError)+'</div>'; return; }
+  if(!vmRows.length){ body.innerHTML='<div class="vm-msg">No encontré líneas de 2026 en las pestañas USA / EU / MENA / Australia.</div>'; return; }
+
+  const gerOK = sessionStorage.getItem('gerOK')==='1';
+  const rows = vmFilter(vmRows);
+  // opciones (cada dimensión ignora su propio filtro para no auto-limitarse)
+  const comerciales=vmUniq(vmFilter(vmRows,'comercial'),'comercial');
+  const clientes=vmUniq(vmFilter(vmRows,'cliente'),'cliente');
+  const regiones=vmUniq(vmFilter(vmRows,'region'),'region');
+  const cats=vmUniq(vmFilter(vmRows,'categoria'),'cat');
+  const years=[...new Set(vmRows.map(r=>r.year))].sort();
+  const months=[...new Set(vmFilter(vmRows,'month').map(r=>r.month))].filter(Boolean).sort((a,b)=>a-b);
+
+  // KPIs
+  const ventas=rows.reduce((s,r)=>s+r.usd,0);
+  const margen=rows.reduce((s,r)=>s+r.gmcFinal,0);
+  const kg=rows.reduce((s,r)=>s+r.kg,0);
+  const nClientes=new Set(rows.map(r=>r.cliente)).size;
+  const mpct= ventas? (margen/ventas*100):0;
+  const nat={}; rows.forEach(r=>{ if(r.cur&&r.cur!=='USD'){ nat[r.cur]=(nat[r.cur]||0)+r.amt; } });
+  // total gerencia (todo, ignorando comercial/cliente pero respetando año)
+  const gerRows=vmRows.filter(r=>String(r.year)===String(vmF.year||'2026'));
+  const gVent=gerRows.reduce((s,r)=>s+r.usd,0), gMar=gerRows.reduce((s,r)=>s+r.gmcFinal,0);
+
+  // tendencia mensual
+  const byMonth={}; rows.forEach(r=>{ const m=r.month||0; if(!m)return; (byMonth[m]=byMonth[m]||{v:0,g:0}); byMonth[m].v+=r.usd; byMonth[m].g+=r.gmcFinal; });
+  const monthsPresent=Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
+  const maxV=Math.max(1,...monthsPresent.map(m=>byMonth[m].v));
+
+  // top clientes
+  const cMap={}; rows.forEach(r=>{ const k=r.cliente; (cMap[k]=cMap[k]||{v:0,kg:0,g:0}); cMap[k].v+=r.usd; cMap[k].kg+=r.kg; cMap[k].g+=r.gmcFinal; });
+  const top=Object.entries(cMap).map(([n,o])=>({n,...o,p:o.v?o.g/o.v*100:0})).sort((a,b)=>b.v-a.v).slice(0,8);
+
+  // categorías
+  const catMap={}; rows.forEach(r=>{ const k=r.cat||'—'; (catMap[k]=catMap[k]||{v:0,g:0}); catMap[k].v+=r.usd; catMap[k].g+=r.gmcFinal; });
+  const catArr=Object.entries(catMap).map(([n,o])=>({n,...o,p:o.v?o.g/o.v*100:0})).sort((a,b)=>b.v-a.v);
+  const maxCat=Math.max(1,...catArr.map(c=>c.v));
+  const catColor=n=>n==='COMMUNITY'?'#9c9810':n==='INNOVATION'?'#3d6224':n==='RESERVE'?'#9c5e15':n==='MICROLOT'?'#2e4a63':'#6b6f86';
+
+  // detalle por línea (ordenado)
+  const det=rows.slice().sort((a,b)=>{
+    const k=vmSort.key; let av=a[k], bv=b[k];
+    if(k==='margen'){ av=a.marginFinal||-999; bv=b.marginFinal||-999; }
+    if(typeof av==='string') return vmSort.dir*String(av).localeCompare(String(bv));
+    return vmSort.dir*((av||0)-(bv||0));
+  });
+  const CAP=400; const detShow=det.slice(0,CAP);
+
+  // Admin: excepciones (sobre TODO lo del año, no filtrado por comercial/cliente)
+  const base=gerRows;
+  const sinIco=base.filter(r=>!r.ico);
+  const sinCosteo=base.filter(r=>r.ico && r.cost<=0);
+  const sinMargen=base.filter(r=>r.contract && (r.marginFinal==null));
+  const alert=base.filter(r=>!(r.cat==='COMMUNITY'&&r.contract) && r.marginReal!=null && r.marginReal<15)
+                  .map(r=>({...r, sev: r.marginReal<0?'hi':'md'}))
+                  .sort((a,b)=>a.marginReal-b.marginReal);
+
+  const sortArrow=k=>vmSort.key===k?(vmSort.dir<0?' ▾':' ▴'):'';
+
+  let html='';
+  // Filtros
+  html+='<div class="vm-filters">'
+    +`<div class="vm-fi me"><label>Comercial</label><select onchange="vmOnFilter('comercial',this.value)">${vmOpts(comerciales,vmF.comercial)}</select></div>`
+    +`<div class="vm-fi"><label>Cliente</label><select onchange="vmOnFilter('cliente',this.value)">${vmOpts(clientes,vmF.cliente)}</select></div>`
+    +`<div class="vm-fi"><label>Región</label><select onchange="vmOnFilter('region',this.value)">${vmOpts(regiones,vmF.region)}</select></div>`
+    +`<div class="vm-fi"><label>Categoría</label><select onchange="vmOnFilter('categoria',this.value)">${vmOpts(cats,vmF.categoria)}</select></div>`
+    +`<div class="vm-fi"><label>Año</label><select onchange="vmOnFilter('year',this.value)">${years.map(y=>`<option value="${y}"${String(y)===vmF.year?' selected':''}>${y}</option>`).join('')}</select></div>`
+    +`<div class="vm-fi"><label>Mes</label><select onchange="vmOnFilter('month',this.value)"><option value="">Todos</option>${months.map(m=>`<option value="${m}"${String(m)===vmF.month?' selected':''}>${VM_MESES[m]||m}</option>`).join('')}</select></div>`
+    +`<div class="vm-fi"><label>Buscar</label><input type="text" placeholder="Cliente / ICO / factura…" value="${vmEsc(vmF.q)}" oninput="vmF.q=this.value; clearTimeout(window._vmq); window._vmq=setTimeout(renderVentasMargenes,250)"></div>`
+    +'</div>';
+  html+=`<div class="vm-note-ger">Gerencia (todo ${vmF.year||'2026'}): <b>${money(gVent)}</b> · ${(gVent?gMar/gVent*100:0).toFixed(1)}% · ${new Set(gerRows.map(r=>r.cliente)).size} clientes</div>`;
+
+  // KPIs
+  html+='<div class="vm-kpis">';
+  html+=`<div class="vm-kpi"><div class="k">Ventas · Revenue</div><div class="v">${money(ventas)} <span style="font-size:12px;color:var(--muted);font-weight:700">USD</span></div><div class="s">facturado (siempre en USD)</div>`
+    + (Object.keys(nat).length?`<div class="vm-nat">${Object.entries(nat).map(([c,v])=>`<span class="vm-pill">${fmtCur(v,c)} ${c}</span>`).join('')}</div>`:'')
+    + '</div>';
+  html+=`<div class="vm-kpi mg"><div class="k">Margen $</div><div class="v">${money(margen)}</div><div class="s">GMC Final</div></div>`;
+  html+=`<div class="vm-kpi"><div class="k">Margen %</div><div class="v">${mpct.toFixed(1)}%</div><div class="s">ponderado</div></div>`;
+  html+=`<div class="vm-kpi"><div class="k">KG vendidos</div><div class="v">${Math.round(kg).toLocaleString('en-US')}</div><div class="s">café verde</div></div>`;
+  html+=`<div class="vm-kpi"><div class="k">Clientes</div><div class="v">${nClientes}</div><div class="s">distintos</div></div>`;
+  html+='</div>';
+
+  // Tendencia + categorías
+  html+='<div class="vm-grid">';
+  html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
+  if(!monthsPresent.length) html+='<div class="vm-msg" style="width:100%">Sin datos para el filtro.</div>';
+  monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.v?o.g/o.v*100:0;
+    html+=`<div class="vm-bar"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}</div></div>`; });
+  html+='</div></div>';
+  html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
+  catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100);
+    html+=`<div class="vm-catrow"><span class="cn">${vmEsc(c.n)}</span><span class="vm-track"><span class="vm-fill" style="width:${w}%;background:${catColor(c.n)}"></span></span><span class="cv">${money(c.v)} · <b style="color:${catColor(c.n)}">${c.p.toFixed(1)}%</b></span></div>`; });
+  html+='</div></div>';
+  html+='</div>';
+
+  // Top clientes
+  html+='<div class="vm-panel"><h3>Top clientes</h3><table class="vm-tbl"><thead><tr><th>Cliente</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">Margen %</th></tr></thead><tbody>';
+  top.forEach(c=>{ html+=`<tr><td class="cl">${vmEsc(c.n)}</td><td class="r">${money(c.v)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r vm-pos">${money(c.g)}</td><td class="r">${c.p.toFixed(1)}%</td></tr>`; });
+  html+='</tbody></table></div>';
+
+  // Detalle por línea
+  html+='<div class="vm-panel"><h3>Detalle por línea de referencia</h3><p class="nt">cada línea de factura · click en los encabezados para ordenar'
+    + (det.length>CAP?` · mostrando ${CAP} de ${det.length} (ordenadas)`:` · ${det.length} líneas`)+'</p>';
+  html+='<table class="vm-tbl"><thead><tr>'
+    +`<th onclick="vmSetSort('cliente')">Cliente${sortArrow('cliente')}</th>`
+    +`<th onclick="vmSetSort('factura')">Factura${sortArrow('factura')}</th>`
+    +`<th onclick="vmSetSort('producto')">Producto${sortArrow('producto')}</th>`
+    +'<th>Cat.</th>'
+    +`<th class="r" onclick="vmSetSort('size')">Tamaño${sortArrow('size')}</th>`
+    +`<th class="r" onclick="vmSetSort('qty')">Cant.${sortArrow('qty')}</th>`
+    +`<th class="r" onclick="vmSetSort('kg')">Total KG${sortArrow('kg')}</th>`
+    +`<th class="r" onclick="vmSetSort('usd')">Revenue USD${sortArrow('usd')}</th>`
+    +`<th class="r" onclick="vmSetSort('margen')">Margen %${sortArrow('margen')}</th>`
+    +'<th>ICO</th></tr></thead><tbody>';
+  detShow.forEach(r=>{
+    const mp=r.marginFinal; const mcls=mp==null?'':mp<0?'vm-neg':mp<15?'vm-warn':'vm-pos';
+    html+=`<tr><td class="cl">${vmEsc(r.cliente)} <span style="font-size:10px;color:var(--muted)">· ${vmEsc(r.region)}</span></td>`
+      +`<td class="vm-mono">${vmEsc(r.factura)||'—'}</td>`
+      +`<td>${vmEsc(r.producto)}</td>`
+      +`<td>${r.cat?`<span class="vm-tag ${vmTagCls(r.cat)}">${vmEsc(r.cat).slice(0,4)}</span>`:''}${r.isRW?' <span class="vm-tag rw">RW</span>':''}</td>`
+      +`<td class="r">${vmEsc(r.size)||'—'}</td>`
+      +`<td class="r">${r.qty?Math.round(r.qty):'—'}</td>`
+      +`<td class="r">${r.kg?Math.round(r.kg).toLocaleString('en-US'):'—'}</td>`
+      +`<td class="r">${money(r.usd)}</td>`
+      +`<td class="r ${mcls}">${mp==null?'—':mp.toFixed(1)+'%'}</td>`
+      +`<td class="vm-mono">${vmEsc(r.ico)||'<span style="color:var(--warn)">— sin ICO</span>'}</td></tr>`;
+  });
+  html+='</tbody></table></div>';
+
+  // Admin (solo gerencia)
+  if(gerOK){
+    const drillData={sinico:sinIco,sincosteo:sinCosteo,sinmargen:sinMargen,alert:alert};
+    html+='<div class="vm-admin"><h3>🛠️ Módulo Admin — Por corregir & Alertas <span style="font-weight:400;color:var(--muted);font-size:12.5px">(solo gerencia · solo '+(vmF.year||'2026')+')</span></h3>'
+      +'<p class="nt">Click en una tarjeta para ver su detalle.</p>';
+    html+='<div class="vm-xcards">';
+    const card=(k,cls,label,val,sub)=>`<div class="vm-xc ${cls}${vmDrill===k?' sel':''}" onclick="vmSetDrill('${k}')"><div class="k">${label}</div><div class="v">${val}</div><div class="s">${sub}</div></div>`;
+    html+=card('sinico','red','Lotes sin ICO',sinIco.length,'mapear al ICO real');
+    html+=card('sincosteo','red','ICOs sin costeo',sinCosteo.length,'faltan en hoja de costeo');
+    html+=card('sinmargen','red','Contratos sin margen',sinMargen.length,'falta MARGIN CLOSED');
+    html+=card('alert','al','⚠️ Margen real &lt; 15%',alert.length,'excl. contrato COMMUNITY');
+    html+='</div>';
+
+    // drill-down
+    html+='<div style="margin-top:14px;border-top:2px dashed #e6c9c0;padding-top:12px">';
+    const d=drillData[vmDrill]||[];
+    if(vmDrill==='alert'){
+      html+=`<h4 style="margin:0 0 8px;color:var(--fsr-fg)">▸ Ventas con margen real &lt; 15% (${alert.length}) — alerta solo admin</h4>`;
+      html+='<p class="nt">Margen <b>real del lote</b> (no el Final) · <b>no cuenta</b> COMMUNITY con contrato. 🔴 negativo = casi seguro error · 🟡 0–15% = revisar precio.</p>';
+      html+='<table class="vm-tbl"><thead><tr><th>Sev.</th><th>Región</th><th>Cliente</th><th>Factura</th><th>Producto</th><th>Cat.</th><th class="r">Margen real</th><th class="r">Revenue</th></tr></thead><tbody>';
+      d.slice(0,120).forEach(r=>{ const sv=r.sev==='hi'?'<span class="vm-sev hi">'+(r.marginReal<-100?'ERROR?':'NEG')+'</span>':'<span class="vm-sev md">BAJO</span>';
+        html+=`<tr><td>${sv}</td><td class="vm-mono">${vmEsc(r.region)}</td><td class="cl">${vmEsc(r.cliente)}</td><td class="vm-mono">${vmEsc(r.factura)||'—'}</td><td>${vmEsc(r.producto)}</td><td>${r.cat?`<span class="vm-tag ${vmTagCls(r.cat)}">${vmEsc(r.cat).slice(0,4)}</span>`:''}</td><td class="r ${r.marginReal<0?'vm-neg':'vm-warn'}">${r.marginReal.toFixed(1)}%</td><td class="r">${money(r.usd)}</td></tr>`; });
+      html+='</tbody></table>';
+    } else {
+      const titles={sinico:'Lotes sin ICO',sincosteo:'ICOs sin costeo',sinmargen:'Contratos sin margen'};
+      html+=`<h4 style="margin:0 0 8px;color:var(--warn)">▸ ${titles[vmDrill]} (${d.length}) — detalle para corregir en el Sheet</h4>`;
+      html+='<table class="vm-tbl"><thead><tr><th>Región</th><th>Cliente</th><th>Factura</th>'
+        + (vmDrill==='sinico'?'<th>Item Name (crudo)</th><th>Producto</th>':vmDrill==='sinmargen'?'<th>Contrato</th><th>ICO</th><th>Producto</th>':'<th>ICO</th><th>Producto</th>')
+        + '<th class="r">Revenue</th></tr></thead><tbody>';
+      d.slice(0,120).forEach(r=>{
+        let mid = vmDrill==='sinico'?`<td class="vm-mono">${vmEsc(r.item).slice(0,60)}</td><td>${vmEsc(r.producto)}</td>`
+                : vmDrill==='sinmargen'?`<td class="vm-mono">${vmEsc(r.contract)}</td><td class="vm-mono">${vmEsc(r.ico)}</td><td>${vmEsc(r.producto)}</td>`
+                : `<td class="vm-mono">${vmEsc(r.ico)}</td><td>${vmEsc(r.producto)}</td>`;
+        html+=`<tr><td class="vm-mono">${vmEsc(r.region)}</td><td class="cl">${vmEsc(r.cliente)}</td><td class="vm-mono">${vmEsc(r.factura)||'—'}</td>${mid}<td class="r">${money(r.usd)}</td></tr>`;
+      });
+      if(!d.length) html+='<tr><td colspan="6" class="vm-msg">✅ Nada por corregir aquí.</td></tr>';
+      html+='</tbody></table>';
+    }
+    html+='</div></div>';
+  } else {
+    html+='<div class="vm-panel" style="text-align:center;color:var(--muted);font-size:13px">🔒 El módulo Admin (data por corregir + alertas de margen) es solo para gerencia. Entra con el código en la pestaña <b>Management</b> y vuelve aquí.</div>';
+  }
+
+  body.innerHTML=html;
 }
 
 // ═══════════════════════════════════════════════════
