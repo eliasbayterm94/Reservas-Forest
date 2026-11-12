@@ -6628,6 +6628,18 @@ function vmNormCli(s){
   t=t.replace(/(LLC|LTD|LIMITED|INC|CORP|CORPORATION|SAS|SRL|GMBH|BV|PTY|PTE|SPZOO|CO)$/,'');
   return t;
 }
+// Normalización agresiva para cruce DIFUSO (QuickBooks ↔ HubSpot): quita
+// paréntesis, "t/a"/"trading as", "&"/"and", y sufijos legales. Luego se cruza
+// por contención (un nombre contenido en el otro).
+function vmFuzzyCli(s){
+  let t=String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  t=t.replace(/\([^)]*\)/g,' ');
+  t=t.replace(/\bt\/?a\b|\btrading as\b/g,' ');
+  t=t.replace(/&/g,' ').replace(/\band\b/g,' ');
+  t=t.replace(/\b(ltd|limited|llc|inc|co|corp|corporation|company|sa|sas|srl|sl|gmbh|bv|pty|pte|spzoo|the)\b/g,' ');
+  return t.replace(/[^a-z0-9]/g,'');
+}
+const vmFuzzyMatch = (a,b) => { if(!a||!b) return false; const n=Math.min(a.length,b.length); return n>=8 && (a.includes(b)||b.includes(a)); };
 // Parsea el Item Name crudo → ICO, contenedor, categoría, producto. El ICO es el
 // último token dd-ddddd (puede traer prefijo RW de Rwanda); el 2º token es el contenedor.
 function vmParseItem(item){
@@ -6818,7 +6830,8 @@ async function cargarVentasMargenes(){
         const comp=g(iComp), legal=iLegal>=0?g(iLegal):'';
         vmDeals.push({ usd:amt, year, month,
           comercial: normComercial(titleCase(g(iOwner)||'Sin asignar')),
-          cliente: comp||legal||'—', norm1: vmNormCli(comp), norm2: vmNormCli(legal) });
+          cliente: comp||legal||'—', norm1: vmNormCli(comp), norm2: vmNormCli(legal),
+          fz1: vmFuzzyCli(comp), fz2: vmFuzzyCli(legal) });
       }
     }catch(e){ console.warn('Deals no disponible', e); }
 
@@ -7091,15 +7104,18 @@ function renderVentasMargenes(){
   // Comparativo HubSpot (Closed Won) vs QuickBooks
   html+='<div class="vm-panel">';
   html+=`<h3 style="cursor:pointer;user-select:none" onclick="vmCmpOpen=!vmCmpOpen;renderVentasMargenes()">📊 Comparativo HubSpot (Closed Won) vs QuickBooks <span style="color:var(--muted);font-weight:400">${vmCmpOpen?'▾ ocultar':'▸ ver'}</span></h3>`;
-  html+='<p class="nt">Closed Won de HubSpot vs ventas facturadas en QuickBooks, por cliente. Respeta los filtros de Comercial / Mes / Año (no Región ni Categoría). El Closed Won es el valor del deal al cerrarse; QuickBooks es lo facturado — las diferencias suelen ser de <i>timing</i>.</p>';
+  html+='<p class="nt">Closed Won de HubSpot vs ventas facturadas en QuickBooks, por cliente · <b>acumulado del año (YTD)</b> para neutralizar el <i>timing</i> (un deal cierra un mes y se factura otro). La diferencia es el <b>backlog</b>: cerrado pero aún sin facturar (QB &lt; HS), o facturado de más (QB &gt; HS). Respeta Comercial y Año (no Mes/Región/Categoría).</p>';
   if(vmCmpOpen){
     if(!vmDeals.length){
       html+='<div class="vm-msg">No encontré deals en la pestaña «Deals» (o ninguno Closed Won en 2026).</div>';
     } else {
-      const inScope=(y,m,com)=>{ if(vmF.year && String(y)!==vmF.year) return false; if(vmF.month && String(m)!==vmF.month) return false; if(vmF.comercial && com!==vmF.comercial) return false; return true; };
-      const qb={}; vmRows.forEach(r=>{ if(!inScope(r.year,r.month,r.comercial))return; const k=vmNormCli(r.cliente); if(!k)return; (qb[k]=qb[k]||{name:r.cliente,v:0}); qb[k].v+=r.usd; });
-      const hs={}; vmDeals.forEach(d=>{ if(!inScope(d.year,d.month,d.comercial))return;
-        let k=(d.norm1&&qb[d.norm1])?d.norm1:(d.norm2&&qb[d.norm2])?d.norm2:(d.norm1||d.norm2); if(!k)return;
+      const inScope=(y,com)=>{ if(vmF.year && String(y)!==vmF.year) return false; if(vmF.comercial && com!==vmF.comercial) return false; return true; };
+      const qb={}; vmRows.forEach(r=>{ if(!inScope(r.year,r.comercial))return; const k=vmNormCli(r.cliente); if(!k)return; (qb[k]=qb[k]||{name:r.cliente,v:0}); qb[k].v+=r.usd; });
+      const qbList=Object.entries(qb).map(([key,o])=>({key, fz:vmFuzzyCli(o.name)}));
+      const hs={}; vmDeals.forEach(d=>{ if(!inScope(d.year,d.comercial))return;
+        let k=(d.norm1&&qb[d.norm1])?d.norm1:(d.norm2&&qb[d.norm2])?d.norm2:null;
+        if(!k){ const cand=qbList.find(q=>vmFuzzyMatch(q.fz,d.fz1)||vmFuzzyMatch(q.fz,d.fz2)); if(cand) k=cand.key; }
+        if(!k) k=d.norm1||d.norm2; if(!k) return;
         (hs[k]=hs[k]||{name:d.cliente,v:0}); hs[k].v+=d.usd; });
       const keys=[...new Set([...Object.keys(qb),...Object.keys(hs)])];
       const cmp=keys.map(k=>{ const q=qb[k]?qb[k].v:0, hv=hs[k]?hs[k].v:0; return {name:(qb[k]&&qb[k].name)||(hs[k]&&hs[k].name)||k, hs:hv, qb:q, diff:q-hv}; })
