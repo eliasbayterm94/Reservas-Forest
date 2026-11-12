@@ -6607,7 +6607,8 @@ const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RE
 // Se puede ir ampliando con lo que vaya apareciendo.
 const VM_SERVICES = ['loadout','handling','certificate operation','documents and legal',
   'legal service','tariff overcost','overcost','freight','storage','re-bagging','rebagging',
-  'sampling fee','courier','logistics'];
+  'sampling fee','courier','logistics','credit card','card fee','shipping','wire fee',
+  'bank fee','surcharge'];
 const vmIsService = s => { const t=String(s||'').toLowerCase(); return VM_SERVICES.some(k=>t.includes(k)); };
 let vmCost = {}, vmContracts = {}, vmClientRep = {}, vmDiag = [];
 // ICO numérico (sin prefijo RW): "26-00852". Para unir con BASE COST aunque el prefijo difiera.
