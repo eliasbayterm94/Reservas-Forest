@@ -1416,7 +1416,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 <!-- ══════════ VISTA: VENTAS & MÁRGENES ══════════ -->
 <div id="viewVentas" class="view hidden" style="overflow-y:auto">
   <style>
-    .vm-wrap{max-width:1180px;margin:0 auto;padding:6px 10px 56px}
+    .vm-wrap{max-width:1180px;margin:0 auto;padding:6px 10px 56px;width:100%;min-width:0;box-sizing:border-box}
     .vm-filters{display:flex;gap:11px;flex-wrap:wrap;margin:6px 0 18px;align-items:flex-end}
     .vm-fi{display:flex;flex-direction:column;gap:4px}
     .vm-fi label{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
@@ -1450,7 +1450,10 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-catrow .cv{font-size:12.5px;color:var(--muted);white-space:nowrap}
     table.vm-tbl{width:100%;border-collapse:collapse;font-size:13px}
     table.vm-tbl th{text-align:left;color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
-    table.vm-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:normal;overflow:visible;text-overflow:clip;height:auto;border-right:none}
+    table.vm-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:normal;overflow:visible;text-overflow:clip;height:auto;border-right:none;overflow-wrap:normal;word-break:normal}
+    table.vm-tbl td.cl{min-width:150px}
+    table.vm-tbl td.vm-mono{overflow-wrap:anywhere}
+    .vm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
     table.vm-tbl th.r,table.vm-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
     table.vm-tbl tbody tr:hover{background:var(--row-hover)}
     table.vm-tbl tbody tr:last-child td{border-bottom:none}
@@ -1471,11 +1474,25 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-sev{font-size:10px;font-weight:800;padding:2px 6px;border-radius:5px}
     .vm-sev.hi{background:#f6dcd5;color:#a5321c}.vm-sev.md{background:var(--fsr-bg);color:var(--fsr-fg)}
     .vm-msg{padding:40px 20px;text-align:center;color:var(--muted);font-size:14px}
-    @media(max-width:860px){
-      .vm-kpis{grid-template-columns:1fr 1fr}
+    @media(max-width:720px){
+      .vm-wrap{padding:4px 12px 48px}
+      /* filtros en 2 columnas, buscar ocupa toda la fila */
+      .vm-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:start}
+      .vm-fi{min-width:0}
+      .vm-fi select,.vm-fi input{width:100%;min-width:0;box-sizing:border-box}
+      .vm-fi:last-child{grid-column:1/-1}
+      .vm-note-ger{text-align:left}
+      /* KPIs en 2 columnas; Ventas (con pills) ocupa toda la fila */
+      .vm-kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+      .vm-kpi{padding:13px 14px}
+      .vm-kpi:first-child{grid-column:1/-1}
+      .vm-kpi .v{font-size:22px}
       .vm-grid{grid-template-columns:1fr}
-      .vm-xcards{grid-template-columns:1fr 1fr}
-      #viewVentas table.vm-tbl{display:block;overflow-x:auto;white-space:nowrap}
+      .vm-xcards{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+      .vm-panel{padding:16px 14px}
+      /* tablas: scroll horizontal con ancho cómodo para que no se aplasten */
+      .vm-scroll table.vm-tbl{min-width:780px}
+      .vm-scroll{border:1px solid var(--border)}
     }
   </style>
   <div class="vm-wrap" id="vmBody">
@@ -6997,14 +7014,14 @@ function renderVentasMargenes(){
   html+='</div>';
 
   // Top clientes
-  html+='<div class="vm-panel"><h3>Top clientes</h3><table class="vm-tbl"><thead><tr><th>Cliente</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">Margen %</th></tr></thead><tbody>';
+  html+='<div class="vm-panel"><h3>Top clientes</h3><div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Cliente</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">Margen %</th></tr></thead><tbody>';
   top.forEach(c=>{ html+=`<tr><td class="cl">${vmEsc(c.n)}</td><td class="r">${money(c.v)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r vm-pos">${money(c.g)}</td><td class="r">${c.p.toFixed(1)}%</td></tr>`; });
-  html+='</tbody></table></div>';
+  html+='</tbody></table></div></div>';
 
   // Detalle por línea
   html+='<div class="vm-panel"><h3>Detalle por línea de referencia</h3><p class="nt">cada línea de factura · click en los encabezados para ordenar'
     + (det.length>CAP?` · mostrando ${CAP} de ${det.length} (ordenadas)`:` · ${det.length} líneas`)+'</p>';
-  html+='<table class="vm-tbl"><thead><tr>'
+  html+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr>'
     +`<th onclick="vmSetSort('cliente')">Cliente${sortArrow('cliente')}</th>`
     +`<th onclick="vmSetSort('factura')">Factura${sortArrow('factura')}</th>`
     +`<th onclick="vmSetSort('producto')">Producto${sortArrow('producto')}</th>`
@@ -7028,7 +7045,7 @@ function renderVentasMargenes(){
       +`<td class="r ${mcls}"><span style="display:block">${mp==null?'—':mp.toFixed(1)+'%'}</span>${r.overrideApplied?'<span class="vm-ctag" title="Margen tomado del contrato">contrato</span>':''}</td>`
       +`<td class="vm-mono">${vmEsc(r.ico)||'<span style="color:var(--warn)">— sin ICO</span>'}</td></tr>`;
   });
-  html+='</tbody></table></div>';
+  html+='</tbody></table></div></div>';
 
   // Admin (solo gerencia)
   if(gerOK){
@@ -7049,14 +7066,14 @@ function renderVentasMargenes(){
     if(vmDrill==='alert'){
       html+=`<h4 style="margin:0 0 8px;color:var(--fsr-fg)">▸ Ventas con margen real &lt; 15% (${alert.length}) — alerta solo admin</h4>`;
       html+='<p class="nt">Margen <b>real del lote</b> (no el Final) · <b>no cuenta</b> COMMUNITY con contrato. 🔴 negativo = casi seguro error · 🟡 0–15% = revisar precio.</p>';
-      html+='<table class="vm-tbl"><thead><tr><th>Sev.</th><th>Región</th><th>Cliente</th><th>Factura</th><th>Producto</th><th>Cat.</th><th class="r">Margen real</th><th class="r">Revenue</th></tr></thead><tbody>';
+      html+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Sev.</th><th>Región</th><th>Cliente</th><th>Factura</th><th>Producto</th><th>Cat.</th><th class="r">Margen real</th><th class="r">Revenue</th></tr></thead><tbody>';
       d.slice(0,120).forEach(r=>{ const sv=r.sev==='hi'?'<span class="vm-sev hi">'+(r.marginReal<-100?'ERROR?':'NEG')+'</span>':'<span class="vm-sev md">BAJO</span>';
         html+=`<tr><td>${sv}</td><td class="vm-mono">${vmEsc(r.region)}</td><td class="cl">${vmEsc(r.cliente)}</td><td class="vm-mono">${vmEsc(r.factura)||'—'}</td><td>${vmEsc(r.producto)}</td><td>${r.cat?`<span class="vm-tag ${vmTagCls(r.cat)}">${vmEsc(r.cat).slice(0,4)}</span>`:''}</td><td class="r ${r.marginReal<0?'vm-neg':'vm-warn'}">${r.marginReal.toFixed(1)}%</td><td class="r">${money(r.usd)}</td></tr>`; });
-      html+='</tbody></table>';
+      html+='</tbody></table></div>';
     } else {
       const titles={sinico:'Lotes sin ICO',sincosteo:'ICOs sin costeo',sinmargen:'Contratos sin margen'};
       html+=`<h4 style="margin:0 0 8px;color:var(--warn)">▸ ${titles[vmDrill]} (${d.length}) — detalle para corregir en el Sheet</h4>`;
-      html+='<table class="vm-tbl"><thead><tr><th>Región</th><th>Cliente</th><th>Factura</th>'
+      html+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Región</th><th>Cliente</th><th>Factura</th>'
         + (vmDrill==='sinico'?'<th>Item Name (crudo)</th><th>Producto</th>':vmDrill==='sinmargen'?'<th>Contrato</th><th>ICO</th><th>Producto</th>':'<th>ICO</th><th>Producto</th>')
         + '<th class="r">Revenue</th></tr></thead><tbody>';
       d.slice(0,120).forEach(r=>{
@@ -7066,7 +7083,7 @@ function renderVentasMargenes(){
         html+=`<tr><td class="vm-mono">${vmEsc(r.region)}</td><td class="cl">${vmEsc(r.cliente)}</td><td class="vm-mono">${vmEsc(r.factura)||'—'}</td>${mid}<td class="r">${money(r.usd)}</td></tr>`;
       });
       if(!d.length) html+='<tr><td colspan="6" class="vm-msg">✅ Nada por corregir aquí.</td></tr>';
-      html+='</tbody></table>';
+      html+='</tbody></table></div>';
     }
     html+='</div></div>';
   }  // sin gerOK: no se muestra nada del módulo Admin (vista limpia para comerciales)
