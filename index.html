@@ -2594,7 +2594,7 @@ const COMERCIAL_ALIAS = {
   'isis couto':'Isis', 'isis':'Isis',
   'andres gutierrez':'Andres', 'andres':'Andres',
   'diego martinez':'Diego', 'diego':'Diego',
-  'luis baquero':'Luis', 'luis':'Luis',
+  'luis baquero':'Luis', 'luis':'Luis', 'luis alberto':'Luis',
   'michal macovic':'Michal', 'michal':'Michal'
 };
 function normComercial(n){
@@ -6603,6 +6603,7 @@ const VM_FX_TAB = 'FX', VM_FX_GID = '';
 const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
 const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
 const VM_REP_TAB = 'SALES REP', VM_REP_GID = '';   // Customer → Comercial (col A → D)
+const VM_DEALS_TAB = 'Deals', VM_DEALS_GID = '';   // HubSpot Closed Won (comparativo vs QuickBooks)
 // Respaldo por región cuando el cliente no cruza en SALES REP.
 const VM_REGION_REP = { 'Dubai':'Ricardo', 'Australia':'Samuel' };
 const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
@@ -6666,7 +6667,8 @@ function vmParseDesc(desc){
 const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
 const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-let vmRows = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
+let vmRows = [], vmDeals = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
+let vmCmpOpen = false;   // comparativo HubSpot desplegado
 let vmF = { comercial:'', cliente:'', region:'', categoria:'', year:'2026', month:'', q:'' };
 let vmSort = { key:'usd', dir:-1 };
 let vmDrill = 'alert';   // tarjeta admin abierta: sinico | sincosteo | sinmargen | alert
@@ -6722,7 +6724,7 @@ function vmLookupCost(ico, iconum){
   return null;
 }
 async function cargarVentasMargenes(){
-  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[]; vmCost={}; vmContracts={}; vmClientRep={}; vmFX={};
+  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[]; vmCost={}; vmContracts={}; vmClientRep={}; vmFX={}; vmDeals=[];
   try{
     // 1) FX (monto nativo → USD). Si falla, respaldo VM_FX_DEFAULT.
     try{
@@ -6795,6 +6797,30 @@ async function cargarVentasMargenes(){
         if(cli && (rep||ho)) vmClientRep[cli]={ rep, ho };   // SALES REP manda sobre CONTRACTS
       }
     }catch(e){ console.warn('SALES REP no disponible', e); }
+
+    // 3c) Deals (HubSpot Closed Won) → comparativo vs QuickBooks
+    try{
+      const dl=parseCSV(await (await fetch(vmGviz(VM_DEALS_TAB,VM_DEALS_GID))).text());
+      const hi=vmHeaderIdx(dl,['close date','deal stage','amount']);
+      const H=dl[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iClose=vmCol(H,['close date']);
+      const iAmt=vmCol(H,['amount']);
+      const iStage=vmCol(H,['deal stage','stage']);
+      const iOwner=vmCol(H,['deal owner first name','deal owner','owner']);
+      const iComp=vmCol(H,['company name']);
+      const iLegal=vmColAll(H,['company name']).find(i=>i!==iComp);   // 2ª "company name" = legal
+      for(let r=hi+1;r<dl.length;r++){
+        const row=dl[r]||[]; const g=i=>(i>=0&&i<row.length)?String(row[i]||'').trim():'';
+        if(!/closed\s*won/i.test(g(iStage))) continue;           // solo Closed Won
+        const amt=cleanNum(g(iAmt)); if(!(amt>0)) continue;
+        const d=normalizeDate(g(iClose)); const year=+(d.slice(0,4))||0; if(year<2026) continue;
+        const month=+(d.slice(5,7))||0;
+        const comp=g(iComp), legal=iLegal>=0?g(iLegal):'';
+        vmDeals.push({ usd:amt, year, month,
+          comercial: normComercial(titleCase(g(iOwner)||'Sin asignar')),
+          cliente: comp||legal||'—', norm1: vmNormCli(comp), norm2: vmNormCli(legal) });
+      }
+    }catch(e){ console.warn('Deals no disponible', e); }
 
     // 4) regiones (crudas de QuickBooks) → calcula todo
     const all=[];
@@ -7061,6 +7087,44 @@ function renderVentasMargenes(){
       +`<td class="vm-mono">${vmEsc(r.ico)||'<span style="color:var(--warn)">— sin ICO</span>'}</td></tr>`;
   });
   html+='</tbody></table></div></div>';
+
+  // Comparativo HubSpot (Closed Won) vs QuickBooks
+  html+='<div class="vm-panel">';
+  html+=`<h3 style="cursor:pointer;user-select:none" onclick="vmCmpOpen=!vmCmpOpen;renderVentasMargenes()">📊 Comparativo HubSpot (Closed Won) vs QuickBooks <span style="color:var(--muted);font-weight:400">${vmCmpOpen?'▾ ocultar':'▸ ver'}</span></h3>`;
+  html+='<p class="nt">Closed Won de HubSpot vs ventas facturadas en QuickBooks, por cliente. Respeta los filtros de Comercial / Mes / Año (no Región ni Categoría). El Closed Won es el valor del deal al cerrarse; QuickBooks es lo facturado — las diferencias suelen ser de <i>timing</i>.</p>';
+  if(vmCmpOpen){
+    if(!vmDeals.length){
+      html+='<div class="vm-msg">No encontré deals en la pestaña «Deals» (o ninguno Closed Won en 2026).</div>';
+    } else {
+      const inScope=(y,m,com)=>{ if(vmF.year && String(y)!==vmF.year) return false; if(vmF.month && String(m)!==vmF.month) return false; if(vmF.comercial && com!==vmF.comercial) return false; return true; };
+      const qb={}; vmRows.forEach(r=>{ if(!inScope(r.year,r.month,r.comercial))return; const k=vmNormCli(r.cliente); if(!k)return; (qb[k]=qb[k]||{name:r.cliente,v:0}); qb[k].v+=r.usd; });
+      const hs={}; vmDeals.forEach(d=>{ if(!inScope(d.year,d.month,d.comercial))return;
+        let k=(d.norm1&&qb[d.norm1])?d.norm1:(d.norm2&&qb[d.norm2])?d.norm2:(d.norm1||d.norm2); if(!k)return;
+        (hs[k]=hs[k]||{name:d.cliente,v:0}); hs[k].v+=d.usd; });
+      const keys=[...new Set([...Object.keys(qb),...Object.keys(hs)])];
+      const cmp=keys.map(k=>{ const q=qb[k]?qb[k].v:0, hv=hs[k]?hs[k].v:0; return {name:(qb[k]&&qb[k].name)||(hs[k]&&hs[k].name)||k, hs:hv, qb:q, diff:q-hv}; })
+        .sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+      const tHS=cmp.reduce((s,r)=>s+r.hs,0), tQB=cmp.reduce((s,r)=>s+r.qb,0);
+      html+=`<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">`
+        +`<span>Closed Won (HubSpot): <b>${money(tHS)}</b></span>`
+        +`<span>Ventas (QuickBooks): <b>${money(tQB)}</b></span>`
+        +`<span>Diferencia: <b class="${(tQB-tHS)<0?'vm-neg':'vm-pos'}">${money(tQB-tHS)}</b></span>`
+        +`<span style="color:var(--muted)">${cmp.length} clientes</span></div>`;
+      html+='<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr><th>Cliente</th><th class="r">Closed Won (HS)</th><th class="r">Ventas (QB)</th><th class="r">Dif (QB − HS)</th><th></th></tr></thead><tbody>';
+      cmp.slice(0,200).forEach(r=>{
+        const only = r.hs===0?'solo QB':r.qb===0?'solo HubSpot':'';
+        const dcls = Math.abs(r.diff) < Math.max(1,0.1*Math.max(r.hs,r.qb)) ? 'vm-pos' : 'vm-warn';
+        html+=`<tr><td class="cl">${vmEsc(r.name)}</td>`
+          +`<td class="r">${r.hs?money(r.hs):'—'}</td>`
+          +`<td class="r">${r.qb?money(r.qb):'—'}</td>`
+          +`<td class="r ${dcls}">${money(r.diff)}</td>`
+          +`<td>${only?`<span class="vm-ctag">${only}</span>`:''}</td></tr>`;
+      });
+      html+='</tbody></table></div>';
+      html+='<p class="nt" style="margin-top:8px">«solo QB» = facturado sin deal Closed Won ese periodo · «solo HubSpot» = deal cerrado sin facturar aún. Ordenado por mayor diferencia.</p>';
+    }
+  }
+  html+='</div>';
 
   // Admin (solo gerencia)
   if(gerOK){
