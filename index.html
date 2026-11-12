@@ -1454,6 +1454,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     table.vm-tbl td.cl{min-width:150px}
     table.vm-tbl td.vm-mono{overflow-wrap:anywhere}
     .vm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
+    /* detalle largo: scroll interno con altura máx para no alargar la página */
+    .vm-scroll.tall{overflow:auto;max-height:60vh;border:1px solid var(--border)}
+    .vm-scroll.tall table.vm-tbl thead th{position:sticky;top:0;z-index:2;background:#edeef3;box-shadow:0 1px 0 var(--border)}
     table.vm-tbl th.r,table.vm-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
     table.vm-tbl tbody tr:hover{background:var(--row-hover)}
     table.vm-tbl tbody tr:last-child td{border-bottom:none}
@@ -7029,8 +7032,8 @@ function renderVentasMargenes(){
 
   // Detalle por línea
   html+='<div class="vm-panel"><h3>Detalle por línea de referencia</h3><p class="nt">cada línea de factura · click en los encabezados para ordenar'
-    + (det.length>CAP?` · mostrando ${CAP} de ${det.length} (ordenadas)`:` · ${det.length} líneas`)+'</p>';
-  html+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr>'
+    + (det.length>CAP?` · mostrando ${CAP} de ${det.length} (ordenadas) · scroll dentro de la tabla`:` · ${det.length} líneas`+(det.length>12?' · scroll dentro de la tabla':''))+'</p>';
+  html+='<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr>'
     +`<th onclick="vmSetSort('cliente')">Cliente${sortArrow('cliente')}</th>`
     +`<th onclick="vmSetSort('factura')">Factura${sortArrow('factura')}</th>`
     +`<th onclick="vmSetSort('producto')">Producto${sortArrow('producto')}</th>`
