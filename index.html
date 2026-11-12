@@ -2202,7 +2202,14 @@ function feeTooltip(r, esWH){
   const hoy=new Date(), ini=r.fee_inicio?new Date(r.fee_inicio+'T00:00:00'):null;
   const m0=new Date(hoy.getFullYear(),hoy.getMonth()-1,1), m1=new Date(hoy.getFullYear(),hoy.getMonth(),0);
   const desde=ini&&ini>m0?ini:m0;
-  const base = esWH ? `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`
+  // Dupuy / Annex / NJ: si el ICO completo tiene 10 sacos o menos, cada reserva paga tarifa plana (API v17).
+  const bU=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
+  const nIco=r.sacos_ico||r.cantidad;
+  // UK igual con 7 sacos o menos en el ICO: GBP 1.40 por reserva.
+  const topeIco = cur==='GBP' ? 7 : 10;
+  const lotePlano = (cur==='USD' || cur==='GBP') && nIco<=topeIco && !bU.includes('CANAD');
+  const base = esWH ? (lotePlano ? `reserva de ${r.cantidad} saco${r.cantidad===1?'':'s'}, ICO de ${nIco} (${topeIco} sacos o menos): ${f2(mensual)}/mes`
+                                 : `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`)
                     : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato`
                       + (r.precio_base ? ` · precio ${r.precio_fuente==='T'?'contrato':'Pallet Price'} ${r.precio_base}` : '') + ')';
   const L=[`${esWH?'Storage':'Finance'} de ${MES[m0.getMonth()]} (${desde.getDate()}–${m1.getDate()} ${MES[m0.getMonth()]}): `
@@ -3488,16 +3495,18 @@ function exportFacturacionMes(){
 
   // Regla de storage de la fila (misma lógica que el API) → texto + tarifa por saco.
   // En Canadá con 8 sacos o menos la tarifa por saco es una fórmula (kg × 2.2046 × 0.132).
+  // lote:true = tarifa plana por reserva (Dupuy/Annex/NJ cuyo ICO completo tiene 10 sacos o menos: 10 USD/mes).
+  // En EE. UU. y UK el tramo lo decide el total del ICO (sacos_ico, API v17); en Canadá, la reserva.
   const reglaStorage=r=>{
-    const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,''), n=r.cantidad, kg=Number(r.bag_size)||0;
-    if(b.includes('DUP'))   return n<=10?{t:'Dupuy, 10 sacos o menos: 10 USD/saco',v:10}:{t:'Dupuy, más de 10 sacos: 1.00 USD/saco',v:1};
+    const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,''), n=r.cantidad, ni=r.sacos_ico||r.cantidad, kg=Number(r.bag_size)||0;
+    if(b.includes('DUP'))   return ni<=10?{t:`Dupuy, ICO de ${ni} sacos (10 o menos): 10 USD/reserva`,v:10,lote:true}:{t:`Dupuy, ICO de ${ni} sacos (más de 10): 1.00 USD/saco`,v:1};
     if(b.includes('CANAD')) return n<=8 ?{t:'Canadá, 8 sacos o menos: 0.132 USD/lb',f:true}:{t:'Canadá, más de 8 sacos: 1.72 USD/saco',v:1.72};
     if(b==='EU'||b.includes('ROTTERDAM')||b.includes('BARCELONA')) return kg>=60?{t:'Rotterdam, saco de 70 kg: 1.37 EUR',v:1.37}:{t:'Rotterdam, 35 kg / caja 24 kg: 1.05 EUR',v:1.05};
-    if(b==='UK')            return n<7?{t:'UK, menos de 7 sacos: 1.40 GBP/saco',v:1.4}:{t:'UK, 7 sacos o más: 0.70 GBP/saco',v:0.7};
+    if(b==='UK')            return ni<=7?{t:`UK, ICO de ${ni} sacos (7 o menos): 1.40 GBP/reserva`,v:1.4,lote:true}:{t:`UK, ICO de ${ni} sacos (más de 7): 0.70 GBP/saco`,v:0.7};
     if(b==='AU'||b.includes('AUSTRAL')||b.includes('MELBOURNE')) return {t:'Australia: 2.5 AUD/saco',v:2.5};
     if(b==='MENA'||b.includes('DUBAI')||b==='DXB') return {t:'MENA: 4 AED/saco',v:4};
     const nom=b.includes('ANNEX')?'Annex':(b==='NJ'||b.includes('CONTINENTAL'))?'Continental (NJ)':String(r.bodega||'Otra');
-    return n<=10?{t:`${nom}, 10 sacos o menos: 10 USD/saco`,v:10}:{t:`${nom}, más de 10 sacos: 1.05 USD/saco`,v:1.05};
+    return ni<=10?{t:`${nom}, ICO de ${ni} sacos (10 o menos): 10 USD/reserva`,v:10,lote:true}:{t:`${nom}, ICO de ${ni} sacos (más de 10): 1.05 USD/saco`,v:1.05};
   };
   const esUSA=r=>{ const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
     return !(b==='EU'||b==='UK'||b==='AU'||b==='MENA'||b==='DXB'||b.includes('ROTTERDAM')||b.includes('BARCELONA')||b.includes('AUSTRAL')||b.includes('MELBOURNE')||b.includes('DUBAI')); };
@@ -3523,13 +3532,13 @@ function exportFacturacionMes(){
   // ── Hoja 2: A facturar (detalle), con fórmulas ──
   //  A Cliente B Comercial C Bodega D Tipo E Contrato F Café G ICO H Factura
   //  I Sacos J Kg/saco K Cobra desde L Desde M Hasta N Días (=M-L+1)
-  //  O Regla storage P Tarifa/saco Q Storage/mes (=I*P) R Storage (=ROUND(Q/30*N,2)) S Moneda
+  //  O Regla storage P Tarifa/saco o /lote Q Storage/mes (=I*P, o =P si es tarifa por lote) R Storage (=ROUND(Q/30*N,2)) S Moneda
   //  T Precio U Fuente V Factor lb W Valor contrato (=T*J*I*V) X Tasa Y Finance/mes (=W*X)
   //  Z Finance (=ROUND(Y/30*N,2)) AA Moneda
   const porCliente=(a,b)=>a.cliente.localeCompare(b.cliente)||String(a.contrato).localeCompare(String(b.contrato));
   const cobran=DATA.filter(r=>r.fee_estado==='COBRA' && (r.fee_mes_dias||0)>0).sort(porCliente);
   const encDet=()=>[[ 'Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Factura','Sacos','Kg por saco',
-    'Cobra desde','Desde','Hasta','Días','Regla storage','Tarifa storage por saco/mes','Storage/mes','Storage','Moneda storage',
+    'Cobra desde','Desde','Hasta','Días','Regla storage','Tarifa storage/mes (por saco o por lote)','Storage/mes','Storage','Moneda storage',
     'Precio','Fuente precio','Factor lb→kg','Valor contrato','Tasa mensual','Finance/mes','Finance','Moneda finance'].map(H)];
   // Una fila del detalle; desdeDe(ini) da el primer día que se cobra en esa hoja.
   const filasDet=(lista,desdeDe)=>{ const out=encDet(); lista.forEach((r,i)=>{
@@ -3539,11 +3548,11 @@ function exportFacturacionMes(){
     const tarifa = rg.f ? kg*2.2046*0.132 : rg.v;
     const precio = Number(r.precio_base)||Number(r.pallet_price)||0;
     const factor = esUSA(r)?2.2046:1, tasa=esAU(r)?0.0103:0.0072;
-    const stMes=r.cantidad*tarifa, valor=precio*kg*r.cantidad*factor, finMes=valor*tasa;
+    const stMes=rg.lote?tarifa:r.cantidad*tarifa, valor=precio*kg*r.cantidad*factor, finMes=valor*tasa;
     out.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),T(r.factura||''),
       N(r.cantidad,'0'),N(kg,'0'),D(fecha(r.fee_inicio)),D(desde),D(mesFin),F(`M${R}-L${R}+1`,dias,'0'),
       T(rg.t), rg.f?F(`J${R}*2.2046*0.132`,tarifa,'#,##0.0000'):N(tarifa,'#,##0.00'),
-      F(`I${R}*P${R}`,stMes), F(`ROUND(Q${R}/30*N${R},2)`,r2(stMes/30*dias)), T(r.wh_cur),
+      F(rg.lote?`P${R}`:`I${R}*P${R}`,stMes), F(`ROUND(Q${R}/30*N${R},2)`,r2(stMes/30*dias)), T(r.wh_cur),
       N(precio,'#,##0.00'), T(r.precio_fuente==='T'?'Precio contrato':'Pallet Price'), N(factor,'0.0000'),
       F(`T${R}*J${R}*I${R}*V${R}`,valor), N(tasa,'0.00%'), F(`W${R}*X${R}`,finMes), F(`ROUND(Y${R}/30*N${R},2)`,r2(finMes/30*dias)), T(r.fin_cur)]);
   }); return out; };
@@ -3598,35 +3607,47 @@ function exportFacturacionMes(){
   // ── Hoja 4: Avisar día 1 ──
   const avisar=DATA.filter(r=>r.fee_notif===avisoIso && (r.fee_estado==='ACUMULA'||r.fee_estado==='GRATIS'||r.fee_estado==='COBRA'))
     .sort((a,b)=>a.cliente.localeCompare(b.cliente));
+  // Lo que se factura en el aviso son los días a prorrata del mes que cierra, desde
+  // "Cobra desde" (o el día 1 de ese mes) hasta el último día del mes; no el mes completo.
+  // Storage/mes y Finance/mes quedan como referencia de lo que pagará cada mes siguiente.
+  //  K Días a cobrar  L Storage a cobrar (=ROUND(P/30*K,2))  M Finance a cobrar (=ROUND(Q/30*K,2))
+  //  P Storage/mes  Q Finance/mes
+  const mesAviso0=new Date(aviso.getFullYear(),aviso.getMonth()-1,1);   // mes que se cobra en el aviso
   const avi=[['Cliente','Comercial','Bodega','Tipo','Contrato','Café','ICO','Sacos','Cobra desde','Fecha aviso',
-    'Días acumulados hoy','Storage/mes','Moneda storage','Finance/mes','Moneda finance','Mensaje'].map(H)];
-  avisar.forEach(r=>avi.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),
-    N(r.cantidad,'0'),D(fecha(r.fee_inicio)),D(fecha(r.fee_notif)),N(r.fee_dias||0,'0'),N(r.wh_mensual),T(r.wh_cur),N(r.fin_mensual),T(r.fin_cur),
-    T(`Su periodo libre terminó; desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan todos los días desde el ${dmy(r.fee_inicio)}.`)]));
+    'Días a cobrar','Storage a cobrar','Finance a cobrar','Moneda storage','Moneda finance',
+    'Storage/mes (mes completo)','Finance/mes (mes completo)','Mensaje'].map(H)];
+  avisar.forEach((r,i)=>{ const R=i+2, ini=fecha(r.fee_inicio), desde=ini&&ini>mesAviso0?ini:mesAviso0;
+    const dias=Math.max(0,Math.round((aviso-desde)/864e5)), st=Number(r.wh_mensual)||0, fi=Number(r.fin_mensual)||0;
+    avi.push([T(r.cliente),T(r.comercial||''),T(r.bodega),T(r.tipo==='SPOT'?'Spot':'Contrato'),T(r.contrato||''),T(r.cafe),T(r.ico),
+      N(r.cantidad,'0'),D(ini),D(fecha(r.fee_notif)),N(dias,'0'),
+      F(`ROUND(P${R}/30*K${R},2)`,r2(st/30*dias)),F(`ROUND(Q${R}/30*K${R},2)`,r2(fi/30*dias)),T(r.wh_cur),T(r.fin_cur),N(st),N(fi),
+      T(`Desde el ${dmy(r.fee_inicio)} corren fees. Si el café sigue en bodega el ${dmy(r.fee_notif)}, se facturan ${dias} días a prorrata (del ${dmy(iso(desde))} al ${dmy(iso(new Date(aviso.getTime()-864e5)))}).`)]); });
 
   // ── Hoja 5: Cómo se calcula ──
   const ayuda=[['Cómo se calcula'],[''],
     [`Periodo facturado: ${dmy(iso(mesIni))} a ${dmy(iso(mesFin))} (último mes cerrado).`],
     [`Hoja "Acumulado a corte": lo que sumaría cada reserva sin retirar si se cobraran todos sus días, desde "Cobra desde" hasta el ${dmy(iso(mesFin))}. Mismas fórmulas; solo cambia "Desde". Es una referencia, no reemplaza la facturación del mes.`],[''],
     ['Días = Hasta − Desde + 1. "Desde" es el día 1 del mes, o el primer día de cobro si empezó a cobrar en ese mes.'],
-    ['Storage = Sacos × Tarifa por saco / mes ÷ 30 × Días.'],
+    ['Storage = Sacos × Tarifa por saco / mes ÷ 30 × Días (en lotes de tarifa plana: Tarifa del lote / mes ÷ 30 × Días).'],
     ['Finance = Precio × Kg por saco × Sacos × Factor lb→kg × Tasa mensual ÷ 30 × Días.'],
     ['   · Factor lb→kg = 2.2046 en EE. UU. (precio por libra); 1 en las demás regiones (precio por kg).'],
     ['   · Tasa mensual = 0.72% (1.03% en Australia).'],
     ['   · Precio = precio de contrato (Price per KG de CONSOLIDADO) en contratos; Pallet Price en SPOT o si el contrato no tiene precio.'],
-    [''],['Tarifas de storage por saco / mes:'],
-    ['   Dupuy: 10 USD (10 sacos o menos) · 1.00 USD (más de 10)'],
-    ['   Annex / Continental (NJ): 10 USD (10 sacos o menos) · 1.05 USD (más de 10)'],
-    ['   Canadá: 0.132 USD por libra (8 sacos o menos) · 1.72 USD por saco (más de 8)'],
-    ['   Rotterdam: 1.37 EUR (saco de 70 kg) · 1.05 EUR (35 kg / caja de 24 kg)'],
-    ['   UK: 1.40 GBP (menos de 7 sacos) · 0.70 GBP (7 o más)'],
+    [''],['Tarifas de storage / mes:'],
+    ['   En EE. UU. y UK el tramo lo decide el total de sacos del ICO en la bodega (todas sus reservas), no cada reserva.'],
+    ['   Dupuy: 10 USD por reserva (ICO de 10 sacos o menos) · 1.00 USD por saco (ICO de más de 10)'],
+    ['   Annex / Continental (NJ): 10 USD por reserva (ICO de 10 sacos o menos) · 1.05 USD por saco (ICO de más de 10)'],
+    ['   Canadá (por reserva): 0.132 USD por libra (8 sacos o menos) · 1.72 USD por saco (más de 8)'],
+    ['   Rotterdam: 1.37 EUR por saco (70 kg) · 1.05 EUR (35 kg / caja de 24 kg)'],
+    ['   UK: 1.40 GBP por reserva (ICO de 7 sacos o menos) · 0.70 GBP por saco (ICO de más de 7)'],
     ['   Australia: 2.5 AUD · MENA: 4 AED'],
     [''],['Inicio del cobro:'],
     ['   SPOT: 60 días libres desde la fecha de reserva.'],
     ['   CONTRACT entrega única (First y Last Delivery a 30 días o menos): 60 días libres tras el Last Delivery.'],
     ['   CONTRACT ventana larga o sin First Delivery: 30 días libres tras el Last Delivery.'],
+    ['   CONTRACT que llega a bodega más de 15 días después del Last Delivery: 60 días libres desde la llegada.'],
     ['   CONTRACT sin Last Delivery: 180 días libres desde la llegada a bodega.'],
-    ['   Aviso el día 1 siguiente: si el café ya salió no paga; si sigue, se factura desde el primer día de cobro.'],
+    ['   Aviso el día 1 siguiente: si el café ya salió no paga; si sigue, se facturan a prorrata los días del mes desde el primer día de cobro (hoja "Avisar día 1").'],
     ['   Al sacar el café, los días del mes en curso van en la factura del café.']].map(f=>f.map(T));
 
   const wb=XLSX.utils.book_new();
@@ -3634,7 +3655,7 @@ function exportFacturacionMes(){
   const anchosDet=[26,16,10,9,18,24,10,12,7,9,12,11,11,6,40,12,12,12,9,10,15,9,14,9,12,12,9];
   XLSX.utils.book_append_sheet(wb,hoja(det,anchosDet),'A facturar (detalle)');
   XLSX.utils.book_append_sheet(wb,hoja(acu,anchosDet),'Acumulado a corte');
-  XLSX.utils.book_append_sheet(wb,hoja(avi,[26,16,10,9,18,24,10,7,12,12,10,12,9,12,9,90]),'Avisar día 1');
+  XLSX.utils.book_append_sheet(wb,hoja(avi,[26,16,10,9,18,24,10,7,12,12,9,12,12,9,9,14,14,90]),'Avisar día 1');
   XLSX.utils.book_append_sheet(wb,hoja(ayuda,[120]),'Cómo se calcula');
   XLSX.writeFile(wb,`Forest_Facturacion_Fees_${iso(mesIni).slice(0,7)}.xlsx`);
 }

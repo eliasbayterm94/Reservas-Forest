@@ -45,8 +45,9 @@
 //   - Si el cafe no esta en su contrato, T queda vacio; U/V se toman del
 //     contrato solo si todas sus lineas tienen las mismas fechas (si no, vacias).
 //     Esas filas se listan en el registro y el status lo avisa.
-//   - Cafes equivalentes (DRILL_EQUIVALENCIAS_): Black Condor, Huila Condor y
-//     Reforest Washed cuentan como la misma referencia al buscar en el contrato.
+//   - Cafes equivalentes (DRILL_EQUIVALENCIAS_): Black Condor, Huila Condor,
+//     Reforest Washed, Nariño Condor y Vergel cuentan como la misma referencia
+//     al buscar en el contrato (los dos ultimos desde el 9-nov-2026).
 //   - Reservas sin contrato ("Not Assigned", "Spot Contract": codigos sin
 //     numeros) no se cruzan con CONSOLIDADO: T/U/V quedan vacios.
 //   - El registro tambien lista los contratos que no aparecen en CONSOLIDADO.
@@ -489,7 +490,9 @@ function DRILL_contratoKey_(contratoVal) {
 // reserva dice uno y el contrato otro del mismo grupo, se toma esa linea.
 // Nombres en minuscula, sin tildes ni signos (como los deja DRILL_norm_).
 const DRILL_EQUIVALENCIAS_ = [
-  ["black condor", "huila condor", "reforest washed"],
+  // 9-nov-2026: Laura agrega Nariño Condor y Vergel. Solo el nombre exacto
+  // "Vergel": los microlotes (Vergel Flowers, SL28 Vergel, Gesha El Vergel…) NO entran.
+  ["black condor", "huila condor", "reforest washed", "narino condor", "vergel"],
 ];
 
 function DRILL_buscarLineaContrato_(contractData, contratoVal, cafe) {

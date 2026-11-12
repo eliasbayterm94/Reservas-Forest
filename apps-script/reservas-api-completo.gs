@@ -1,9 +1,45 @@
 // ═══════════════════════════════════════════════════════════════
-// FOREST RESERVAS — Apps Script API v14
+// FOREST RESERVAS — Apps Script API v17
 // Lee las columnas A–V (datos puros, sin fórmulas) + AB (Container) + AC (Status).
 // Calcula W, X, Y, Z, AA directamente en JavaScript.
 //
-// CAMBIOS RESPECTO A v13:
+// CAMBIOS RESPECTO A v16 (11-nov-2026, reglas de Laura):
+//   1. El tramo de storage lo decide el TOTAL DE SACOS DEL ICO en esa bodega
+//      (todas sus reservas y facturados sin rotar), no la cantidad de cada fila.
+//      Nuevo campo sacos_ico.
+//      - Dupuy / Annex / Continental: ICO con 10 sacos o menos → cada reserva
+//        paga USD 10/mes plano. ICO con más de 10 → todas sus reservas pagan por
+//        saco (1.00 Dupuy, 1.05 NJ/Annex), aunque la reserva sea pequeña.
+//        Ej.: ICO 26-00687 (Dupuy, 43 sacos): java pura 5 sacos → USD 5/mes, no 10.
+//      - UK: ICO con 7 sacos o menos → cada reserva paga GBP 1.40/mes plano
+//        (igual que Dupuy; antes era 1.40 por saco y "menos de 7");
+//        ICO con más de 7 → 0.70 GBP/saco.
+//      - Canadá sigue mirando cada reserva por separado.
+//   2. Llegada tardía: el umbral baja de 25 a 15 días (LLEGADA_TARDIA_MIN_DIAS).
+//   3. Llaves del caché fv16_ → fv17_.
+//
+// CAMBIOS DE v16 RESPECTO A v15:
+//   1. Dupuy / Annex / Continental con 10 sacos o menos: USD 10 al mes POR LOTE
+//      (tarifa plana), no USD 10 por saco. Ej.: FC-25-HOU-006, 5 sacos → USD 10/mes,
+//      no USD 50. Con más de 10 sacos sigue por saco (1.00 Dupuy, 1.05 NJ/Annex).
+//   2. Llaves del caché fv15d_ → fv16_.
+//
+// CAMBIOS DE v15 RESPECTO A v14:
+//   1. CONTRACT que llega a bodega MÁS DE 25 DÍAS después de su Last Delivery:
+//      antes cobraba desde el mismo día de llegada (cero días libres). Ahora tiene
+//      60 días libres contados desde la llegada (DIAS_LIBRES.LLEGADA_TARDIA).
+//      Con 25 días o menos de atraso sigue la regla normal (LLEGADA_TARDIA_MIN_DIAS).
+//      Ej.: FC-26-OA-4a7e, última entrega 31-may, llegó 26-oct → cobra desde 26-dic.
+//      Supuesto provisional (9-nov-2026): el retraso es de Forest (despachamos
+//      tarde), no del cliente. Si más adelante se sabe que el cliente pidió
+//      aplazar, ese caso debería ir por la regla normal (días tras Last Delivery).
+//   2. toNum lee precios escritos como texto ("£18.50", "9,07"); antes daban 0.
+//   3. Sin ETA no corren fees (el café no ha llegado). Antes un contrato sin ETA
+//      cobraba desde Last Delivery + 30 aunque siguiera navegando.
+//   4. Llaves del caché fv14_ → fv15d_, para que al publicar no se siga sirviendo
+//      el JSON con los fees viejos.
+//
+// CAMBIOS DE v14 RESPECTO A v13:
 //   1. Se expone "status" (columna AC, índice 28): el estado REAL del lote
 //      ("On Spot" / "On Float") tal como lo escribe el Drilldown v10 desde la
 //      columna Status del Offering.
@@ -40,8 +76,9 @@
 //      ⚠️ El cambio del trigger solo aplica al volver a ejecutar setupTrigger().
 // ═══════════════════════════════════════════════════════════════
 
-const SHEET_ID  = "1UYREKkSoUPOX2hKfiZNxfgr2tylNDxNn6pzrsZ3tcqw";
-const SHEET_GID = "1973971668";
+// v15: RES_ al inicio porque otro archivo del proyecto ya declara SHEET_ID.
+const RES_SHEET_ID  = "1UYREKkSoUPOX2hKfiZNxfgr2tylNDxNn6pzrsZ3tcqw";
+const RES_SHEET_GID = "1973971668";
 
 // Índices en el array leído (A=0 … V=21, AB=27, AC=28)
 const C = {
@@ -69,8 +106,8 @@ const C = {
 
 // Caché en chunks (límite Apps Script: 100 KB por key)
 // v14: fv11_ → fv14_ para que el JSON viejo (sin "status") no se siga sirviendo.
-const CACHE_PREFIX = 'fv14_chunk_';
-const CACHE_META   = 'fv14_meta';
+const CACHE_PREFIX = 'fv17_chunk_';
+const CACHE_META   = 'fv17_meta';
 const CACHE_SECS   = 60 * 60 * 6; // 6 horas — máximo que permite CacheService  MARGEN
 const CHUNK_SIZE   = 90000;
 
@@ -79,12 +116,16 @@ const CHUNK_SIZE   = 90000;
 //   SPOT:     60 días libres tras la reserva (sin fecha de reserva no se cobra)
 //   CONTRACT: con Last Delivery → 30 días libres tras V; si U y V están a 30 días
 //             o menos (entrega única), 60 días libres tras V
+//             si llegó a bodega más de 15 días después de V → 60 días libres
+//             tras la llegada (v15)
 //             sin Last Delivery → 180 días libres tras la llegada (ETA)
 //             (la fecha de reserva no cuenta en CONTRACT)
 //   SPOT: si la reserva es anterior a la llegada, se cuenta desde la llegada.
 // Tarifas mensuales, cobradas por día (tarifa / 30). Solo se cobra si el café
 // sigue en bodega el día 1 siguiente al inicio (aviso): ver fee_estado.
-const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60, TRAS_LAST_DELIVERY: 30 };
+const DIAS_LIBRES = { SPOT: 60, CONTRACT: 180, ENTREGA_UNICA: 60, TRAS_LAST_DELIVERY: 30, LLEGADA_TARDIA: 60 };
+// La regla de llegada tardía aplica solo si el café llegó MÁS de estos días después del Last Delivery
+const LLEGADA_TARDIA_MIN_DIAS = 15;
 // Tasa mensual del finance fee sobre el valor del contrato (AU tiene la suya)
 const FIN_RATE    = { AU: 0.0103, DEFAULT: 0.0072 };
 const LB_POR_KG   = 2.2046;
@@ -108,16 +149,31 @@ function bodegaInfo(raw) {
 }
 
 // Storage de UN mes para la fila → { monto, moneda }
-function storageMensual(wh, sacos, bagKg) {
+// sacos = sacos de la fila · sacosIco = total del ICO en esa bodega (decide el
+// tramo en EE. UU. y UK, v17). Canadá decide con los sacos de la fila.
+function storageMensual(wh, sacos, bagKg, sacosIco) {
+  const nIco = sacosIco || sacos;
   switch (wh) {
-    case 'DUPUY':  return { monto: sacos * (sacos <= 10 ? 10 : 1.00), moneda:'USD' };
+    case 'DUPUY':  return { monto: nIco <= 10 ? 10 : sacos * 1.00, moneda:'USD' };   // ICO ≤10 sacos: 10 USD por reserva
     case 'CANADA': return { monto: sacos <= 8 ? sacos * bagKg * LB_POR_KG * 0.132 : sacos * 1.72, moneda:'USD' };
     case 'EU':     return { monto: sacos * (bagKg >= 60 ? 1.37 : 1.05), moneda:'EUR' }; // 70 kg vs 35 kg / caja 24 kg
-    case 'UK':     return { monto: sacos * (sacos < 7 ? 1.40 : 0.70),   moneda:'GBP' };
+    case 'UK':     return { monto: nIco <= 7 ? 1.40 : sacos * 0.70,     moneda:'GBP' }; // ICO ≤7 sacos: 1.40 GBP por reserva
     case 'AU':     return { monto: sacos * 2.5, moneda:'AUD' };
     case 'MENA':   return { monto: sacos * 4,   moneda:'AED' };
-    default:       return { monto: sacos * (sacos <= 10 ? 10 : 1.05), moneda:'USD' }; // ANNEX, CONTINENTAL, OTRA
+    default:       return { monto: nIco <= 10 ? 10 : sacos * 1.05, moneda:'USD' };   // ANNEX, CONTINENTAL, OTRA; ICO ≤10 sacos: 10 USD por reserva
   }
+}
+
+// Fila de la hoja que cuenta para el API (reservado o facturado sin rotar, con cliente o café)
+function filaActiva(r) {
+  const e = String(r[C.estado] || '').toUpperCase().trim();
+  if (!(e.includes("FACT") || e.includes("RESERV"))) return false;
+  return !!(String(r[C.cliente] || '').trim() || String(r[C.cafe] || '').trim());
+}
+// Llave del ICO por bodega: el mismo ICO en dos bodegas son lotes distintos
+function llaveIco(r) {
+  const ico = String(r[C.ico] || '').trim().toUpperCase();
+  return ico ? bodegaInfo(r[C.bodega]).wh + '|' + ico : null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -149,9 +205,9 @@ function out(json) {
 // LECTURA: UNA SOLA llamada getValues(), A–AC (29 cols)
 // ─────────────────────────────────────────────────────────────
 function leerSheet() {
-  const ss     = SpreadsheetApp.openById(SHEET_ID);
+  const ss     = SpreadsheetApp.openById(RES_SHEET_ID);
   const sheets = ss.getSheets();
-  let sheet    = sheets.find(s => String(s.getSheetId()) === String(SHEET_GID));
+  let sheet    = sheets.find(s => String(s.getSheetId()) === String(RES_SHEET_GID));
   if (!sheet) sheet = sheets[0];
 
   const lastRow = sheet.getLastRow();
@@ -168,6 +224,13 @@ function leerSheet() {
   const todayMs = today.getTime();
 
   const rows = [];
+
+  // v17: total de sacos por ICO (en su bodega) — decide el tramo del storage
+  const sacosPorIco = {};
+  for (let i = 0; i < data.length; i++) {
+    const k = filaActiva(data[i]) ? llaveIco(data[i]) : null;
+    if (k) sacosPorIco[k] = (sacosPorIco[k] || 0) + toInt(data[i][C.cantidad]);
+  }
 
   for (let i = 0; i < data.length; i++) {
     const r = data[i];
@@ -224,15 +287,25 @@ function leerSheet() {
     // fecha base (reserva 22 jul + 60 → libre hasta 20 sep, cobra desde 21 sep)
     const baseReserva = (fechaReservaDate && etaDate && fechaReservaDate < etaDate) ? etaDate : fechaReservaDate;
     let inicioMs = null;
-    if (tipo === "SPOT") {
+    // v15: sin ETA el café no ha llegado a bodega (o no se sabe cuándo llegó):
+    // no corren fees. Antes un contrato sin ETA cobraba desde Last Delivery + 30.
+    if (!etaDate) {
+      // inicioMs queda null → sin fee
+    } else if (tipo === "SPOT") {
       if (baseReserva) inicioMs = diaMs(baseReserva) + (DIAS_LIBRES.SPOT + 1) * 86400000;
+    } else if (lastDeliveryDate && etaDate &&
+               Math.round((diaMs(etaDate) - diaMs(lastDeliveryDate)) / 86400000) > LLEGADA_TARDIA_MIN_DIAS) {
+      // v15: llegó a bodega más de 15 días DESPUÉS de la última entrega pactada →
+      // el cliente no pudo retirarlo a tiempo; los días libres se cuentan desde la llegada.
+      // Con 15 días o menos de atraso sigue la regla normal (días tras Last Delivery).
+      inicioMs = diaMs(etaDate) + (DIAS_LIBRES.LLEGADA_TARDIA + 1) * 86400000;
     } else if (lastDeliveryDate) {
       // Entrega única (U = V o a 30 días o menos): 60 días libres tras V; si no, 30
       const ventanaCorta = firstDeliveryDate &&
         Math.round((diaMs(lastDeliveryDate) - diaMs(firstDeliveryDate)) / 86400000) <= 30;
       inicioMs = diaMs(lastDeliveryDate) + ((ventanaCorta ? DIAS_LIBRES.ENTREGA_UNICA : DIAS_LIBRES.TRAS_LAST_DELIVERY) + 1) * 86400000;
-      if (etaDate) inicioMs = Math.max(inicioMs, diaMs(etaDate));  // no antes de llegar a bodega
-    } else if (etaDate) {                                          // CONTRACT: la reserva no cuenta
+      inicioMs = Math.max(inicioMs, diaMs(etaDate));               // no antes de llegar a bodega
+    } else {                                                       // CONTRACT: la reserva no cuenta
       inicioMs = diaMs(etaDate) + (DIAS_LIBRES.CONTRACT + 1) * 86400000;
     }
 
@@ -262,7 +335,9 @@ function leerSheet() {
     }
     const diasCobro = feeEstado === 'COBRA' ? diasAcum : 0;
 
-    const st = storageMensual(info.wh, cantidad, bagSize);
+    const kIco     = llaveIco(r);
+    const sacosIco = kIco ? sacosPorIco[kIco] : cantidad;   // sin ICO: la fila sola
+    const st = storageMensual(info.wh, cantidad, bagSize, sacosIco);
     // Facturación mensual: el monto a facturar es el del último mes cerrado;
     // el acumulado (todos los días desde el inicio) va aparte.
     const whDia  = st.monto / 30;
@@ -285,6 +360,7 @@ function leerSheet() {
       cafe,
       ico:            String(r[C.ico]       || '').trim(),
       cantidad,
+      sacos_ico:      sacosIco,                         // v17: total del ICO en su bodega (decide el tramo de storage)
       tipo,
       estado,
       contrato:       String(r[C.contrato]  || '').trim(),
@@ -347,7 +423,11 @@ function vacío() {
 function toNum(v) {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === 'number') return v;
-  const n = parseFloat(String(v).replace(/,/g, '').trim());
+  // v15: acepta precios escritos como texto ("£18.50", "€ 9,07", "USD 6.5"):
+  // se quitan símbolos de moneda y espacios; una coma sin punto es decimal.
+  let s = String(v).replace(/[^\d,.\-]/g, '');
+  s = (s.includes(',') && !s.includes('.')) ? s.replace(',', '.') : s.replace(/,/g, '');
+  const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 
