@@ -2111,10 +2111,13 @@ function feeTooltip(r, esWH){
   const hoy=new Date(), ini=r.fee_inicio?new Date(r.fee_inicio+'T00:00:00'):null;
   const m0=new Date(hoy.getFullYear(),hoy.getMonth()-1,1), m1=new Date(hoy.getFullYear(),hoy.getMonth(),0);
   const desde=ini&&ini>m0?ini:m0;
-  // Dupuy / Annex / NJ con 10 sacos o menos pagan tarifa plana por lote (igual que el API v16).
+  // Dupuy / Annex / NJ: si el ICO completo tiene 10 sacos o menos, cada reserva paga tarifa plana (API v17).
   const bU=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
-  const lotePlano = cur==='USD' && r.cantidad<=10 && !bU.includes('CANAD');
-  const base = esWH ? (lotePlano ? `lote de ${r.cantidad} saco${r.cantidad===1?'':'s'} (10 sacos o menos): ${f2(mensual)}/mes`
+  const nIco=r.sacos_ico||r.cantidad;
+  // UK igual con 7 sacos o menos en el ICO: GBP 1.40 por reserva.
+  const topeIco = cur==='GBP' ? 7 : 10;
+  const lotePlano = (cur==='USD' || cur==='GBP') && nIco<=topeIco && !bU.includes('CANAD');
+  const base = esWH ? (lotePlano ? `reserva de ${r.cantidad} saco${r.cantidad===1?'':'s'}, ICO de ${nIco} (${topeIco} sacos o menos): ${f2(mensual)}/mes`
                                  : `${r.cantidad} sacos × ${f2(mensual/(r.cantidad||1))} = ${f2(mensual)}/mes`)
                     : `${f2(mensual)}/mes (${r.bodega==='AU'?'1.03':'0.72'}% del contrato`
                       + (r.precio_base ? ` · precio ${r.precio_fuente==='T'?'contrato':'Pallet Price'} ${r.precio_base}` : '') + ')';
@@ -3390,17 +3393,18 @@ function exportFacturacionMes(){
 
   // Regla de storage de la fila (misma lógica que el API) → texto + tarifa por saco.
   // En Canadá con 8 sacos o menos la tarifa por saco es una fórmula (kg × 2.2046 × 0.132).
-  // lote:true = tarifa plana por lote (Dupuy/Annex/NJ con 10 sacos o menos: 10 USD/mes el lote).
+  // lote:true = tarifa plana por reserva (Dupuy/Annex/NJ cuyo ICO completo tiene 10 sacos o menos: 10 USD/mes).
+  // En EE. UU. y UK el tramo lo decide el total del ICO (sacos_ico, API v17); en Canadá, la reserva.
   const reglaStorage=r=>{
-    const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,''), n=r.cantidad, kg=Number(r.bag_size)||0;
-    if(b.includes('DUP'))   return n<=10?{t:'Dupuy, 10 sacos o menos: 10 USD/lote',v:10,lote:true}:{t:'Dupuy, más de 10 sacos: 1.00 USD/saco',v:1};
+    const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,''), n=r.cantidad, ni=r.sacos_ico||r.cantidad, kg=Number(r.bag_size)||0;
+    if(b.includes('DUP'))   return ni<=10?{t:`Dupuy, ICO de ${ni} sacos (10 o menos): 10 USD/reserva`,v:10,lote:true}:{t:`Dupuy, ICO de ${ni} sacos (más de 10): 1.00 USD/saco`,v:1};
     if(b.includes('CANAD')) return n<=8 ?{t:'Canadá, 8 sacos o menos: 0.132 USD/lb',f:true}:{t:'Canadá, más de 8 sacos: 1.72 USD/saco',v:1.72};
     if(b==='EU'||b.includes('ROTTERDAM')||b.includes('BARCELONA')) return kg>=60?{t:'Rotterdam, saco de 70 kg: 1.37 EUR',v:1.37}:{t:'Rotterdam, 35 kg / caja 24 kg: 1.05 EUR',v:1.05};
-    if(b==='UK')            return n<7?{t:'UK, menos de 7 sacos: 1.40 GBP/saco',v:1.4}:{t:'UK, 7 sacos o más: 0.70 GBP/saco',v:0.7};
+    if(b==='UK')            return ni<=7?{t:`UK, ICO de ${ni} sacos (7 o menos): 1.40 GBP/reserva`,v:1.4,lote:true}:{t:`UK, ICO de ${ni} sacos (más de 7): 0.70 GBP/saco`,v:0.7};
     if(b==='AU'||b.includes('AUSTRAL')||b.includes('MELBOURNE')) return {t:'Australia: 2.5 AUD/saco',v:2.5};
     if(b==='MENA'||b.includes('DUBAI')||b==='DXB') return {t:'MENA: 4 AED/saco',v:4};
     const nom=b.includes('ANNEX')?'Annex':(b==='NJ'||b.includes('CONTINENTAL'))?'Continental (NJ)':String(r.bodega||'Otra');
-    return n<=10?{t:`${nom}, 10 sacos o menos: 10 USD/lote`,v:10,lote:true}:{t:`${nom}, más de 10 sacos: 1.05 USD/saco`,v:1.05};
+    return ni<=10?{t:`${nom}, ICO de ${ni} sacos (10 o menos): 10 USD/reserva`,v:10,lote:true}:{t:`${nom}, ICO de ${ni} sacos (más de 10): 1.05 USD/saco`,v:1.05};
   };
   const esUSA=r=>{ const b=String(r.bodega||'').toUpperCase().replace(/[^A-Z]/g,'');
     return !(b==='EU'||b==='UK'||b==='AU'||b==='MENA'||b==='DXB'||b.includes('ROTTERDAM')||b.includes('BARCELONA')||b.includes('AUSTRAL')||b.includes('MELBOURNE')||b.includes('DUBAI')); };
@@ -3528,17 +3532,18 @@ function exportFacturacionMes(){
     ['   · Tasa mensual = 0.72% (1.03% en Australia).'],
     ['   · Precio = precio de contrato (Price per KG de CONSOLIDADO) en contratos; Pallet Price en SPOT o si el contrato no tiene precio.'],
     [''],['Tarifas de storage / mes:'],
-    ['   Dupuy: 10 USD por lote (10 sacos o menos) · 1.00 USD por saco (más de 10)'],
-    ['   Annex / Continental (NJ): 10 USD por lote (10 sacos o menos) · 1.05 USD por saco (más de 10)'],
-    ['   Canadá: 0.132 USD por libra (8 sacos o menos) · 1.72 USD por saco (más de 8)'],
+    ['   En EE. UU. y UK el tramo lo decide el total de sacos del ICO en la bodega (todas sus reservas), no cada reserva.'],
+    ['   Dupuy: 10 USD por reserva (ICO de 10 sacos o menos) · 1.00 USD por saco (ICO de más de 10)'],
+    ['   Annex / Continental (NJ): 10 USD por reserva (ICO de 10 sacos o menos) · 1.05 USD por saco (ICO de más de 10)'],
+    ['   Canadá (por reserva): 0.132 USD por libra (8 sacos o menos) · 1.72 USD por saco (más de 8)'],
     ['   Rotterdam: 1.37 EUR por saco (70 kg) · 1.05 EUR (35 kg / caja de 24 kg)'],
-    ['   UK: 1.40 GBP (menos de 7 sacos) · 0.70 GBP (7 o más)'],
+    ['   UK: 1.40 GBP por reserva (ICO de 7 sacos o menos) · 0.70 GBP por saco (ICO de más de 7)'],
     ['   Australia: 2.5 AUD · MENA: 4 AED'],
     [''],['Inicio del cobro:'],
     ['   SPOT: 60 días libres desde la fecha de reserva.'],
     ['   CONTRACT entrega única (First y Last Delivery a 30 días o menos): 60 días libres tras el Last Delivery.'],
     ['   CONTRACT ventana larga o sin First Delivery: 30 días libres tras el Last Delivery.'],
-    ['   CONTRACT que llega a bodega más de 25 días después del Last Delivery: 60 días libres desde la llegada.'],
+    ['   CONTRACT que llega a bodega más de 15 días después del Last Delivery: 60 días libres desde la llegada.'],
     ['   CONTRACT sin Last Delivery: 180 días libres desde la llegada a bodega.'],
     ['   Aviso el día 1 siguiente: si el café ya salió no paga; si sigue, se facturan a prorrata los días del mes desde el primer día de cobro (hoja "Avisar día 1").'],
     ['   Al sacar el café, los días del mes en curso van en la factura del café.']].map(f=>f.map(T));
