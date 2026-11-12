@@ -6608,7 +6608,8 @@ const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RE
 const VM_SERVICES = ['loadout','handling','certificate operation','documents and legal',
   'legal service','tariff overcost','overcost','freight','storage','re-bagging','rebagging',
   'sampling fee','courier','logistics','credit card','card fee','shipping','wire fee',
-  'bank fee','surcharge'];
+  'bank fee','surcharge','exporting document','phytosanitar','advance payment',
+  'export service','warehouse'];
 const vmIsService = s => { const t=String(s||'').toLowerCase(); return VM_SERVICES.some(k=>t.includes(k)); };
 let vmCost = {}, vmContracts = {}, vmClientRep = {}, vmDiag = [];
 // ICO numérico (sin prefijo RW): "26-00852". Para unir con BASE COST aunque el prefijo difiera.
@@ -6630,10 +6631,17 @@ function vmParseItem(item){
   const ms=[...s.matchAll(/(RW[- ]?)?(\d{2}-\d{3,})/gi)];
   let ico='', iconum='';
   if(ms.length){ const m=ms[ms.length-1]; iconum=m[2]; ico=(m[1]?'RW-':'')+m[2]; }
+  // ICO de proveedor externo: código alfanumérico al final (ej. CA825316, H31908).
+  if(!ico){ const sup=s.match(/\b([A-Z]{1,3}\d{4,}[A-Z]?)\s*$/); if(sup) ico=sup[1]; }
   // "Direct from Colombia" sin ICO → ICO padre 25-999 (costeo en BASE COST).
   if(!ico && /direct from colombia/i.test(s)){ ico='25-999'; iconum='25-999'; }
+  // categoría: primero por token exacto (Forest), si no, buscándola en el texto (proveedor).
   let cat=''; for(const t of toks){ if(VM_CATS.includes(t.toUpperCase())){ cat=t.toUpperCase(); break; } }
-  let prod=toks.length?toks[toks.length-1]:''; prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}\s*$/i,'').trim();
+  if(!cat){ const up=s.toUpperCase(); for(const c of VM_CATS){ if(new RegExp('\\b'+c+'\\b').test(up)){ cat=c; break; } } }
+  // producto: último segmento, quitando el ICO (dash o alfanumérico) y la categoría.
+  let prod=toks.length?toks[toks.length-1]:'';
+  prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}\s*$/i,'').replace(/\b[A-Z]{1,3}\d{4,}[A-Z]?\s*$/,'').trim();
+  if(cat) prod=prod.replace(new RegExp('\\b'+cat+'\\b','i'),'').replace(/\s{2,}/g,' ').trim();
   return { ico, iconum, cat, prod: prod||toks[toks.length-1]||'', container: toks[1]||'' };
 }
 // Parsea Description → código de contrato y tamaño del saco (KG).
