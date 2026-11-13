@@ -114,6 +114,17 @@ async function main(){
   try{ const sr=await fetchCSV('SALES REP'); const hi=hdrIdx(sr,['customer','cliente']); const H=sr[hi].map(h=>String(h||'').trim().toLowerCase());
     const iCli=col(H,['customer','cliente']),iRep=col(H,['comercial','sales rep','rep']),iHO=col(H,['hand over']);
     for(let r=hi+1;r<sr.length;r++){ const row=sr[r]||[]; const cli=normCli(row[iCli]),rep=String(row[iRep]||'').trim(),ho=String(iHO>=0?(row[iHO]||''):'').trim(); if(cli&&(rep||ho))REP[cli]={rep,ho}; } }catch(e){ console.error('SALES REP',e.message); }
+  // METAS → meta mensual por comercial (USD). Celda vacía o 0 = mes sin meta (no cuenta).
+  const META={};
+  try{ const mt=await fetchCSV('METAS'); const hi=hdrIdx(mt,['comercial','mensualidad','enero']); const H=mt[hi].map(h=>String(h||'').trim().toLowerCase());
+    const iCom=col(H,['comercial','mensualidad','sales rep','rep']);
+    const MES_N=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const MES_A=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const iMes=MES_N.map((nm,k)=>{ let c=col(H,[nm]); if(c<0)c=col(H,[MES_A[k]]); return c; });
+    for(let r=hi+1;r<mt.length;r++){ const row=mt[r]||[]; const com=norm(String(iCom>=0?(row[iCom]||''):'').trim());
+      if(!com||com==='Sin asignar')continue;
+      const m=iMes.map(ci=>{ if(ci<0)return null; const n=cleanNum(row[ci]); return n>0?n:null; });
+      if(m.every(x=>x==null))continue; META[com]=m; } }catch(e){ console.error('METAS',e.message); }
 
   function contractMargin(code,product){ const arr=code?CONTR[String(code).toUpperCase()]:null; if(!arr||!arr.length)return null;
     const wm=arr.filter(c=>c.margin!=null); if(!wm.length)return null; if(wm.length===1)return wm[0].margin;
@@ -163,6 +174,10 @@ async function main(){
   const fmtM = n => { const s=n<0?'-':''; n=Math.abs(Math.round(n)); return s+(n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+Math.round(n/1e3)+'k':'$'+n); };
   const mpOf = o => o.vc?o.g/o.vc*100:0;
   const dot = mp => mp<15?' 🔴':mp<22?' 🟡':'';
+  // Cumplimiento del año: facturado YTD ÷ suma de metas Ene..mes actual (vacío/0 no cuenta)
+  const cumpDot = p => p==null?'':p>=100?'🟢':p>=80?'🟡':'🔴';
+  const metaYTDof = com => { const mm=META[com]; if(!mm)return null; let s=0,has=false; for(let k=0;k<M;k++){ if(mm[k]!=null){s+=mm[k];has=true;} } return has?s:null; };
+  const cumpOf = (com,a) => { const mt=metaYTDof(com); return (mt&&mt>0)?a.ytd.v/mt*100:null; };
   // Comerciales "reales" vs facturación adicional (placeholders / sin asignar)
   const MAIN = new Set(['Santiago','Diego','Pablo','Michal','Juan David','Ricardo','Luis','Isis','Shady','Samuel','Sebastian','Andres']);
   const mains = Object.keys(agg).filter(c=>MAIN.has(c) && agg[c].ytd.v>0).sort((a,b)=>agg[b].ytd.v-agg[a].ytd.v);
@@ -173,10 +188,13 @@ async function main(){
   const tot={mtd:{v:0,g:0,vc:0},qtd:{v:0,g:0,vc:0},ytd:{v:0,g:0,vc:0}};
   Object.keys(agg).forEach(c=>['mtd','qtd','ytd'].forEach(w=>{ tot[w].v+=agg[c][w].v; tot[w].g+=agg[c][w].g; tot[w].vc+=agg[c][w].vc; }));
 
-  const line = (name,a) => `• **${name}** — YTD ${fmtM(a.ytd.v)} (${mpOf(a.ytd).toFixed(0)}%)${dot(mpOf(a.ytd))} · QTD ${fmtM(a.qtd.v)} · MTD ${fmtM(a.mtd.v)}`;
+  const line = (name,a) => { const cp=cumpOf(name,a); const cs=cp==null?'':` · 🎯 ${Math.round(cp)}% ${cumpDot(cp)}`;
+    return `• **${name}** — YTD ${fmtM(a.ytd.v)}${cs} · mg ${mpOf(a.ytd).toFixed(0)}%${dot(mpOf(a.ytd))} · QTD ${fmtM(a.qtd.v)} · MTD ${fmtM(a.mtd.v)}`; };
+  const totMetaYTD = Object.keys(META).reduce((s,c)=>s+(metaYTDof(c)||0),0);
+  const compCump = totMetaYTD>0 ? tot.ytd.v/totMetaYTD*100 : null;
   const fecha = `${asOf.getDate()} ${MES[M]} ${Y}`;
   let msg = `📊 **Ventas & Márgenes por comercial** — ${fecha} (QuickBooks)\n`;
-  msg += `YTD **${fmtM(tot.ytd.v)}** · margen **${fmtM(tot.ytd.g)} (${mpOf(tot.ytd).toFixed(0)}%)**  ·  QTD ${fmtM(tot.qtd.v)}  ·  MTD ${fmtM(tot.mtd.v)}\n`;
+  msg += `YTD **${fmtM(tot.ytd.v)}**${compCump==null?'':` · 🎯 meta **${Math.round(compCump)}%** ${cumpDot(compCump)}`} · margen **${mpOf(tot.ytd).toFixed(0)}%**  ·  QTD ${fmtM(tot.qtd.v)}  ·  MTD ${fmtM(tot.mtd.v)}\n`;
   msg += `_Por comercial, de mayor a menor venta YTD:_\n\n`;
   mains.forEach(c=>{ msg += line(c, agg[c]) + '\n'; });
   if(otros.ytd.v>0) msg += `• **Facturación adicional** — YTD ${fmtM(otros.ytd.v)} · QTD ${fmtM(otros.qtd.v)} · MTD ${fmtM(otros.mtd.v)}  _(${otrosNames.join(', ')})_\n`;
@@ -188,6 +206,9 @@ async function main(){
     const lowM = mains.slice().filter(c=>agg[c].ytd.vc>0).sort((a,b)=>mpOf(agg[a].ytd)-mpOf(agg[b].ytd))[0];
     msg += `🥇 Mayor venta: **${topV}** ${fmtM(agg[topV].ytd.v)}\n`;
     if(topM) msg += `📈 Mejor margen: **${topM}** ${mpOf(agg[topM].ytd).toFixed(0)}%  ·  📉 Menor: **${lowM}** ${mpOf(agg[lowM].ytd).toFixed(0)}%\n`;
+    const wc = mains.filter(c=>cumpOf(c,agg[c])!=null);
+    if(wc.length){ const bC=wc.slice().sort((a,b)=>cumpOf(b,agg[b])-cumpOf(a,agg[a]))[0], lC=wc.slice().sort((a,b)=>cumpOf(a,agg[a])-cumpOf(b,agg[b]))[0];
+      msg += `🎯 Mejor cumplimiento: **${bC}** ${Math.round(cumpOf(bC,agg[bC]))}%  ·  Menor: **${lC}** ${Math.round(cumpOf(lC,agg[lC]))}%\n`; }
   }
   msg += `👉 https://reservasforest.netlify.app`;
   process.stdout.write(msg + '\n');
