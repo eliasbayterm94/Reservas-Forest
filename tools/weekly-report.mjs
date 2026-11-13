@@ -52,7 +52,8 @@ function parseItem(item){ const s=String(item||''); const toks=s.split(':').map(
   if(!cat){ const up=s.toUpperCase(); for(const c of CATS){ if(new RegExp('\\b'+c+'\\b').test(up)){ cat=c; break; } } }
   let prod=toks.length?toks[toks.length-1]:''; if(ico) prod=prod.split(ico).join(' ');
   prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}/g,' '); if(cat) prod=prod.replace(new RegExp('\\b'+cat+'\\b','i'),' ');
-  return { ico, iconum, cat, prod: prod.replace(/\s{2,}/g,' ').trim() }; }
+  prod=prod.replace(/\s{2,}/g,' ').trim().replace(/[\s/]+$/,'').replace(/^[\s/]+/,'').replace(/\s{2,}/g,' ').trim();   // quita "/" al inicio/fin
+  return { ico, iconum, cat, prod }; }
 function parseDesc(desc){ const s=String(desc||''); let contract='';
   const fc=s.match(/\bFC-\d{2}-[A-Za-z]+-[A-Za-z0-9]+/i); if(fc) contract=fc[0].trim();
   else { const cm=s.match(/Contract:\s*([A-Za-z0-9\-]+)/i); if(cm) contract=cm[1].trim(); }

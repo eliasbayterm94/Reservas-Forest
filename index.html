@@ -1483,9 +1483,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-cc .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
     .vm-cc .v{font-size:24px;font-weight:800;margin:3px 0 1px}
     .vm-cc .s{font-size:12px;color:var(--muted)}
-    .vm-regcump{display:flex;flex-direction:column;gap:16px;margin-top:6px}
+    .vm-regcump{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 22px;margin-top:6px}
     .vm-rcrow2{width:100%;min-width:0}
-    .vm-rclab2{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}
+    .vm-rclab2{font-size:12px;font-weight:700;color:var(--text);margin-bottom:0}
     .vm-rcchart{width:100%;min-width:0}
     .vm-share{width:44px;height:7px;border-radius:4px;background:var(--border);display:inline-block;overflow:hidden;vertical-align:middle}
     .vm-sharef{display:block;height:100%;border-radius:4px}
@@ -6773,6 +6773,7 @@ function vmParseItem(item){
   prod=prod.replace(/(RW[- ]?)?\d{2}-\d{3,}/g,' ');
   if(cat) prod=prod.replace(new RegExp('\\b'+cat+'\\b','i'),' ');
   prod=prod.replace(/\s{2,}/g,' ').trim();
+  prod=prod.replace(/[\s/]+$/,'').replace(/^[\s/]+/,'').replace(/\s{2,}/g,' ').trim();   // quita "/" al inicio/fin (evita duplicar "Guava Banana" vs "Guava Banana /")
   return { ico, iconum, cat, prod: prod||toks[toks.length-1]||'', container: toks[1]||'' };
 }
 // Parsea Description → código de contrato y tamaño del saco (KG).
@@ -7185,19 +7186,19 @@ function vmRenderProductos(rows){
 // SUB-VISTA REGIONES: drill-down de general a específico (Company→Región→Comercial→Cliente→Producto)
 // Combo SVG por mercado: barras = facturado del mes, línea = % cumplimiento (con ref 100%)
 function vmRegComboSvg(months, data, gMaxF, maxP){
-  const n=months.length; const W=Math.max(340, n*52), H=120, padL=8, padR=8, padT=16, padB=18, iW=W-padL-padR, iH=H-padT-padB;
+  const n=months.length; const W=Math.max(300, n*44), H=74, padL=6, padR=6, padT=12, padB=12, iW=W-padL-padR, iH=H-padT-padB;
   const slot=iW/n; const X=i=>padL+slot*i+slot/2; const baseY=padT+iH;
   const yPct=p=>padT+iH*(1-Math.min(p,maxP)/maxP);
   let bars='', dots=''; const seg=[];
   data.forEach((d,i)=>{
-    const bw=Math.min(24, slot*0.52); const bh=iH*Math.min(d.fact,gMaxF)/(gMaxF||1);
-    bars+=`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${(baseY-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,bh).toFixed(1)}" rx="2" fill="#cbd5e1"><title>${VM_MESES[d.mo]} · facturado ${money(d.fact)}</title></rect>`;
+    const bw=Math.min(15, slot*0.5); const bh=iH*Math.min(d.fact,gMaxF)/(gMaxF||1);
+    bars+=`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${(baseY-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,bh).toFixed(1)}" rx="1.5" fill="#cbd5e1"><title>${VM_MESES[d.mo]} · facturado ${money(d.fact)}</title></rect>`;
     if(d.p!=null){ seg.push(`${X(i).toFixed(1)},${yPct(d.p).toFixed(1)}`); const c=vmCumpColor(d.p);
-      dots+=`<circle cx="${X(i).toFixed(1)}" cy="${yPct(d.p).toFixed(1)}" r="2.8" fill="${c}"><title>${VM_MESES[d.mo]} · ${Math.round(d.p)}% de meta</title></circle>`
-        +`<text x="${X(i).toFixed(1)}" y="${(yPct(d.p)-5).toFixed(1)}" font-size="8.5" fill="${c}" text-anchor="middle" font-weight="700">${Math.round(d.p)}</text>`; }
+      dots+=`<circle cx="${X(i).toFixed(1)}" cy="${yPct(d.p).toFixed(1)}" r="2" fill="${c}"><title>${VM_MESES[d.mo]} · ${Math.round(d.p)}% de meta</title></circle>`
+        +`<text x="${X(i).toFixed(1)}" y="${(yPct(d.p)-4).toFixed(1)}" font-size="7" fill="${c}" text-anchor="middle" font-weight="700">${Math.round(d.p)}</text>`; }
   });
-  const line = seg.length>1?`<polyline points="${seg.join(' ')}" fill="none" stroke="#5b6b7f" stroke-width="1.6"/>`:'';
-  const mlabels=data.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${(H-5).toFixed(1)}" font-size="8" fill="#8a8578" text-anchor="middle">${VM_MESES[d.mo]}</text>`).join('');
+  const line = seg.length>1?`<polyline points="${seg.join(' ')}" fill="none" stroke="#5b6b7f" stroke-width="1.3"/>`:'';
+  const mlabels=data.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${(H-3).toFixed(1)}" font-size="6.5" fill="#8a8578" text-anchor="middle">${VM_MESES[d.mo]}</text>`).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`
     +`<line x1="${padL}" y1="${yPct(100).toFixed(1)}" x2="${W-padR}" y2="${yPct(100).toFixed(1)}" stroke="#8a8578" stroke-dasharray="3 3" stroke-width="1" opacity=".5"/>`
     +bars+line+dots+mlabels+`</svg>`;
@@ -7235,16 +7236,17 @@ function vmRenderRegiones(allRows){
   const lvl=Math.min(vmRegPath.length,3); const dim=dims[lvl]; const leaf=lvl>=3;
   const m={}; rows.forEach(r=>{ const k=r[dim]||'—'; const o=m[k]||(m[k]={name:k,v:0,kg:0,g:0,vc:0}); o.v+=r.usd;o.kg+=r.kg; if(r.marginFinal!=null){o.g+=r.gmcFinal;o.vc+=r.usd;} });
   const arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0})).sort((a,b)=>b.v-a.v);
-  let html=(vmRegPath.length===0?vmRegionCumpChart(vmF.year||'2026'):'')+'<div class="vm-panel"><h3>Análisis por región</h3><p class="nt">de lo general a lo específico · click en una fila para entrar</p>';
+  const regTotG=arr.reduce((s,o)=>s+(o.g||0),0);
+  let html=(vmRegPath.length===0?vmRegionCumpChart(vmF.year||'2026'):'')+'<div class="vm-panel"><h3>Análisis por región</h3><p class="nt">de lo general a lo específico · click en una fila para entrar · "% del margen" = peso sobre el margen de contribución del nivel actual</p>';
   html+=`<div class="vm-crumb"><span class="vm-crumbi" onclick="vmRegTo(0)">🏢 Company</span>`;
   vmRegPath.forEach((p,i)=>{ html+=` <span class="vm-sep">›</span> <span class="vm-crumbi" onclick="vmRegTo(${i+1})">${vmEsc(p)}</span>`; });
   html+=`</div>`;
-  html+=`<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr><th>${labels[lvl]}</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">% Margen</th>${leaf?'':'<th></th>'}</tr></thead><tbody>`;
+  html+=`<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr><th>${labels[lvl]}</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r" title="Peso sobre el margen de contribución del nivel actual">% del margen</th><th class="r">% Margen</th>${leaf?'':'<th></th>'}</tr></thead><tbody>`;
   arr.forEach(o=>{
     const click = leaf?'':`style="cursor:pointer" onclick="vmRegInto('${vmEscJs(o.name)}')"`;
     html+=`<tr ${click}><td class="cl">${leaf?'':'▸ '}${vmEsc(o.name)}</td>`
       +`<td class="r">${money(o.v)}</td><td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td>`
-      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td><td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
+      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td>`+vmShareCell(o.g,regTotG)+`<td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
       +(leaf?'':`<td style="color:var(--muted);text-align:right">entrar →</td>`)+`</tr>`;
   });
   html+='</tbody></table></div></div>';
