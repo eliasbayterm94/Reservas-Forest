@@ -69,8 +69,27 @@ async function fetchCSV(name){
   return parseCSV(out);
 }
 
+// Envío directo por la Web API de Slack (chat.postMessage) usando el bot token
+// inyectado por el proxy del entorno en el header Authorization (host slack.com).
+// No depende del conector MCP de Slack, así que funciona en sesiones programadas.
+function slackPost(channel, text){
+  const body = JSON.stringify({ channel, text, unfurl_links:false, unfurl_media:false });
+  const out = execFileSync('curl', ['-s','--max-time','30','-X','POST',
+    'https://slack.com/api/chat.postMessage',
+    '-H','Content-Type: application/json; charset=utf-8',
+    '-H','Authorization: Bearer proxy-injected',
+    '--data', body], { maxBuffer:8*1024*1024, encoding:'utf8' });
+  let r; try{ r=JSON.parse(out); }catch(e){ throw new Error('Slack respuesta no-JSON: '+String(out).slice(0,200)); }
+  if(!r.ok) throw new Error('Slack error ('+channel+'): '+(r.error||JSON.stringify(r)));
+  return r;
+}
+
 async function main(){
-  const asOf = process.argv[2] ? new Date(process.argv[2]+'T12:00:00') : new Date();
+  const argv = process.argv.slice(2);
+  const dateArg = argv.find(a=>!a.startsWith('--'));
+  const SEND = argv.includes('--send');
+  const TEST = argv.includes('--test'); // --test => solo DM a Elias
+  const asOf = dateArg ? new Date(dateArg+'T12:00:00') : new Date();
   const Y = asOf.getFullYear(), M = asOf.getMonth()+1, Qt = Math.floor((M-1)/3);
 
   const FX={}, COST={}, CONTR={}, REP={};
@@ -165,6 +184,20 @@ async function main(){
     if(topM) msg += `📈 Mejor margen: **${topM}** ${mpOf(agg[topM].ytd).toFixed(0)}%  ·  📉 Menor: **${lowM}** ${mpOf(agg[lowM].ytd).toFixed(0)}%\n`;
   }
   msg += `👉 https://reservasforest.netlify.app`;
-  process.stdout.write(msg);
+  process.stdout.write(msg + '\n');
+
+  if(SEND){
+    // Slack usa mrkdwn: negrita es *texto* (no **texto**). La itálica _texto_ ya es válida.
+    const slackText = msg.replace(/\*\*/g,'*');
+    const ALL = [['Elias','U063KF99TV2'],['Andres Gutierrez','U063KFZM812'],['Shady','U063VMM4D89']];
+    const recipients = TEST ? ALL.slice(0,1) : ALL;
+    const results=[];
+    for(const [name,uid] of recipients){
+      try{ slackPost(uid, slackText); results.push('OK '+name); }
+      catch(e){ results.push('FALLO '+name+': '+e.message); }
+    }
+    process.stderr.write('\n[SLACK] '+results.join(' | ')+'\n');
+    if(results.some(r=>r.startsWith('FALLO'))) process.exit(2);
+  }
 }
 main().catch(e=>{ console.error('ERROR', e); process.exit(1); });
