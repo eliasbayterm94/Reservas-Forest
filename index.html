@@ -1487,6 +1487,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-rcrow2{width:100%;min-width:0}
     .vm-rclab2{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}
     .vm-rcchart{width:100%;min-width:0}
+    .vm-share{width:44px;height:7px;border-radius:4px;background:var(--border);display:inline-block;overflow:hidden;vertical-align:middle}
+    .vm-sharef{display:block;height:100%;border-radius:4px}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
     .vm-tag.com{background:var(--spot-bg);color:var(--spot-fg)}.vm-tag.inn{background:var(--res-bg);color:var(--res-fg)}
     .vm-tag.res{background:var(--fsr-bg);color:var(--fsr-fg)}.vm-tag.mic{background:var(--ctr-bg);color:var(--ctr-fg)}.vm-tag.rw{background:#e9e0f5;color:#5b3a8a}
@@ -7098,6 +7100,10 @@ const vmArrowC = k => vmCliSort.key===k?(vmCliSort.dir<0?' ▾':' ▴'):'';
 const vmArrowP = k => vmProdSort.key===k?(vmProdSort.dir<0?' ▾':' ▴'):'';
 
 // SUB-VISTA CLIENTES: todos los clientes + split por macro-categoría + drill a productos
+// Celda: peso de un margen $ sobre el margen de contribución TOTAL del scope filtrado.
+// Responde "cuánto aporta este cliente/producto/categoría al margen total" (no solo su %).
+function vmShareCell(val,total){ if(!(total>0)||val==null) return '<td class="r">—</td>'; const p=val/total*100; const w=Math.max(0,Math.min(100,Math.round(Math.abs(p))));
+  return `<td class="r"><span style="display:inline-flex;align-items:center;justify-content:flex-end;gap:6px"><b class="${p<0?'vm-neg':''}">${p.toFixed(1)}%</b><span class="vm-share"><span class="vm-sharef" style="width:${w}%;background:${p<0?'var(--warn)':'var(--green)'}"></span></span></span></td>`; }
 function vmRenderClientes(rows){
   const m={};
   rows.forEach(r=>{ const k=r.cliente||'—'; const o=m[k]||(m[k]={name:k,v:0,kg:0,g:0,vc:0,community:0,mir:0,otros:0});
@@ -7113,18 +7119,22 @@ function vmRenderClientes(rows){
     +`<th class="r" onclick="vmSetCliSort('kg')">KG${vmArrowC('kg')}</th>`
     +`<th class="r" onclick="vmSetCliSort('mir')">MIR${vmArrowC('mir')}</th>`
     +`<th class="r" onclick="vmSetCliSort('community')">Community${vmArrowC('community')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('g')">Margen $${vmArrowC('g')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('g')" title="Peso de este cliente sobre el margen de contribución total del filtro">% del margen${vmArrowC('g')}</th>`
     +`<th class="r" onclick="vmSetCliSort('p')">% Margen${vmArrowC('p')}</th></tr></thead><tbody>`;
+  const vmCliTotG=arr.reduce((s,o)=>s+(o.g||0),0);
   arr.slice(0,400).forEach(o=>{
     const open=vmCliOpen===o.name;
     html+=`<tr style="cursor:pointer" onclick="vmCliToggle('${vmEscJs(o.name)}')"><td class="cl">${open?'▾ ':'▸ '}${vmEsc(o.name)}</td>`
       +`<td class="r">${money(o.v)}</td><td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td>`
       +`<td class="r">${o.mir?money(o.mir):'—'}</td><td class="r">${o.community?money(o.community):'—'}</td>`
-      +`<td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td></tr>`;
+      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td>`+vmShareCell(o.g,vmCliTotG)+`<td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td></tr>`;
     if(open){
       const pm={}; rows.filter(r=>r.cliente===o.name).forEach(r=>{ const pk=(r.producto||'—')+' · '+vmMacroCat(r.cat); const p=pm[pk]||(pm[pk]={name:r.producto||'—',cat:r.cat,kg:0,v:0,g:0,vc:0}); p.kg+=r.kg; p.v+=r.usd; if(r.marginFinal!=null){p.g+=r.gmcFinal;p.vc+=r.usd;} });
       const prods=Object.values(pm).map(p=>({...p,pct:p.vc?p.g/p.vc*100:0})).sort((a,b)=>b.v-a.v);
-      html+='<tr class="vm-sub"><td colspan="6" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Producto</th><th>Cat.</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">% Margen</th></tr></thead><tbody>';
-      prods.forEach(p=>{ html+=`<tr><td>${vmEsc(p.name)}</td><td>${p.cat?`<span class="vm-tag ${vmTagCls((p.cat||'').toUpperCase())}">${vmEsc(p.cat).slice(0,4)}</span>`:''}</td><td class="r">${Math.round(p.kg).toLocaleString('en-US')}</td><td class="r">${money(p.v)}</td><td class="r ${p.pct<0?'vm-neg':p.pct<15?'vm-warn':'vm-pos'}">${p.vc?p.pct.toFixed(1)+'%':'—'}</td></tr>`; });
+      const subTotG=prods.reduce((s,p)=>s+(p.g||0),0);
+      html+='<tr class="vm-sub"><td colspan="8" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Producto</th><th>Cat.</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">Margen $</th><th class="r">% del margen</th><th class="r">% Margen</th></tr></thead><tbody>';
+      prods.forEach(p=>{ html+=`<tr><td>${vmEsc(p.name)}</td><td>${p.cat?`<span class="vm-tag ${vmTagCls((p.cat||'').toUpperCase())}">${vmEsc(p.cat).slice(0,4)}</span>`:''}</td><td class="r">${Math.round(p.kg).toLocaleString('en-US')}</td><td class="r">${money(p.v)}</td><td class="r vm-pos">${p.vc?money(p.g):'—'}</td>`+vmShareCell(p.g,subTotG)+`<td class="r ${p.pct<0?'vm-neg':p.pct<15?'vm-warn':'vm-pos'}">${p.vc?p.pct.toFixed(1)+'%':'—'}</td></tr>`; });
       html+='</tbody></table></td></tr>';
     }
   });
@@ -7149,19 +7159,22 @@ function vmRenderProductos(rows){
     +`<th class="r" onclick="vmSetProdSort('kg')">KG${vmArrowP('kg')}</th>`
     +`<th class="r" onclick="vmSetProdSort('v')">Ventas${vmArrowP('v')}</th>`
     +`<th class="r" onclick="vmSetProdSort('g')">Margen $${vmArrowP('g')}</th>`
+    +`<th class="r" onclick="vmSetProdSort('g')" title="Peso de este producto sobre el margen de contribución total del filtro">% del margen${vmArrowP('g')}</th>`
     +`<th class="r" onclick="vmSetProdSort('p')">% Margen${vmArrowP('p')}</th>`
     +`<th class="r" onclick="vmSetProdSort('nc')"># Clientes${vmArrowP('nc')}</th></tr></thead><tbody>`;
+  const vmProdTotG=arr.reduce((s,o)=>s+(o.g||0),0);
   arr.slice(0,500).forEach(o=>{
     const open=vmProdOpen===o.name;
     html+=`<tr style="cursor:pointer" onclick="vmProdToggle('${vmEscJs(o.name)}')"><td class="cl">${open?'▾ ':'▸ '}${vmEsc(o.name)}</td><td>${o.cat?`<span class="vm-tag ${vmTagCls((o.cat||'').toUpperCase())}">${vmEsc(o.cat).slice(0,4)}</span>`:''}</td>`
       +`<td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td><td class="r">${money(o.v)}</td>`
-      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td><td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
+      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td>`+vmShareCell(o.g,vmProdTotG)+`<td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
       +`<td class="r">${o.nc}</td></tr>`;
     if(open){
       const cm={}; rows.filter(r=>(r.producto||'—')===o.name).forEach(r=>{ const c=cm[r.cliente]||(cm[r.cliente]={name:r.cliente,kg:0,v:0,g:0,vc:0}); c.kg+=r.kg; c.v+=r.usd; if(r.marginFinal!=null){c.g+=r.gmcFinal;c.vc+=r.usd;} });
       const clis=Object.values(cm).map(c=>({...c,pct:c.vc?c.g/c.vc*100:0})).sort((a,b)=>b.v-a.v);
-      html+='<tr class="vm-sub"><td colspan="7" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Cliente</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">% Margen</th></tr></thead><tbody>';
-      clis.forEach(c=>{ html+=`<tr><td>${vmEsc(c.name)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r">${money(c.v)}</td><td class="r ${c.pct<0?'vm-neg':c.pct<15?'vm-warn':'vm-pos'}">${c.vc?c.pct.toFixed(1)+'%':'—'}</td></tr>`; });
+      const subTotG=clis.reduce((s,c)=>s+(c.g||0),0);
+      html+='<tr class="vm-sub"><td colspan="8" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Cliente</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">Margen $</th><th class="r">% del margen</th><th class="r">% Margen</th></tr></thead><tbody>';
+      clis.forEach(c=>{ html+=`<tr><td>${vmEsc(c.name)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r">${money(c.v)}</td><td class="r vm-pos">${c.vc?money(c.g):'—'}</td>`+vmShareCell(c.g,subTotG)+`<td class="r ${c.pct<0?'vm-neg':c.pct<15?'vm-warn':'vm-pos'}">${c.vc?c.pct.toFixed(1)+'%':'—'}</td></tr>`; });
       html+='</tbody></table></td></tr>';
     }
   });
@@ -7473,9 +7486,10 @@ function renderVentasMargenes(){
   html+='</div>';
   if(cumpSvg) html+='<div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:4px"><div class="nt" style="margin:0 0 2px">🎯 Cumplimiento del mes (facturado ÷ meta)</div>'+cumpSvg+'</div>';
   html+='</div>';
-  html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
-  catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100);
-    html+=`<div class="vm-catrow"><span class="cn">${vmEsc(c.n)}</span><span class="vm-track"><span class="vm-fill" style="width:${w}%;background:${catColor(c.n)}"></span></span><span class="cv">${money(c.v)} · <b style="color:${catColor(c.n)}">${c.p.toFixed(1)}%</b></span></div>`; });
+  const catTotG=catArr.reduce((s,c)=>s+(c.g||0),0);
+  html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">barra = ventas · margen $ y su peso sobre el margen de contribución total</p><div class="vm-cat">';
+  catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100); const sh=catTotG>0?c.g/catTotG*100:0;
+    html+=`<div class="vm-catrow"><span class="cn">${vmEsc(c.n)}</span><span class="vm-track"><span class="vm-fill" style="width:${w}%;background:${catColor(c.n)}"></span></span><span class="cv">${money(c.v)} · margen <b>${c.vc?money(c.g):'—'}</b> <span style="color:var(--muted)">(${sh.toFixed(0)}% del margen)</span> · <b style="color:${catColor(c.n)}">${c.p.toFixed(1)}%</b></span></div>`; });
   html+='</div></div>';
   html+='</div>';
 
