@@ -17,15 +17,15 @@
 :root{
   /* Forest Design System tokens */
   --fc-yellow:#e7e244;--fc-navy:#1b203d;--fc-navy-dark:#0f1226;--fc-ink:#0c0c0b;
-  --fc-cream:#f5f4ee;--fc-blue:#95b5ce;
+  --fc-cream:#F4F5F7;--fc-blue:#95b5ce;
 
   /* App palette mapped onto the design system */
-  --bg:#f5f4ee;              /* page ground = cream */
+  --bg:#F4F5F7;              /* fondo gris claro neutro (Laura no quiso el crema) */
   --surface:#ffffff;         /* cards / table */
-  --surface2:#f5f4ee;        /* inputs / chips */
+  --surface2:#F4F5F7;        /* inputs / chips */
   --surface3:#eceef3;        /* table header (cool navy tint) */
-  --border:#e8e8e2;          /* ink-100 */
-  --border2:#c9c9c2;         /* ink-200 */
+  --border:#E5E7EB;          /* ink-100 */
+  --border2:#CBCED6;         /* ink-200 */
   --text:#0c0c0b;            /* ink */
   --text2:#5a5a55;           /* ink-500 */
   --text3:#9a9a93;           /* ink-300 */
@@ -42,7 +42,7 @@
   --fsr-fg:#9c5e15;--fsr-bg:#f6ead6;--fsr-bd:#e0bf8a;           /* warning */
   --warn:#a8351c;--warn-bg:#fbe9e5;                             /* danger */
   --ok-fg:#3d6224;--ok-bg:#dcf2dc;                              /* success */
-  --row-alt:#faf9f4;--row-hover:#eef2f6;
+  --row-alt:#FAFBFC;--row-hover:#eef2f6;
   --fee-bg:#fbf9d3;--fee-fg:#7a6a00;--fee-bd:#e7e244;           /* yellow accent */
   --radius:10px;
 }
@@ -116,6 +116,9 @@ body{
 .btn-excel{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 15px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:6px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;flex-shrink:0;margin-left:auto}
 .btn-excel:hover{background:var(--fc-navy-dark);transform:translateY(-1px)}
 .btn-excel svg{width:15px;height:15px;stroke-width:2}
+/* Secundario Forest: contorno navy (imagen, PDF, correo). El principal es navy con letra amarilla. */
+.btn-excel.btn-sec{background:#fff;color:var(--fc-navy);box-shadow:inset 0 0 0 1.5px var(--fc-navy)}
+.btn-excel.btn-sec:hover{background:var(--fc-yellow);color:var(--fc-navy-dark)}
 .filter-toggle{display:none;align-items:center;gap:6px;height:34px;padding:0 14px;background:var(--fc-navy);color:#fff;border:none;border-radius:6px;font-family:'Archivo',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
 .filter-toggle svg{width:15px;height:15px;stroke-width:2}
 
@@ -193,8 +196,8 @@ td:last-child{border-right:none}
 .sit{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
 .sit-inc{background:#fde5e0;color:#a8351c}
 .sit-hoy{background:#fff0d6;color:#b86000}
-.sit-sem{background:#fff8e6;color:#8a6d00}
-.sit-fut{background:var(--ok-bg,#e7f3e7);color:var(--ok-fg,#2c7a2c)}
+.sit-sem{background:#fff8e6;color:#7A6A00}
+.sit-fut{background:var(--ok-bg,#e7f3e7);color:var(--ok-fg,#3d6224)}
 .ger-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:12.5px;color:var(--text);cursor:pointer;max-width:220px}
 
 /* Metas de cobro */
@@ -202,16 +205,16 @@ td:last-child{border-right:none}
 .meta-form-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .meta-form-head .res-count{font-weight:600;color:var(--text2)}
 .meta-hint{font-size:12px;color:var(--text3)}
-.meta-draft{font-size:12px;font-weight:700;color:#8a6d00;background:#fff8e6;border:1px solid #efe3b0;border-radius:6px;padding:3px 9px}
+.meta-draft{font-size:12px;font-weight:700;color:#7A6A00;background:#fff8e6;border:1px solid #efe3b0;border-radius:6px;padding:3px 9px}
 .meta-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
 .meta-grid label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:var(--text2)}
 .meta-grid input{padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;color:var(--text);font-family:'DM Mono',monospace}
-.meta-real{font-size:10.5px;font-weight:500;color:#2c7a2c}
+.meta-real{font-size:10.5px;font-weight:500;color:#3d6224}
 .meta-total{display:flex;flex-direction:column;gap:4px;justify-content:flex-end;font-size:11.5px;font-weight:700;color:var(--text2)}
 .meta-total b{font-size:18px;color:var(--fc-navy);font-family:'DM Mono',monospace}
 .meta-form-foot{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
-.meta-bar{display:inline-block;height:8px;border-radius:4px;background:#e6e3d8;overflow:hidden;vertical-align:middle;width:60px;margin-left:6px}
-.meta-bar>i{display:block;height:100%;background:#2c7a2c}
+.meta-bar{display:inline-block;height:8px;border-radius:4px;background:#E5E7EB;overflow:hidden;vertical-align:middle;width:60px;margin-left:6px}
+.meta-bar>i{display:block;height:100%;background:#3d6224}
 @media(max-width:760px){.meta-grid{grid-template-columns:repeat(2,1fr)}.meta-total{grid-column:span 2}}
 
 .dias-badge{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500}
@@ -242,7 +245,7 @@ tfoot td.tot-label{color:var(--text2);font-family:'Montserrat',sans-serif;font-w
 tfoot td.tot-fee{color:var(--fee-fg);background:linear-gradient(180deg,var(--fee-bg) 0%,var(--surface3) 100%)}
 
 /* ══ OVERLAYS ══ */
-.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none;background:rgba(244,241,235,.9);backdrop-filter:blur(2px)}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none;background:rgba(244,245,247,.9);backdrop-filter:blur(2px)}
 .overlay.hidden{display:none}
 .overlay-icon{font-size:40px;opacity:.3}
 .overlay-title{font-family:'Archivo',sans-serif;font-size:22px;color:var(--border2);letter-spacing:-.02em}
@@ -375,7 +378,7 @@ tbody tr.rowsel{background:#fdfce0 !important}
 tbody tr.fl-inc  td:nth-child(2){box-shadow:inset 3px 0 0 var(--warn)}
 tbody tr.fl-week td:nth-child(2){box-shadow:inset 3px 0 0 var(--gold)}
 .est{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
-.est.e-sin {background:#ececec;color:#777}
+.est.e-sin {background:#E5E7EB;color:#777}
 .est.e-cont{background:var(--yel-bg,#fbf9d3);background:#fbf9d3;color:#7a6a00}
 .est.e-comp{background:#e6eef5;color:#2e4a63}
 .est.e-parc{background:#dcf2dc;color:#3d6224}
@@ -397,7 +400,7 @@ tbody tr.rfl-warn td:nth-child(2){box-shadow:inset 3px 0 0 #9c5e15}
 .acc.a-ok  {background:#dcf2dc;color:#3d6224}
 .pill.flag-inc{background:var(--warn-bg);color:var(--warn);border-color:#efb0a4}
 .pill.flag-week{background:#fbf3d8;color:#8a6c00;border-color:#e6d488}
-.pill.flag-sin{background:#ececec;color:#666;border-color:#d5d5d5}
+.pill.flag-sin{background:#E5E7EB;color:#666;border-color:#d5d5d5}
 .pill b{font-family:'DM Mono',monospace;margin-left:3px;font-weight:600}
 #histTable{table-layout:auto}
 #histTable th{padding:0 12px;height:38px}
@@ -470,7 +473,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 .pn-row{display:flex;gap:10px}.pn-row .pn-fld{flex:1;min-width:0}
 .pn-fld label.pn-check{display:flex;align-items:center;gap:8px;margin:9px 0 0;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text2);cursor:pointer}
 .pn-check input{width:16px;height:16px;accent-color:var(--fc-navy);cursor:pointer;flex-shrink:0}
-.pn-inp.locked{background:var(--cream,#f5f4ee);background:#f5f4ee;color:var(--text2);font-family:'DM Mono',monospace;font-weight:600}
+.pn-inp.locked{background:var(--cream,#F4F5F7);background:#F4F5F7;color:var(--text2);font-family:'DM Mono',monospace;font-weight:600}
 .pn-foot{border-top:1px solid var(--border);padding:12px 18px;display:flex;gap:10px}
 .pn-save{flex:1;height:40px;background:var(--fc-navy);color:var(--fc-yellow);border:none;border-radius:8px;font-family:'Archivo',sans-serif;font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:12px;cursor:pointer}
 .pn-save:disabled{opacity:.6}
@@ -819,8 +822,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="pill fsr off" id="cPorVencer" onclick="togglePorVencer(this)"><i data-lucide="clock"></i> Due soon (10d)</span>
     <span class="res-count" id="cResCount">—</span>
     <select id="v90Rep" class="ger-sel" style="margin-left:auto" title="Comercial para el correo de cartera vencida +90 días"><option value="">Comercial +90d…</option></select>
-    <button class="btn-excel" onclick="emailVencidas90()" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Abre un correo con los clientes +90 días de ese comercial (saldo en moneda de factura y USD)"><i data-lucide="mail"></i> Correo +90d</button>
-    <button class="btn-excel" onclick="exportCarteraPDF()" style="margin-left:8px;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+    <button class="btn-excel btn-sec" onclick="emailVencidas90()" style="margin-left:8px" title="Abre un correo con los clientes +90 días de ese comercial (saldo en moneda de factura y USD)"><i data-lucide="mail"></i> Correo +90d</button>
+    <button class="btn-excel btn-sec" onclick="exportCarteraPDF()" style="margin-left:8px"><i data-lucide="file-text"></i> PDF</button>
     <button class="btn-excel" onclick="exportCartera()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
   </div>
 
@@ -856,8 +859,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       <div class="mailmodal-foot">
         <span class="mail-info" id="mailInfo"></span>
         <button class="btn-excel" onclick="mailCopiar()"><i data-lucide="copy"></i> <span id="mailCopyLbl">Copy</span></button>
-        <button class="btn-excel" onclick="mailPDF()" style="background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
-        <button class="btn-excel" onclick="mailAbrir()" style="background:#1B203D;color:#fff"><i data-lucide="mail"></i> Open in email</button>
+        <button class="btn-excel btn-sec" onclick="mailPDF()"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel" onclick="mailAbrir()"><i data-lucide="mail"></i> Open in email</button>
       </div>
     </div>
   </div>
@@ -960,9 +963,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <select id="rcSel" class="ger-sel" style="margin-left:auto;min-width:200px" onchange="renderCarteraComisiones()">
       <option value="">Elige tu nombre…</option>
     </select>
-    <button class="btn-excel" onclick="exportCarteraComisionPNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen del estado del comercial seleccionado"><i data-lucide="image"></i> Imagen</button>
+    <button class="btn-excel btn-sec" onclick="exportCarteraComisionPNG()" style="margin-left:8px;" title="Descarga una imagen del estado del comercial seleccionado"><i data-lucide="image"></i> Imagen</button>
     <select id="rcMailReg" class="ger-sel" style="margin-left:8px" title="Adjuntar la rotación de esta región (opcional)"><option value="">+ rotación de… (opcional)</option></select>
-    <button class="btn-excel" onclick="emailRepRegionPNG()" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Genera la imagen (rep + región) y abre un correo con el resumen para enviarla"><i data-lucide="mail"></i> Enviar por correo</button>
+    <button class="btn-excel btn-sec" onclick="emailRepRegionPNG()" style="margin-left:8px" title="Genera la imagen (rep + región) y abre un correo con el resumen para enviarla"><i data-lucide="mail"></i> Enviar por correo</button>
   </div>
   <div id="rcCard" style="padding:4px 2px"></div>
   <div class="footer">
@@ -983,7 +986,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="res-count">Rotación (con penalidad) y vejez ponderada por región</span>
     <span id="r90Src" class="res-count" style="margin-left:12px;color:var(--text3)"></span>
     <select id="r90ImgReg" class="ger-sel" style="margin-left:auto" title="Región para la imagen"><option value="">Imagen: todas las regiones</option></select>
-    <button class="btn-excel" onclick="exportRotacion90PNG()" style="margin-left:8px;background:#1B203D;color:#fff" title="Descarga una imagen de la rotación (de la región elegida) para enviar por correo"><i data-lucide="image"></i> Imagen</button>
+    <button class="btn-excel btn-sec" onclick="exportRotacion90PNG()" style="margin-left:8px;" title="Descarga una imagen de la rotación (de la región elegida) para enviar por correo"><i data-lucide="image"></i> Imagen</button>
     <button class="btn-excel" onclick="exportRotacion90Excel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="table-wrap" id="twR90" style="flex:0 0 auto;max-height:60vh;contain:layout paint">
@@ -1047,9 +1050,9 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     <span class="res-count ci-lbl" title="Se genera desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones">Control de Inventario · café verde — se genera en vivo desde CONSOLIDADO, Informe Inventario 22+ y Drilldown Posiciones</span>
     <span class="res-count" id="ciTs" style="color:var(--text3)">—</span>
     <button class="btn-excel" onclick="recargarControlInv()" title="Vuelve a generar con los datos más recientes de las hojas"><i data-lucide="refresh-cw"></i> Actualizar</button>
-    <button class="btn-excel ci-solo-dash" onclick="exportControlInvPDF(this)" style="margin-left:8px;background:#a8351c;color:#fff" title="Resumen ejecutivo en una página, para presentación: inventario por región y alertas de vejez, con los mismos números del dashboard"><i data-lucide="file-text"></i> Resumen PDF</button>
-    <button class="btn-excel ci-solo-dash" onclick="exportInventarioValorPDF(this)" style="margin-left:8px;background:#2c7a2c;color:#fff" title="Descarga la valorización del inventario en USD por región (total / reservado / libre)"><i data-lucide="dollar-sign"></i> Valor $ (PDF)</button>
-    <button class="btn-excel ci-solo-dash" onclick="abrirControlInv()" style="margin-left:8px;background:#1B203D;color:#fff" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
+    <button class="btn-excel btn-sec ci-solo-dash" onclick="exportControlInvPDF(this)" style="margin-left:8px" title="Resumen ejecutivo en una página, para presentación: inventario por región y alertas de vejez, con los mismos números del dashboard"><i data-lucide="file-text"></i> Resumen PDF</button>
+    <button class="btn-excel btn-sec ci-solo-dash" onclick="exportInventarioValorPDF(this)" style="margin-left:8px" title="Descarga la valorización del inventario en USD por región (total / reservado / libre)"><i data-lucide="dollar-sign"></i> Valor $ (PDF)</button>
+    <button class="btn-excel btn-sec ci-solo-dash" onclick="abrirControlInv()" style="margin-left:8px;" title="Ábrelo en una pestaña aparte del navegador"><i data-lucide="external-link"></i> Abrir aparte</button>
     <button class="btn-excel ci-solo-cons hidden" onclick="exportConsumoExcel()" style="margin-left:8px" title="Descarga la vista actual en Excel, más las reservas sin cruzar y el mapeo de clientes"><i data-lucide="download"></i> Excel</button>
   </div>
   <div class="ci-hint hidden" id="ciHint"></div><!-- el texto lo pone cargarControlInv() -->
@@ -1128,8 +1131,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
           <button id="gaCom" class="ger-agg-btn active" onclick="setGerAgg('comercial')">Por comercial</button>
           <button id="gaReg" class="ger-agg-btn" onclick="setGerAgg('region')">Por región</button>
         </div>
-        <button class="btn-excel" onclick="exportGerenciaPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen</button>
-        <button class="btn-excel" onclick="exportGerenciaPDF()" style="margin-left:8px;background:#a8351c;color:#fff"><i data-lucide="file-text"></i> PDF</button>
+        <button class="btn-excel btn-sec" onclick="exportGerenciaPNG()" style="margin-left:auto;"><i data-lucide="image"></i> Imagen</button>
+        <button class="btn-excel btn-sec" onclick="exportGerenciaPDF()" style="margin-left:8px"><i data-lucide="file-text"></i> PDF</button>
         <button class="btn-excel" onclick="exportGerenciaExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twGer">
@@ -1163,7 +1166,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <select id="rotRepSel" class="ger-sel" style="margin-left:auto" title="Comercial para el PDF de detalle">
           <option value="">Todos los comerciales</option>
         </select>
-        <button class="btn-excel" onclick="exportReservasPDF()" style="background:#a8351c;color:#fff" title="PDF por comercial: cafés reservados por cliente, de mayor a menor"><i data-lucide="file-text"></i> PDF por comercial</button>
+        <button class="btn-excel btn-sec" onclick="exportReservasPDF()" title="PDF por comercial: cafés reservados por cliente, de mayor a menor"><i data-lucide="file-text"></i> PDF por comercial</button>
         <button class="btn-excel" onclick="exportRotacionExcel()" style="margin-left:8px" title="Excel del resumen de rotación"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twRot">
@@ -1193,7 +1196,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
       </div>
       <div class="ger-toolbar">
         <span class="res-count">Compromisos por comercial y bracket (USD)</span>
-        <button class="btn-excel" onclick="borradorMetaDesdeCompromisos()" style="margin-left:auto;background:#1B203D;color:#fff" title="Copia los totales por bracket a Metas de cobro como borrador para que gerencia los ajuste y guarde"><i data-lucide="target"></i> Pasar a Metas (borrador)</button>
+        <button class="btn-excel" onclick="borradorMetaDesdeCompromisos()" style="margin-left:auto;" title="Copia los totales por bracket a Metas de cobro como borrador para que gerencia los ajuste y guarde"><i data-lucide="target"></i> Pasar a Metas (borrador)</button>
         <button class="btn-excel" onclick="exportCompromisosExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twComp">
@@ -1244,7 +1247,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <div class="meta-form-head">
           <span class="res-count">Compromiso de recolección — semana del</span>
           <input type="date" id="metaWeek" class="ger-sel" onchange="cargarMetaSemana()" title="Lunes de la semana">
-          <button class="btn-excel" onclick="borradorMetaDesdeCompromisos()" style="background:#1B203D;color:#fff" title="Trae los totales por bracket de los compromisos de los comerciales como borrador para ajustar y guardar"><i data-lucide="target"></i> Cargar compromisos</button>
+          <button class="btn-excel" onclick="borradorMetaDesdeCompromisos()" title="Trae los totales por bracket de los compromisos de los comerciales como borrador para ajustar y guardar"><i data-lucide="target"></i> Cargar compromisos</button>
           <span class="meta-hint">La meta total es la suma de los brackets.</span>
           <span id="metaDraftNote" class="meta-draft" style="display:none">● Borrador desde Compromisos — ajusta y pulsa Guardar meta</span>
         </div>
@@ -1258,7 +1261,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         </div>
         <div class="meta-form-foot">
           <input type="text" id="miNota" class="ger-sel" placeholder="Nota (opcional)" style="flex:1;min-width:160px">
-          <button class="btn-excel" id="btnGuardarMeta" onclick="guardarMeta()" style="background:#1B203D;color:#fff"><i data-lucide="save"></i> Guardar meta</button>
+          <button class="btn-excel" id="btnGuardarMeta" onclick="guardarMeta()"><i data-lucide="save"></i> Guardar meta</button>
         </div>
       </div>
 
@@ -1297,7 +1300,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
           <button id="rpSem" class="ger-agg-btn active" onclick="setRecPeriod('semana')">Semana pasada</button>
           <button id="rpMes" class="ger-agg-btn" onclick="setRecPeriod('mes')">Este mes</button>
         </div>
-        <button class="btn-excel" onclick="exportRecaudoPNG()" style="margin-left:auto;background:#1B203D;color:#fff"><i data-lucide="image"></i> Imagen</button>
+        <button class="btn-excel btn-sec" onclick="exportRecaudoPNG()" style="margin-left:auto;"><i data-lucide="image"></i> Imagen</button>
       </div>
       <div class="table-wrap" id="twRec">
         <table id="recTable">
@@ -1352,7 +1355,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
         <select id="cfHorizon" class="ger-sel" style="margin-left:auto" onchange="renderCashflow()" title="Semanas a proyectar">
           <option value="8">8 semanas</option><option value="12" selected>12 semanas</option><option value="16">16 semanas</option>
         </select>
-        <button class="btn-excel" id="btnSaveForecast" onclick="guardarPronostico()" style="margin-left:8px;background:#1B203D;color:#fff" title="Guarda una foto del pronóstico de esta semana para trazar estimado vs real en el tiempo"><i data-lucide="camera"></i> Guardar pronóstico</button>
+        <button class="btn-excel" id="btnSaveForecast" onclick="guardarPronostico()" style="margin-left:8px;" title="Guarda una foto del pronóstico de esta semana para trazar estimado vs real en el tiempo"><i data-lucide="camera"></i> Guardar pronóstico</button>
         <button class="btn-excel" onclick="exportCashflowExcel()" style="margin-left:8px"><i data-lucide="download"></i> Excel</button>
       </div>
       <div class="table-wrap" id="twCf" style="flex:0 1 auto;max-height:42vh;contain:layout paint">
@@ -2537,9 +2540,9 @@ const ROT_TARGETS = {
 function rotStatus(actual, tNum){
   if(!tNum || !(actual>0)) return null;
   const r=actual/tNum;
-  if(r<0.95)  return {lbl:'Ahead', c:'#2c7a2c'};
+  if(r<0.95)  return {lbl:'Ahead', c:'#3d6224'};
   if(r<=1.05) return {lbl:'On',    c:'#2563a8'};
-  if(r<=1.25) return {lbl:'Watch', c:'#8a6d00'};
+  if(r<=1.25) return {lbl:'Watch', c:'#7A6A00'};
   return {lbl:'Off', c:'#a8351c'};
 }
 // URL /exec del Apps Script de Seguimiento (se llena cuando esté desplegado).
@@ -2947,7 +2950,7 @@ function rotVejezRows(){
   return { rows, globalVejez: totAvailKg?totKgDays/totAvailKg:0, totOld, totPenalty:VEJEZ_PENAL*totOld,
     rotGlobalAdj: rw?rwd/rw:0, rotGlobalBase: rot.globalDias, totRotKg: rot.totKg };
 }
-function vejColor(v){ return v>0 && v<VEJEZ_TARGET ? '#2c7a2c' : (v>0 ? '#a8351c' : 'var(--text3)'); }
+function vejColor(v){ return v>0 && v<VEJEZ_TARGET ? '#3d6224' : (v>0 ? '#a8351c' : 'var(--text3)'); }
 
 // Agrega por región: días ponderados por kg + total kg + participación.
 function rot90Rows(){
@@ -3891,6 +3894,69 @@ async function fetchConTiempo(url, ms, intentos){
   throw ultimoError;
 }
 
+// Piel Forest para el dashboard embebido. La plantilla del Apps Script trae su
+// propia estética (Oswald / IBM Plex, café y rojo); aquí se le cambian letra y
+// colores al vuelo para que se vea como el resto de la app, sin tocar ni
+// redesplegar el script. Solo aplica al camino srcdoc: «Abrir aparte» y el
+// iframe directo de respaldo muestran el dashboard tal cual sale de Google.
+// --stamp sigue siendo rojo porque el script lo usa para «crítico» y «+150 días»;
+// lo que cambia a navy/amarillo es el cromo (navegación, chips, filtros).
+const CI_FOREST_CSS = `
+:root{
+  --ground:#0F1226;--paper:#F4F5F7;--paper-2:#FAFBFC;--paper-3:#FFFFFF;
+  --ink:#0C0C0B;--ink-soft:#5A5A55;--ink-faint:#9A9A93;--paper-line:#E5E7EB;
+  --stamp:#A8351C;--stamp-dark:#8A2414;--stamp-tint:#FBE9E5;
+  --teal:#2E4A63;--teal-light:#95B5CE;--teal-tint:#E6EEF5;
+  --gold:#9C9810;--cream-on-dark:#F4F5F7;
+  --fc-yellow:#E7E244;--fc-yellow-l:#FBF9D3;--fc-navy:#1B203D;--fc-navy-dark:#0F1226;
+}
+body{font-family:'Montserrat',sans-serif}
+h1,h2,h3,.disp{font-family:'Archivo',sans-serif;font-weight:800;color:var(--fc-navy)}
+.masthead{border-bottom-color:var(--fc-yellow)}
+.masthead .meta b,.kpi .value,.region-card .rname,.region-card .rkg,.cvr-card .cvr-kg,.tz-name{color:var(--fc-navy)}
+.refresh-btn{background:var(--fc-navy);color:var(--fc-yellow);border-radius:6px;font-weight:700}
+.refresh-btn:hover{background:var(--fc-navy-dark)}
+.section-head{border-bottom-color:var(--fc-navy)}
+.section-num{color:var(--gold)}
+.modulenav{background:var(--fc-navy-dark)}
+.modulenav button{background:var(--fc-navy-dark);color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.08em;font-size:13px}
+.modulenav button .modnum{color:#95B5CE}
+.modulenav button.active{background:var(--fc-navy);color:#fff;border-bottom-color:var(--fc-yellow)}
+.modulenav button.active .modnum{color:var(--fc-yellow)}
+.global-filter-bar{background:var(--fc-navy)}
+.global-filter-bar .gf-chip{background:var(--fc-yellow);color:var(--fc-navy)}
+.chip,.m3-subnav button,.filter-group select,.filter-group input[type=text],#exportExcelBtn,#old150Btn{border-radius:6px}
+.chip.active,.m3-subnav button.active{background:var(--fc-navy);color:var(--fc-yellow);border-color:var(--fc-navy)}
+.m3-subnav{border-radius:8px;overflow:hidden}
+.region-card.active{background:var(--fc-yellow-l);box-shadow:inset 0 0 0 2px var(--fc-navy)}
+#catTbody tr.cat-active{background:var(--fc-yellow-l);box-shadow:inset 3px 0 0 var(--fc-navy)}
+#whTbody tr.wh-activa td{background:rgba(231,226,68,.22)}
+#whTbody tr.wh-activa td:first-child,.vejez-row.wh-activa{box-shadow:inset 3px 0 0 var(--fc-navy)}
+.vejez-row.wh-activa{background:rgba(231,226,68,.18)}
+thead th{color:var(--ink-soft);border-bottom-color:var(--fc-navy)}
+thead th:hover,.clickable:hover,.kpi .value.clickable:hover,.tz-close:hover{color:var(--teal)}
+tr.table-total-row td,#movTable tfoot td,#movTable tfoot tr:first-child td{border-top-color:var(--fc-navy)}
+.manija-col:hover::after,.manija-col.arrastrando::after{background:var(--fc-navy)}
+.trend-card:hover,.trend-card:focus-visible{border-color:var(--fc-navy);box-shadow:0 2px 12px rgba(27,32,61,.10)}
+.tz-backdrop{background:rgba(15,18,38,.6)}
+#exportExcelBtn,#old150Btn,.filter-clear{color:var(--fc-navy)}
+#exportExcelBtn:hover,#old150Btn:hover{background:var(--fc-yellow-l);border-color:var(--fc-navy)}
+.insight-list li{border-left-color:var(--fc-navy)}
+.method{border-top-color:var(--fc-yellow)}
+.panel,.region-grid,.cvr-grid,.trend-card,.filter-bar,.leadtime-note{border-radius:10px}
+.region-grid,.cvr-grid{overflow:hidden}
+`;
+const CI_FOREST_FONTS = '<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">';
+function ciTemaForest(tpl){
+  return tpl
+    .replace(/<link[^>]*fonts\.googleapis\.com\/css2[^>]*>/, CI_FOREST_FONTS)
+    .replace(/'Oswald'/g, "'Archivo'")
+    .replace(/'IBM Plex Sans'/g, "'Montserrat'")
+    // Colores por región: navy, azul, amarillo oscuro, lila y ocre, como la paleta de Forest
+    .replace(/const REGION_COLORS = \{[^}]*\}/, "const REGION_COLORS = {USA:'#1B203D', AU:'#5B8DB8', UK:'#B5AF1C', EU:'#8E7CC3', MENA:'#9C5E15'}")
+    .replace('</head>', () => '<style id="forest-theme">' + CI_FOREST_CSS + '</style></head>');
+}
+
 async function cargarControlInv(forzar){
   const f=$('ciFrame'); if(!f) return;
   if(ctrlInvLoaded && !forzar && (Date.now() - ctrlInvCargadoEn) < CI_FRESCURA_MS) return;
@@ -3942,7 +4008,7 @@ async function cargarControlInv(forzar){
     f.setAttribute('sandbox', 'allow-scripts allow-downloads');
     // Reemplazo con función, para que un "$&" dentro de los datos no se
     // interprete como patrón de reemplazo.
-    f.srcdoc = tpl.replace('__DATA_JSON__', () => datos.replace(/<\/script/g, '<\\/script'));
+    f.srcdoc = ciTemaForest(tpl).replace('__DATA_JSON__', () => datos.replace(/<\/script/g, '<\\/script'));
     return;
   }catch(err){
     // Si el endpoint aún no está desplegado, o falla, se cae al iframe directo:
@@ -5127,8 +5193,8 @@ function renderGerencia(){
       +`<td class="c-num"${hot?' style="color:var(--warn)"':''}>${money(r.ve)}</td>`
       +`<td class="c-num"${hot?' style="color:var(--warn);font-weight:700"':''}>${pct(r)}%</td>`
       +`<td class="c-num">${money(r.b1)}</td><td class="c-num">${money(r.b2)}</td><td class="c-num">${money(r.b3)}</td><td class="c-num">${money(r.b4)}</td>`
-      +`<td class="c-num"${r.cobS>0?' style="color:#2c7a2c;font-weight:700"':' style="color:var(--text3)"'}>${money(r.cobS)}</td>`
-      +`<td class="c-num"${r.cobM>0?' style="color:#2c7a2c"':' style="color:var(--text3)"'}>${money(r.cobM)}</td></tr>`;
+      +`<td class="c-num"${r.cobS>0?' style="color:#3d6224;font-weight:700"':' style="color:var(--text3)"'}>${money(r.cobS)}</td>`
+      +`<td class="c-num"${r.cobM>0?' style="color:#3d6224"':' style="color:var(--text3)"'}>${money(r.cobM)}</td></tr>`;
   };
   $('tbodyGer').innerHTML = rows.map(r=>rowHtml(r,false)).join('') + rowHtml(tot,true);
   $('gAb').textContent=money(tot.ab);
@@ -5191,7 +5257,7 @@ function renderCompromisos(){
   if(!cartLoaded){ return; }
   const {rows, tot}=compromisosRows();
   const pctCell=p=> p==null ? '<span style="color:var(--text3)">—</span>'
-    : `<span style="color:${p>=70?'#2c7a2c':(p<50?'#a8351c':'#8a6d00')};font-weight:700">${p}%</span>`;
+    : `<span style="color:${p>=70?'#3d6224':(p<50?'#a8351c':'#7A6A00')};font-weight:700">${p}%</span>`;
   const rowHtml=(r,isTot)=>`<tr${isTot?' class="ger-tot"':''}><td class="${isTot?'':'c-cliente'}">${esc(r.c)}</td>`
     +`<td class="c-num">${r.n}</td><td class="c-num" style="font-weight:700">${money(r.tot)}</td>`
     +`<td class="c-num">${r.current?money(r.current):'<span style=\"color:var(--text3)\">—</span>'}</td>`
@@ -5382,7 +5448,7 @@ function renderCashflow(){
   if(!cartLoaded){ if($('cfBody')) $('cfBody').innerHTML='<tr><td style="padding:20px;color:var(--text3)">Cargando cartera…</td></tr>'; return; }
   const M=cashflowMatrix(); const {weeks, rows, colTot, later, grand, bias}=M;
   const cell=v=> v>0? money(v) : '<span style="color:var(--text3)">—</span>';
-  const dot=c=> c>=0.75?'#2c7a2c':c>=0.5?'#8a6d00':'#a8351c';
+  const dot=c=> c>=0.75?'#3d6224':c>=0.5?'#7A6A00':'#a8351c';
   $('cfHead').innerHTML='<tr><th>Empresa</th>'+weeks.map(w=>`<th style="text-align:right">${fmtWeek(w)}</th>`).join('')
     +(later>0?'<th style="text-align:right">Después</th>':'')+'<th style="text-align:right">Total</th></tr>';
   const body=rows.map(r=>{
@@ -5435,8 +5501,8 @@ function renderCfTrack(){
     const real=col[w] ? col[w].total : 0;
     const varr=est==null ? null : real-est;
     const acc=(est&&est>0) ? Math.max(0,Math.min(100,Math.round((1-Math.abs(real-est)/est)*100))) : null;
-    const vcol=varr==null ? '' : (varr>=0?'#2c7a2c':'#a8351c');
-    const accCol=acc==null ? '' : (acc>=85?'#2c7a2c':acc>=60?'#8a6d00':'#a8351c');
+    const vcol=varr==null ? '' : (varr>=0?'#3d6224':'#a8351c');
+    const accCol=acc==null ? '' : (acc>=85?'#3d6224':acc>=60?'#7A6A00':'#a8351c');
     return `<tr><td class="c-mono">${fmtWeek(w)}</td>`
       +`<td class="c-num">${est==null?'<span style="color:var(--text3)">— sin foto</span>':money(est)}</td>`
       +`<td class="c-num">${money(real)}</td>`
@@ -5524,8 +5590,8 @@ function comisionesRows(){
 }
 function cmColor(pct){ if(pct==null) return {c:'var(--text3)',lbl:'sin ventas',k:'gray'};
   if(pct>=CM_LIMIT) return {c:'#a8351c',lbl:'CONGELA',k:'red'};
-  if(pct>=0.05)     return {c:'#8a6d00',lbl:'Alerta',k:'amber'};
-  return {c:'#2c7a2c',lbl:'OK',k:'green'}; }
+  if(pct>=0.05)     return {c:'#7A6A00',lbl:'Alerta',k:'amber'};
+  return {c:'#3d6224',lbl:'OK',k:'green'}; }
 function cmBadge(pct){ const s=cmColor(pct);
   const txt = pct==null ? '—' : (pct*100).toFixed(1)+'%';
   return `<span style="display:inline-block;min-width:52px;padding:2px 8px;border-radius:10px;font-weight:700;color:#fff;background:${s.c}">${txt}</span>`;
@@ -5588,7 +5654,7 @@ function cmCardHtml(r){
       <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Ventas 90d</span><b>${r.ventas>0?money(r.ventas):'— sin dato'}</b></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Cartera vencida</span><b>${money(r.venc)}</b></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;margin:2px 0"><span style="color:var(--text2)">Tope 8% (vencida máx.)</span><b>${r.ventas>0?money(CM_LIMIT*r.ventas):'—'}</b></div>
-      <div style="display:flex;justify-content:space-between;font-size:14px;margin:8px 0 10px;padding-top:8px;border-top:1px solid var(--border2)"><span style="font-weight:700">A cobrar para no congelar</span><b style="color:${r.aCobrar>0?'#a8351c':'#2c7a2c'};font-size:16px">${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien')}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;margin:8px 0 10px;padding-top:8px;border-top:1px solid var(--border2)"><span style="font-weight:700">A cobrar para no congelar</span><b style="color:${r.aCobrar>0?'#a8351c':'#3d6224'};font-size:16px">${r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien')}</b></div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Desglose de la vencida por bracket:</div>
       ${brkHtml}
     </div>
@@ -5623,7 +5689,7 @@ function renderCarteraComisiones(){
 function _comisionCardHtml(r){
   const cl=diasAlCierre();
   const s=cmColor(r.pct);
-  const accent = s.c==='var(--text3)' ? '#9a9ea9' : s.c;
+  const accent = s.c==='var(--text3)' ? '#9A9A93' : s.c;
   const pctTxt = r.pct==null ? '—' : (r.pct*100).toFixed(1)+'%';
   const tope = r.ventas>0 ? CM_LIMIT*r.ventas : null;
   const brk=[['1–30',r.b1],['31–60',r.b2],['61–90',r.b3],['90+',r.b4]];
@@ -5632,27 +5698,27 @@ function _comisionCardHtml(r){
     const p = r.ventas>0 ? (v/r.ventas*100) : 0;
     const w = Math.round(v/barMax*100);
     return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
-      <span style="width:56px;color:#5b6170;font-size:12.5px">${l}</span>
+      <span style="width:56px;color:#5A5A55;font-size:12.5px">${l}</span>
       <div style="flex:1;background:#eceae3;border-radius:5px;height:15px;overflow:hidden"><div style="width:${w}%;height:100%;background:${accent};opacity:.85"></div></div>
-      <span style="width:170px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#1f2430">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
+      <span style="width:170px;text-align:right;font-family:DM Mono,monospace;font-size:12.5px;color:#0C0C0B">${money(v)}${r.ventas>0?` · ${p.toFixed(1)}%`:''}</span></div>`;
   }).join('');
-  const statRow=(lab,val,bold,color)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}${bold?';font-size:15px':''}">${val}</b></div>`;
-  return `<div style="border:1px solid #e3e0d7;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
+  const statRow=(lab,val,bold,color)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;margin:3px 0"><span style="color:#5A5A55">${lab}</span><b style="color:${color||'#0C0C0B'}${bold?';font-size:15px':''}">${val}</b></div>`;
+  return `<div style="border:1px solid #E5E7EB;border-top:4px solid ${accent};border-radius:12px;padding:20px 22px;background:#fff">
       <div style="display:flex;gap:28px;flex-wrap:wrap">
         <div style="min-width:230px">
           <div style="font-size:17px;font-weight:800;color:#1B203D">${esc(r.c)}</div>
           <div style="font-size:44px;font-weight:800;color:${accent};line-height:1.05;margin-top:6px">${pctTxt}</div>
           <div style="color:${accent};font-weight:700;font-size:14px;margin-top:2px">${s.lbl}${r.pct!=null&&r.pct>=CM_LIMIT?' — comisiones se congelan al cierre':''}</div>
-          <div style="margin-top:10px;color:#5b6170;font-size:12.5px">Límite: 8% · faltan <b>${cl.dias===0?'0 (hoy)':cl.dias}</b> día(s) para el cierre (día 5)</div>
+          <div style="margin-top:10px;color:#5A5A55;font-size:12.5px">Límite: 8% · faltan <b>${cl.dias===0?'0 (hoy)':cl.dias}</b> día(s) para el cierre (día 5)</div>
         </div>
         <div style="flex:1;min-width:340px">
           ${statRow('Ventas 90d', r.ventas>0?money(r.ventas):'— sin dato')}
           ${statRow('Cartera vencida', money(r.venc), true)}
           ${statRow('Tope 8% (vencida máx.)', tope!=null?money(tope):'—')}
-          <div style="border-top:1px solid #e3e0d7;margin:9px 0 10px;padding-top:9px">
-            ${statRow('A cobrar para no congelar', r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien'), true, r.aCobrar>0?'#a8351c':'#2c7a2c')}
+          <div style="border-top:1px solid #E5E7EB;margin:9px 0 10px;padding-top:9px">
+            ${statRow('A cobrar para no congelar', r.aCobrar==null?'—':(r.aCobrar>0?money(r.aCobrar):'$0 · va bien'), true, r.aCobrar>0?'#a8351c':'#3d6224')}
           </div>
-          <div style="font-size:12px;color:#5b6170;margin-bottom:2px">Desglose de la vencida por bracket:</div>
+          <div style="font-size:12px;color:#5A5A55;margin-bottom:2px">Desglose de la vencida por bracket:</div>
           ${brkHtml}
         </div>
       </div>
@@ -5680,19 +5746,19 @@ function exportCarteraComisionPNG(){
   if(!r){ alert('No encontré el estado de ese comercial.'); return; }
   const fecha = new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:760px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado de comisiones</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
+        <div style="font-size:12px;color:#9A9A93;margin-top:2px">Cartera vencida vs. límite 8% (base: ventas 90d) · ${fecha}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Cartera Comisiones</div>
     </div>
     ${_comisionCardHtml(r)}
-    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Estado = cartera vencida ÷ ventas de los últimos 90 días. Si supera 8% al cierre (día 5) se congelan las comisiones. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    <div style="font-size:10.5px;color:#CBCED6;margin-top:10px">Estado = cartera vencida ÷ ventas de los últimos 90 días. Si supera 8% al cierre (día 5) se congelan las comisiones. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
-  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+  html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Comisiones_${name.replace(/[^A-Za-z0-9]+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
@@ -5720,22 +5786,22 @@ async function emailRepRegionPNG(){
     const fecha=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
     const dTxt=v=> v>0 ? Math.round(v)+' d' : '—';
     const box=document.createElement('div');
-    box.style.cssText='position:fixed;left:-10000px;top:0;width:900px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+    box.style.cssText='position:fixed;left:-10000px;top:0;width:900px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
     box.innerHTML=`
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
         <div>
           <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Estado del comercial</div>
-          <div style="font-size:12px;color:#9a9ea9;margin-top:2px">${esc(rep.c)}${region?(' · rotación de '+esc(region)):''} · ${fecha}</div>
+          <div style="font-size:12px;color:#9A9A93;margin-top:2px">${esc(rep.c)}${region?(' · rotación de '+esc(region)):''} · ${fecha}</div>
         </div>
-        <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Forest Reservas</div>
+        <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Forest Reservas</div>
       </div>
       <div style="font-size:13px;font-weight:700;color:#1B203D;margin:0 0 8px">Cartera & comisiones</div>
       ${_comisionCardHtml(rep)}
       ${regRow?`<div style="font-size:13px;font-weight:700;color:#1B203D;margin:18px 0 8px">Rotación · ${esc(region)}</div>${_rotRegionCardHtml(regRow, dTxt)}`:''}
-      <div style="font-size:10.5px;color:#b7b3a8;margin-top:12px">Cartera: vencida ÷ ventas 90d (límite 8%). Rotación ajustada = actual + 2 d por lote disponible >150 d. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+      <div style="font-size:10.5px;color:#CBCED6;margin-top:12px">Cartera: vencida ÷ ventas 90d (límite 8%). Rotación ajustada = actual + 2 d por lote disponible >150 d. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
     document.body.appendChild(box);
     let canvas;
-    try{ canvas=await html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}); }
+    try{ canvas=await html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}); }
     finally{ try{document.body.removeChild(box);}catch(e){} }
     const a=document.createElement('a');
     a.download=`Forest_${name.replace(/[^A-Za-z0-9]+/g,'_')}${region?('_'+region.replace(/[^A-Za-z0-9]+/g,'_')):''}_${new Date().toISOString().slice(0,10)}.png`;
@@ -5824,49 +5890,49 @@ function exportRotacion90Excel(){
 function _rotRegionCardHtml(r, dTxt){
   const tg=ROT_TARGETS[r.region]; const st=tg?rotStatus(r.rotBase,tg.tNum):null;
   const accent = st ? st.c : '#1B203D';
-  const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#9a9ea9';
+  const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#3d6224':'#a8351c') : '#9A9A93';
   const lots=(vejezLots||[]).filter(l=>l.region===r.region && l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
   const th='padding:8px 11px;font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
-  const td='padding:7px 11px;font-size:12.5px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
-  const kpi=(lab,val,sub,ac)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${ac};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
-    <div style="font-size:26px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
-    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
-  const stat=(lab,val,color)=>`<div style="display:flex;justify-content:space-between;font-size:13px;margin:3px 0"><span style="color:#5b6170">${lab}</span><b style="color:${color||'#1f2430'}">${val}</b></div>`;
+  const td='padding:7px 11px;font-size:12.5px;color:#0C0C0B;border-bottom:1px solid #E5E7EB;text-align:right;font-family:DM Mono,monospace';
+  const kpi=(lab,val,sub,ac)=>`<div style="flex:1;background:#fff;border:1px solid #E5E7EB;border-left:4px solid ${ac};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9A9A93">${lab}</div>
+    <div style="font-size:26px;font-weight:800;color:#1B203D;margin-top:3px;font-family:DM Mono,monospace">${val}</div>
+    <div style="font-size:11px;color:#9A9A93;margin-top:2px">${sub}</div></div>`;
+  const stat=(lab,val,color)=>`<div style="display:flex;justify-content:space-between;font-size:13px;margin:3px 0"><span style="color:#5A5A55">${lab}</span><b style="color:${color||'#0C0C0B'}">${val}</b></div>`;
   const lotRows = lots.length ? lots.slice(0,14).map(l=>`<tr>
-      <td style="padding:7px 11px;font-size:12px;text-align:left;font-family:ui-monospace,Menlo,monospace;border-bottom:1px solid #ececec;color:#1B203D">${esc(l.ico||'—')}</td>
-      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #ececec">${esc(l.name||'')}</td>
-      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #ececec;color:#5b6170">${esc(l.warehouse||'')}</td>
-      <td style="${td};font-weight:700;color:${l.dias>180?'#a8351c':'#8a6d00'}">${Math.round(l.dias)} d</td>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;font-family:DM Mono,monospace;border-bottom:1px solid #E5E7EB;color:#1B203D">${esc(l.ico||'—')}</td>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #E5E7EB">${esc(l.name||'')}</td>
+      <td style="padding:7px 11px;font-size:12px;text-align:left;border-bottom:1px solid #E5E7EB;color:#5A5A55">${esc(l.warehouse||'')}</td>
+      <td style="${td};font-weight:700;color:${l.dias>180?'#a8351c':'#7A6A00'}">${Math.round(l.dias)} d</td>
       <td style="${td}">${kgFmt?kgFmt(l.actual):Math.round(l.actual)}</td></tr>`).join('')
-    : `<tr><td colspan="5" style="padding:16px;text-align:center;color:#2c7a2c;font-size:13px">No hay lotes disponibles con más de 150 días. 👍</td></tr>`;
+    : `<tr><td colspan="5" style="padding:16px;text-align:center;color:#3d6224;font-size:13px">No hay lotes disponibles con más de 150 días. 👍</td></tr>`;
   return `<div style="display:flex;gap:12px;margin-bottom:14px">
       ${kpi('Rotación actual (90d)',dTxt(r.rotBase),'ponderada','#1B203D')}
-      ${kpi('Rotación ajustada',dTxt(r.rotAdj),'con penalidad','#8a6d00')}
+      ${kpi('Rotación ajustada',dTxt(r.rotAdj),'con penalidad','#7A6A00')}
       ${kpi('Lotes que afectan',(r.oldCount||0)+'',(r.penalty>0?('penalidad +'+r.penalty+' d'):'sin penalidad'),'#a8351c')}
       ${kpi('Vejez pond.',dTxt(r.vejez),'target < '+VEJEZ_TARGET+' d',vjC)}
     </div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid #e3e0d7;border-radius:10px;padding:14px 16px">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px 16px">
       <div style="flex:1;min-width:240px">
         ${stat('Target 6-meses', tg?tg.t6+' d':'—')}
         ${stat('Destino', tg&&tg.dest?tg.dest+' d':'—')}
         ${stat('Estado vs target', st?st.lbl:'—', accent)}
       </div>
       <div style="flex:1;min-width:240px">
-        ${stat('Lotes disponibles >150 d', (r.oldCount||0)+'', r.oldCount>0?'#a8351c':'#2c7a2c')}
-        ${stat('Penalidad aplicada', r.penalty>0?('+'+r.penalty+' d'):'0 d', r.penalty>0?'#a8351c':'#2c7a2c')}
+        ${stat('Lotes disponibles >150 d', (r.oldCount||0)+'', r.oldCount>0?'#a8351c':'#3d6224')}
+        ${stat('Penalidad aplicada', r.penalty>0?('+'+r.penalty+' d'):'0 d', r.penalty>0?'#a8351c':'#3d6224')}
         ${stat('kg disponibles', r.availKg>0?(kgFmt?kgFmt(r.availKg):Math.round(r.availKg))+' kg':'—')}
       </div>
     </div>
     <div style="font-size:12.5px;font-weight:700;color:#1B203D;margin:0 0 6px">Lotes que afectan la rotación (>150 días)</div>
-    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
       <thead><tr>
         <th style="${th};text-align:left">ICO</th><th style="${th};text-align:left">Nombre</th>
         <th style="${th};text-align:left">Bodega</th><th style="${th}">Días</th><th style="${th}">Actual</th>
       </tr></thead>
       <tbody>${lotRows}</tbody>
     </table>
-    ${lots.length>14?`<div style="font-size:11px;color:#9a9ea9;margin-top:6px">… y ${lots.length-14} lote(s) más (ver la lista completa en el dashboard).</div>`:''}`;
+    ${lots.length>14?`<div style="font-size:11px;color:#9A9A93;margin-top:6px">… y ${lots.length-14} lote(s) más (ver la lista completa en el dashboard).</div>`:''}`;
 }
 // Texto plano de la rotación de una región (para el cuerpo del correo).
 function _rotRegionResumenTxt(r){
@@ -5880,19 +5946,19 @@ function _rotRegionResumenTxt(r){
 // Imagen enfocada en UNA región (para enviar al comercial de esa región).
 function _rotRegionPNG(r, fecha, dTxt){
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:860px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:860px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación · ${esc(r.region)}</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada y lotes que afectan (>150 días) · ${fecha}</div>
+        <div style="font-size:12px;color:#9A9A93;margin-top:2px">Rotación actual vs. ajustada y lotes que afectan (>150 días) · ${fecha}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
     </div>
     ${_rotRegionCardHtml(r, dTxt)}
-    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Rotación ajustada = actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    <div style="font-size:10.5px;color:#CBCED6;margin-top:10px">Rotación ajustada = actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
-  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+  html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Rotacion_${String(r.region).replace(/[^A-Za-z0-9]+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
@@ -5911,51 +5977,51 @@ function exportRotacion90PNG(){
   if(selReg){ const r=M.rows.find(x=>x.region===selReg); if(!r){ alert('No hay datos para esa región.'); return; } _rotRegionPNG(r, fecha, dTxt); return; }
 
   const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
-  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const td='padding:8px 12px;font-size:13px;color:#0C0C0B;border-bottom:1px solid #E5E7EB;text-align:right;font-family:DM Mono,monospace';
   const rowHtml=(r)=>{ const tg=ROT_TARGETS[r.region]; const st=tg?rotStatus(r.rotBase,tg.tNum):null;
-    const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#c2c2bb';
+    const vjC = r.vejez>0 ? (r.vejez<VEJEZ_TARGET?'#3d6224':'#a8351c') : '#c2c2bb';
     return `<tr style="background:#fff">`
-      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:700;color:#1B203D;border-bottom:1px solid #ececec">${esc(r.region)}</td>`
+      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:700;color:#1B203D;border-bottom:1px solid #E5E7EB">${esc(r.region)}</td>`
       +`<td style="${td};font-weight:700">${dTxt(r.rotBase)}</td>`
-      +`<td style="${td};color:#5b6170">${tg?esc(tg.t6):'—'}</td>`
+      +`<td style="${td};color:#5A5A55">${tg?esc(tg.t6):'—'}</td>`
       +`<td style="${td};text-align:left;padding-left:20px">${st?`<span style="display:inline-block;min-width:52px;text-align:center;padding:2px 8px;border-radius:10px;font-weight:700;color:#fff;background:${st.c}">${st.lbl}</span>`:'<span style="color:#c2c2bb">—</span>'}</td>`
       +`<td style="${td};font-weight:700;color:${r.oldCount>0?'#a8351c':'#c2c2bb'}">${r.oldCount||0}</td>`
       +`<td style="${td};color:${r.penalty>0?'#a8351c':'#c2c2bb'}">${r.penalty>0?('+'+r.penalty+' d'):'—'}</td>`
       +`<td style="${td};font-weight:800;color:#1B203D">${dTxt(r.rotAdj)}</td>`
       +`<td style="${td};font-weight:700;color:${vjC}">${dTxt(r.vejez)}</td></tr>`;
   };
-  const totRow=`<tr style="background:#E9C400">`
-    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:800;color:#1B203D;border-bottom:1px solid #E9C400">GLOBAL</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.rotGlobalBase)}</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400">—</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400">—</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800;color:#1B203D">${M.totOld||0}</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800;color:#1B203D">${M.totPenalty>0?('+'+M.totPenalty+' d'):'—'}</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.rotGlobalAdj)}</td>`
-    +`<td style="${td};border-bottom:1px solid #E9C400;font-weight:800">${dTxt(M.globalVejez)}</td></tr>`;
-  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
-    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
-    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
-  const vjGlobalC = M.globalVejez>0 ? (M.globalVejez<VEJEZ_TARGET?'#2c7a2c':'#a8351c') : '#9a9ea9';
+  const totRow=`<tr style="background:#E7E244">`
+    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:800;color:#1B203D;border-bottom:1px solid #E7E244">GLOBAL</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244;font-weight:800">${dTxt(M.rotGlobalBase)}</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244">—</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244">—</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244;font-weight:800;color:#1B203D">${M.totOld||0}</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244;font-weight:800;color:#1B203D">${M.totPenalty>0?('+'+M.totPenalty+' d'):'—'}</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244;font-weight:800">${dTxt(M.rotGlobalAdj)}</td>`
+    +`<td style="${td};border-bottom:1px solid #E7E244;font-weight:800">${dTxt(M.globalVejez)}</td></tr>`;
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #E5E7EB;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9A9A93">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:DM Mono,monospace">${val}</div>
+    <div style="font-size:11px;color:#9A9A93;margin-top:2px">${sub}</div></div>`;
+  const vjGlobalC = M.globalVejez>0 ? (M.globalVejez<VEJEZ_TARGET?'#3d6224':'#a8351c') : '#9A9A93';
 
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:1040px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1040px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
       <div>
         <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Rotación por región</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Rotación actual vs. ajustada · lotes que afectan (>150 días) · ${fecha}</div>
+        <div style="font-size:12px;color:#9A9A93;margin-top:2px">Rotación actual vs. ajustada · lotes que afectan (>150 días) · ${fecha}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Rotación & Vejez</div>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:16px">
       ${kpi('Rotación actual (global)',dTxt(M.rotGlobalBase),'ponderada 90d','#1B203D')}
-      ${kpi('Rotación ajustada (global)',dTxt(M.rotGlobalAdj),'con penalidad','#8a6d00')}
+      ${kpi('Rotación ajustada (global)',dTxt(M.rotGlobalAdj),'con penalidad','#7A6A00')}
       ${kpi('Lotes que afectan',(M.totOld||0)+'',' > 150 días (penalidad +2 d c/u)','#a8351c')}
       ${kpi('Vejez global',dTxt(M.globalVejez),'target < '+VEJEZ_TARGET+' días',vjGlobalC)}
     </div>
-    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
       <thead><tr>
         <th style="${th};text-align:left">Región</th>
         <th style="${th}">Rot. actual (90d)</th><th style="${th}">Target 6-mo</th>
@@ -5963,11 +6029,11 @@ function exportRotacion90PNG(){
         <th style="${th}">Lotes >150d</th><th style="${th}">Penalidad</th>
         <th style="${th}">Rot. ajustada</th><th style="${th}">Vejez pond.</th>
       </tr></thead>
-      <tbody>${M.rows.length? M.rows.map(rowHtml).join('')+totRow : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">Sin datos de rotación ni vejez.</td></tr>`}</tbody>
+      <tbody>${M.rows.length? M.rows.map(rowHtml).join('')+totRow : `<tr><td colspan="8" style="padding:20px;text-align:center;color:#9A9A93;font-size:13px">Sin datos de rotación ni vejez.</td></tr>`}</tbody>
     </table>
-    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Rotación ajustada = rotación actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    <div style="font-size:10.5px;color:#CBCED6;margin-top:10px">Rotación ajustada = rotación actual + 2 días por cada lote disponible con &gt;150 días. Menos días = mejor rotación. · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
-  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+  html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Rotacion_${new Date().toISOString().slice(0,10)}.png`;
@@ -5999,7 +6065,7 @@ function renderRotLotes(){
   // Lista >150 días, del más viejo al menos
   const list=f.filter(l=>l.dias>VEJEZ_PENAL_DIAS).sort((a,b)=>b.dias-a.dias);
   body.innerHTML = list.length ? list.map(l=>{
-    const dc = l.dias>180 ? '#a8351c' : '#8a6d00';
+    const dc = l.dias>180 ? '#a8351c' : '#7A6A00';
     return `<tr><td class="c-cliente">${esc(l.region)}</td><td>${esc(l.warehouse)}</td>`
       +`<td style="font-family:'DM Mono',monospace;font-size:11.5px">${esc(l.ico)}</td>`
       +`<td>${esc(l.name)}</td><td>${esc(l.series)}</td><td style="text-align:center">${esc(l.bagSize)}</td>`
@@ -6123,7 +6189,7 @@ function renderMetaHistory(){
     const pctTxt=c.total? pct+'%' : '<span style="color:var(--text3)">sin meta</span>';
     return `<tr><td class="c-cliente">${fmtWeek(w)}</td>`
       +`<td class="c-num">${c.total?money(c.total):'<span style="color:var(--text3)">—</span>'}</td>`
-      +`<td class="c-num" style="color:#2c7a2c;font-weight:700">${g.total?money(g.total):'<span style=\"color:var(--text3)\">—</span>'}</td>`
+      +`<td class="c-num" style="color:#3d6224;font-weight:700">${g.total?money(g.total):'<span style=\"color:var(--text3)\">—</span>'}</td>`
       +`<td class="c-num">${pctTxt}${bar}</td>`
       +`<td class="c-num">${cell(g.current,c.current)}</td><td class="c-num">${cell(g.b1,c.b1)}</td>`
       +`<td class="c-num">${cell(g.b2,c.b2)}</td><td class="c-num">${cell(g.b3,c.b3)}</td><td class="c-num">${cell(g.b4,c.b4)}</td></tr>`;
@@ -6185,48 +6251,48 @@ function exportGerenciaPNG(){
   const prevLabel=`${_rng(_pMon)}–${_rng(_pSun)}`;
 
   const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
-  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
+  const td='padding:8px 12px;font-size:13px;color:#0C0C0B;border-bottom:1px solid #E5E7EB;text-align:right;font-family:DM Mono,monospace';
   const rowHtml=(r,isTot)=>{ const hot=pct(r)>=60;
-    const bg=isTot?'#E9C400':'#fff'; const c1col=isTot?'#1B203D':'#1B203D';
+    const bg=isTot?'#E7E244':'#fff'; const c1col=isTot?'#1B203D':'#1B203D';
     const nameW=isTot?'800':'700';
     return `<tr style="background:${bg}">`
-      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${nameW};color:${c1col};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.c)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'}">${money(r.ab)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${isTot?'#1B203D':'#9a9ea9'}">${money(r.co)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'};color:${hot?'#a8351c':'#1f2430'}">${money(r.ve)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:700;color:${hot?'#a8351c':'#1f2430'}">${pct(r)}%</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b1)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b2)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b3)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${money(r.b4)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobSPrev>0?'#2c7a2c':'#9a9ea9'};font-weight:${(r.cobSPrev>0||isTot)?'700':'400'}">${money(r.cobSPrev)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobS>0?'#2c7a2c':'#9a9ea9'};font-weight:${r.cobS>0?'700':'400'}">${money(r.cobS)}</td>`
-      +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};color:${r.cobM>0?'#2c7a2c':'#9a9ea9'}">${money(r.cobM)}</td>`
+      +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${nameW};color:${c1col};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${esc(r.c)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};font-weight:${isTot?'800':'400'}">${money(r.ab)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};color:${isTot?'#1B203D':'#9A9A93'}">${money(r.co)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};font-weight:${isTot?'800':'400'};color:${hot?'#a8351c':'#0C0C0B'}">${money(r.ve)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};font-weight:700;color:${hot?'#a8351c':'#0C0C0B'}">${pct(r)}%</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${money(r.b1)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${money(r.b2)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${money(r.b3)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${money(r.b4)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};color:${r.cobSPrev>0?'#3d6224':'#9A9A93'};font-weight:${(r.cobSPrev>0||isTot)?'700':'400'}">${money(r.cobSPrev)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};color:${r.cobS>0?'#3d6224':'#9A9A93'};font-weight:${r.cobS>0?'700':'400'}">${money(r.cobS)}</td>`
+      +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};color:${r.cobM>0?'#3d6224':'#9A9A93'}">${money(r.cobM)}</td>`
       +`</tr>`;
   };
-  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
-    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
-    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #E5E7EB;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9A9A93">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:DM Mono,monospace">${val}</div>
+    <div style="font-size:11px;color:#9A9A93;margin-top:2px">${sub}</div></div>`;
 
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:1200px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1200px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
       <div>
         <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Cartera por ${porQ}</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">Cuentas por cobrar en USD · ${fecha}</div>
+        <div style="font-size:12px;color:#9A9A93;margin-top:2px">Cuentas por cobrar en USD · ${fecha}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Management</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Management</div>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:16px">
       ${kpi('Open AR',money(tot.ab),'USD','#1B203D')}
       ${kpi('Overdue',money(tot.ve),pctTot+'% of AR','#a8351c')}
-      ${kpi('Cobrado sem. pasada',money(cobSPrev),prevLabel,'#2c7a2c')}
-      ${kpi('Cobrado esta semana',money(cobS),'en curso','#2c7a2c')}
-      ${kpi('Cobrado este mes',money(cobM),'collected','#2c7a2c')}
+      ${kpi('Cobrado sem. pasada',money(cobSPrev),prevLabel,'#3d6224')}
+      ${kpi('Cobrado esta semana',money(cobS),'en curso','#3d6224')}
+      ${kpi('Cobrado este mes',money(cobM),'collected','#3d6224')}
     </div>
-    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
       <thead><tr>
         <th style="${th};text-align:left">${col1}</th><th style="${th}">Open</th><th style="${th}">Current</th>
         <th style="${th}">Overdue</th><th style="${th}">%O</th>
@@ -6235,9 +6301,9 @@ function exportGerenciaPNG(){
       </tr></thead>
       <tbody>${rows.map(r=>rowHtml(r,false)).join('')}${rowHtml(tot,true)}</tbody>
     </table>
-    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    <div style="font-size:10.5px;color:#CBCED6;margin-top:10px">Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
-  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+  html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Cartera_${slug}_${new Date().toISOString().slice(0,10)}.png`;
@@ -6300,7 +6366,7 @@ function renderRecaudo(){
   const money2=(v,accent)=>`<td class="c-num"${accent?` style="color:${accent};font-weight:700"`:(v>0?'':' style="color:var(--text3)"')}>${money(v)}</td>`;
   const rowHtml=(r,isTot)=>`<tr${isTot?' class="ger-tot"':''}>`
     +`<td class="${isTot?'':'c-cliente'}">${esc(r.k)}</td>`
-    +money2(r.current, r.current>0?'#2c7a2c':null)
+    +money2(r.current, r.current>0?'#3d6224':null)
     +money2(r.b1)+money2(r.b2)+money2(r.b3)
     +money2(r.b4, r.b4>0?'#a8351c':null)
     +(showUnk?money2(r.unk):'')
@@ -6326,38 +6392,38 @@ function exportRecaudoPNG(){
   const pctVenc = tot.total? Math.round(vencida/tot.total*100):0;
 
   const th='padding:9px 12px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c9cbe0;background:#1B203D;text-align:right;font-weight:700';
-  const td='padding:8px 12px;font-size:13px;color:#1f2430;border-bottom:1px solid #ececec;text-align:right;font-family:ui-monospace,Menlo,monospace';
-  const cell=(v,isTot,accent)=>`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:${isTot?'800':'400'};color:${accent||(v>0?'#1f2430':'#c2c2bb')}">${money(v)}</td>`;
-  const rowHtml=(r,isTot)=>`<tr style="background:${isTot?'#E9C400':'#fff'}">`
-    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${isTot?'800':'700'};color:#1B203D;border-bottom:1px solid ${isTot?'#E9C400':'#ececec'}">${esc(r.k)}</td>`
-    +cell(r.current,isTot,r.current>0?'#2c7a2c':null)
+  const td='padding:8px 12px;font-size:13px;color:#0C0C0B;border-bottom:1px solid #E5E7EB;text-align:right;font-family:DM Mono,monospace';
+  const cell=(v,isTot,accent)=>`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};font-weight:${isTot?'800':'400'};color:${accent||(v>0?'#0C0C0B':'#c2c2bb')}">${money(v)}</td>`;
+  const rowHtml=(r,isTot)=>`<tr style="background:${isTot?'#E7E244':'#fff'}">`
+    +`<td style="padding:8px 12px;font-size:13px;text-align:left;font-weight:${isTot?'800':'700'};color:#1B203D;border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'}">${esc(r.k)}</td>`
+    +cell(r.current,isTot,r.current>0?'#3d6224':null)
     +cell(r.b1,isTot)+cell(r.b2,isTot)+cell(r.b3,isTot)
     +cell(r.b4,isTot,r.b4>0?'#a8351c':null)
     +(showUnk?cell(r.unk,isTot):'')
-    +`<td style="${td};border-bottom:1px solid ${isTot?'#E9C400':'#ececec'};font-weight:800;color:#1B203D">${money(r.total)}</td></tr>`;
-  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #e3e0d7;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9a9ea9">${lab}</div>
-    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:ui-monospace,Menlo,monospace">${val}</div>
-    <div style="font-size:11px;color:#9a9ea9;margin-top:2px">${sub}</div></div>`;
+    +`<td style="${td};border-bottom:1px solid ${isTot?'#E7E244':'#E5E7EB'};font-weight:800;color:#1B203D">${money(r.total)}</td></tr>`;
+  const kpi=(lab,val,sub,accent)=>`<div style="flex:1;background:#fff;border:1px solid #E5E7EB;border-left:4px solid ${accent};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:#9A9A93">${lab}</div>
+    <div style="font-size:23px;font-weight:800;color:#1B203D;margin-top:3px;font-family:DM Mono,monospace">${val}</div>
+    <div style="font-size:11px;color:#9A9A93;margin-top:2px">${sub}</div></div>`;
 
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;left:-10000px;top:0;width:1080px;background:#f7f6f2;padding:26px 28px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-sizing:border-box';
-  const emptyRow=`<tr><td colspan="${showUnk?8:7}" style="padding:20px;text-align:center;color:#9a9ea9;font-size:13px">No hay cobros registrados en ${corto}.</td></tr>`;
+  box.style.cssText='position:fixed;left:-10000px;top:0;width:1080px;background:#F4F5F7;padding:26px 28px;font-family:Montserrat,sans-serif;box-sizing:border-box';
+  const emptyRow=`<tr><td colspan="${showUnk?8:7}" style="padding:20px;text-align:center;color:#9A9A93;font-size:13px">No hay cobros registrados en ${corto}.</td></tr>`;
   box.innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
       <div>
         <div style="font-size:19px;font-weight:800;color:#1B203D">Forest — Recaudo ${corto}</div>
-        <div style="font-size:12px;color:#9a9ea9;margin-top:2px">De dónde vino el cobro · por ${grpTxt} y bracket · ${rango}</div>
+        <div style="font-size:12px;color:#9A9A93;margin-top:2px">De dónde vino el cobro · por ${grpTxt} y bracket · ${rango}</div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E9C400;padding:5px 12px;border-radius:8px">Recaudo</div>
+      <div style="font-size:12px;font-weight:700;color:#1B203D;background:#E7E244;padding:5px 12px;border-radius:8px">Recaudo</div>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:16px">
-      ${kpi('Recaudado '+corto,money(tot.total),(tot.n||0)+' cobros','#2c7a2c')}
+      ${kpi('Recaudado '+corto,money(tot.total),(tot.n||0)+' cobros','#3d6224')}
       ${kpi('De cartera al día',money(tot.current),'current (por vencer)','#1B203D')}
       ${kpi('De cartera vencida',money(vencida),pctVenc+'% del recaudo','#a8351c')}
       ${kpi('90+ días',money(tot.b4),'lo más viejo cobrado','#8a2414')}
     </div>
-    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e0d7;border-radius:10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
       <thead><tr>
         <th style="${th};text-align:left">${col1}</th>
         <th style="${th}">Current</th><th style="${th}">1–30</th><th style="${th}">31–60</th>
@@ -6366,9 +6432,9 @@ function exportRecaudoPNG(){
       </tr></thead>
       <tbody>${rows.length? rows.map(r=>rowHtml(r,false)).join('')+rowHtml(tot,true) : emptyRow}</tbody>
     </table>
-    <div style="font-size:10.5px;color:#b7b3a8;margin-top:10px">El bracket es la antigüedad de la factura al momento de cobrarla.${showUnk?' S/B = cobros sin bracket registrado.':''} · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
+    <div style="font-size:10.5px;color:#CBCED6;margin-top:10px">El bracket es la antigüedad de la factura al momento de cobrarla.${showUnk?' S/B = cobros sin bracket registrado.':''} · Forest Reservas · generado ${new Date().toLocaleString('es-CO')}</div>`;
   document.body.appendChild(box);
-  html2canvas(box,{scale:2,backgroundColor:'#f7f6f2',logging:false}).then(canvas=>{
+  html2canvas(box,{scale:2,backgroundColor:'#F4F5F7',logging:false}).then(canvas=>{
     document.body.removeChild(box);
     const a=document.createElement('a');
     a.download=`Forest_Recaudo_${slug}_${new Date().toISOString().slice(0,10)}.png`;
@@ -6385,7 +6451,7 @@ function exportGerenciaExcel(){
   const pct=r=>r.ab?Math.round(r.ve/r.ab*100):0;
   const R = r => [r.c, Math.round(r.ab), Math.round(r.co), Math.round(r.ve), pct(r)/100, Math.round(r.b1), Math.round(r.b2), Math.round(r.b3), Math.round(r.b4), Math.round(r.cobS), Math.round(r.cobM)];
 
-  const NAVY='1B203D', YELLOW='E7E244', WHITE='FFFFFF', BORDER='DDD9CF', ALT='F5F4EE', INK='1A1710';
+  const NAVY='1B203D', YELLOW='E7E244', WHITE='FFFFFF', BORDER='DDD9CF', ALT='F4F5F7', INK='1A1710';
   const thin=()=>({style:'thin',color:{rgb:BORDER}});
   const allB=()=>({top:thin(),bottom:thin(),left:thin(),right:thin()});
   const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:NAVY}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB()}});
@@ -6502,7 +6568,7 @@ function exportRotacionExcel(){
   if(!DATA.length){ alert('Los datos aún están cargando, intenta en un momento.'); return; }
   const {rows,tot}=rotacionRows();
   const R=r=>[r.c,Math.round(r.bags),Math.round(r.b1),Math.round(r.b2),Math.round(r.b3),Math.round(r.b4),Math.round(r.fee),Math.round(r.pull)];
-  const NAVY='1B203D',YELLOW='E7E244',WHITE='FFFFFF',BORDER='DDD9CF',ALT='F5F4EE',INK='1A1710';
+  const NAVY='1B203D',YELLOW='E7E244',WHITE='FFFFFF',BORDER='DDD9CF',ALT='F4F5F7',INK='1A1710';
   const thin=()=>({style:'thin',color:{rgb:BORDER}}); const allB=()=>({top:thin(),bottom:thin(),left:thin(),right:thin()});
   const hdr=v=>({v,t:'s',s:{fill:{patternType:'solid',fgColor:{rgb:NAVY}},font:{bold:true,color:{rgb:WHITE},sz:10,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:allB()}});
   const cell=(v,ev,al)=>{const o={v,t:typeof v==='number'?'n':'s',s:{fill:{patternType:'solid',fgColor:{rgb:ev?ALT:WHITE}},font:{sz:10,name:'Calibri',color:{rgb:INK}},alignment:{horizontal:al||'right',vertical:'center'},border:allB()}}; if(typeof v==='number')o.z='#,##0'; return o;};
@@ -6572,7 +6638,7 @@ function renderHistorial(){
     const estN = normEst(r.estado);
     const est = estN ? `<span class="est ${EST_CLASS[estN]||'e-sin'}">${esc(estN)}</span>` : '<span class="mut2">—</span>';
     const paid = Number(String(r.montoCerrado||'').replace(/[^0-9.\-]/g,''))||0;
-    const paidCell = paid>0 ? `<td class="c-num" style="color:#2c7a2c;font-weight:700">${money(paid)}</td>` : '<td class="c-num" style="color:var(--text3)">—</td>';
+    const paidCell = paid>0 ? `<td class="c-num" style="color:#3d6224;font-weight:700">${money(paid)}</td>` : '<td class="c-num" style="color:var(--text3)">—</td>';
     return `<tr><td class="c-mono">${esc(r.fechaCierre||'—')}</td><td class="c-cliente">${esc(r.cliente||'')}</td><td class="c-muted">${esc(r.comercial||'')}</td><td class="c-mono">${esc(r.factura||'')}</td><td class="c-bodega">${esc(r.region||'')}</td><td class="c-total">${esc(String(r.monto||'—'))}</td>${paidCell}<td>${est}</td><td class="mut2">${esc(r.compromiso||'—')}</td><td>${cum}</td></tr>`;
   }).join('');
   $('hResCount').textContent=`${rows.length} closed`;
