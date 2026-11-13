@@ -1445,6 +1445,18 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-bar .bl{font-size:11px;color:var(--muted);margin-top:5px;text-align:center;line-height:1.5}
     .vm-bar .bv{font-size:11px;font-weight:800;color:var(--text)}
     .vm-bar{cursor:default}
+    .vm-bar.sel .bb{background:linear-gradient(180deg,#7a6a00,#5a4e00);box-shadow:0 0 0 2px var(--fc-yellow)}
+    .vm-bar.sel .bl,.vm-bar.sel .bp{color:var(--fc-navy);font-weight:800}
+    .vm-subtabs{display:flex;gap:4px;flex-wrap:wrap;margin:16px 0 2px;border-bottom:2px solid var(--border)}
+    .vm-subtab{background:none;border:none;padding:9px 16px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:8px 8px 0 0}
+    .vm-subtab:hover{color:var(--navy2)}
+    .vm-subtab.on{color:var(--fc-navy);border-bottom-color:var(--fc-yellow)}
+    .vm-crumb{font-size:14px;margin:0 0 12px;color:var(--navy2)}
+    .vm-crumbi{cursor:pointer;font-weight:700;color:var(--fc-navy)}
+    .vm-crumbi:hover{text-decoration:underline}
+    .vm-crumb .vm-sep{color:var(--muted)}
+    table.vm-tbl table.vm-tbl{font-size:12.5px}
+    .vm-sub td{padding:0 !important}
     .vm-cat{display:flex;flex-direction:column;gap:9px}
     .vm-catrow{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;font-size:13px}
     .vm-catrow .cn{font-weight:700}
@@ -6768,6 +6780,18 @@ const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el 
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 let vmRows = [], vmDeals = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
 let vmCmpOpen = false;   // comparativo HubSpot desplegado
+let vmSub = 'resumen';   // sub-pestaña: resumen | clientes | productos | regiones
+let vmCliOpen = '';      // cliente expandido (drill a productos) en sub-vista Clientes
+let vmRegPath = [];      // breadcrumb de la sub-vista Regiones [region, comercial, cliente]
+let vmCliSort = { key:'v', dir:-1 }, vmProdSort = { key:'v', dir:-1 };
+function vmSetSub(s){ vmSub=s; vmCliOpen=''; renderVentasMargenes(); }
+function vmMacroCat(cat){ cat=(cat||'').toUpperCase(); if(cat==='COMMUNITY') return 'Community'; if(cat==='MICROLOT'||cat==='INNOVATION'||cat==='RESERVE') return 'MIR'; return 'Otros'; }
+const vmEscJs = s => String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+function vmCliToggle(name){ vmCliOpen = (vmCliOpen===name?'':name); renderVentasMargenes(); }
+function vmRegInto(v){ vmRegPath=[...vmRegPath, v]; renderVentasMargenes(); }
+function vmRegTo(n){ vmRegPath=vmRegPath.slice(0,n); renderVentasMargenes(); }
+function vmSetCliSort(k){ if(vmCliSort.key===k) vmCliSort.dir*=-1; else vmCliSort={key:k,dir:(k==='name'?1:-1)}; renderVentasMargenes(); }
+function vmSetProdSort(k){ if(vmProdSort.key===k) vmProdSort.dir*=-1; else vmProdSort={key:k,dir:(k==='name'?1:-1)}; renderVentasMargenes(); }
 let vmF = { comercial:'', cliente:'', region:'', categoria:'', year:'2026', month:'', q:'' };
 let vmSort = { key:'usd', dir:-1 };
 let vmDrill = 'alert';   // tarjeta admin abierta: sinico | sincosteo | sinmargen | alert
@@ -7025,6 +7049,99 @@ function vmOnFilter(key,val){ vmF[key]=val; renderVentasMargenes(); }
 function vmSetSort(key){ if(vmSort.key===key) vmSort.dir*=-1; else { vmSort.key=key; vmSort.dir = (key==='cliente'||key==='producto'||key==='region')?1:-1; } renderVentasMargenes(); }
 function vmSetDrill(k){ vmDrill=k; renderVentasMargenes(); }
 
+// Barra de sub-pestañas
+function vmSubTabsHtml(){
+  const tabs=[['resumen','Resumen'],['clientes','Clientes'],['productos','Productos'],['regiones','Regiones']];
+  return '<div class="vm-subtabs">'+tabs.map(([k,l])=>`<button class="vm-subtab${vmSub===k?' on':''}" onclick="vmSetSub('${k}')">${l}</button>`).join('')+'</div>';
+}
+const vmArrowC = k => vmCliSort.key===k?(vmCliSort.dir<0?' ▾':' ▴'):'';
+const vmArrowP = k => vmProdSort.key===k?(vmProdSort.dir<0?' ▾':' ▴'):'';
+
+// SUB-VISTA CLIENTES: todos los clientes + split por macro-categoría + drill a productos
+function vmRenderClientes(rows){
+  const m={};
+  rows.forEach(r=>{ const k=r.cliente||'—'; const o=m[k]||(m[k]={name:k,v:0,kg:0,g:0,vc:0,community:0,mir:0,otros:0});
+    o.v+=r.usd; o.kg+=r.kg; if(r.marginFinal!=null){ o.g+=r.gmcFinal; o.vc+=r.usd; }
+    const mc=vmMacroCat(r.cat); o[mc==='Community'?'community':mc==='MIR'?'mir':'otros']+=r.usd; });
+  let arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0}));
+  const sk=vmCliSort.key, dir=vmCliSort.dir;
+  arr.sort((a,b)=> sk==='name' ? dir*String(a.name).localeCompare(String(b.name)) : dir*((a[sk]||0)-(b[sk]||0)) );
+  let html='<div class="vm-panel"><h3>Clientes</h3><p class="nt">todos los clientes · click en un cliente para ver sus productos · click en los encabezados para ordenar · '+arr.length+' clientes</p>';
+  html+='<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr>'
+    +`<th onclick="vmSetCliSort('name')">Cliente${vmArrowC('name')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('v')">Ventas${vmArrowC('v')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('kg')">KG${vmArrowC('kg')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('mir')">MIR${vmArrowC('mir')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('community')">Community${vmArrowC('community')}</th>`
+    +`<th class="r" onclick="vmSetCliSort('p')">% Margen${vmArrowC('p')}</th></tr></thead><tbody>`;
+  arr.slice(0,400).forEach(o=>{
+    const open=vmCliOpen===o.name;
+    html+=`<tr style="cursor:pointer" onclick="vmCliToggle('${vmEscJs(o.name)}')"><td class="cl">${open?'▾ ':'▸ '}${vmEsc(o.name)}</td>`
+      +`<td class="r">${money(o.v)}</td><td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td>`
+      +`<td class="r">${o.mir?money(o.mir):'—'}</td><td class="r">${o.community?money(o.community):'—'}</td>`
+      +`<td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td></tr>`;
+    if(open){
+      const pm={}; rows.filter(r=>r.cliente===o.name).forEach(r=>{ const pk=(r.producto||'—')+' · '+vmMacroCat(r.cat); const p=pm[pk]||(pm[pk]={name:r.producto||'—',cat:r.cat,kg:0,v:0,g:0,vc:0}); p.kg+=r.kg; p.v+=r.usd; if(r.marginFinal!=null){p.g+=r.gmcFinal;p.vc+=r.usd;} });
+      const prods=Object.values(pm).map(p=>({...p,pct:p.vc?p.g/p.vc*100:0})).sort((a,b)=>b.v-a.v);
+      html+='<tr class="vm-sub"><td colspan="6" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Producto</th><th>Cat.</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">% Margen</th></tr></thead><tbody>';
+      prods.forEach(p=>{ html+=`<tr><td>${vmEsc(p.name)}</td><td>${p.cat?`<span class="vm-tag ${vmTagCls((p.cat||'').toUpperCase())}">${vmEsc(p.cat).slice(0,4)}</span>`:''}</td><td class="r">${Math.round(p.kg).toLocaleString('en-US')}</td><td class="r">${money(p.v)}</td><td class="r ${p.pct<0?'vm-neg':p.pct<15?'vm-warn':'vm-pos'}">${p.vc?p.pct.toFixed(1)+'%':'—'}</td></tr>`; });
+      html+='</tbody></table></td></tr>';
+    }
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
+// SUB-VISTA PRODUCTOS: foco en el producto (más/menos vendidos, márgenes)
+function vmRenderProductos(rows){
+  const m={};
+  rows.forEach(r=>{ const k=(r.producto||'—'); const o=m[k]||(m[k]={name:k,cat:r.cat,kg:0,v:0,g:0,vc:0,cl:new Set()});
+    o.kg+=r.kg; o.v+=r.usd; o.cl.add(r.cliente); if(r.marginFinal!=null){o.g+=r.gmcFinal;o.vc+=r.usd;} if(!o.cat&&r.cat)o.cat=r.cat; });
+  let arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0,nc:o.cl.size}));
+  const sk=vmProdSort.key, dir=vmProdSort.dir;
+  arr.sort((a,b)=> sk==='name' ? dir*String(a.name).localeCompare(String(b.name)) : dir*((a[sk]||0)-(b[sk]||0)) );
+  let html='<div class="vm-panel"><h3>Productos</h3><p class="nt">foco en el producto · click en los encabezados para ordenar (más/menos vendidos, mejor/peor margen) · '+arr.length+' productos</p>';
+  html+='<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr>'
+    +`<th onclick="vmSetProdSort('name')">Producto${vmArrowP('name')}</th><th>Cat.</th>`
+    +`<th class="r" onclick="vmSetProdSort('kg')">KG${vmArrowP('kg')}</th>`
+    +`<th class="r" onclick="vmSetProdSort('v')">Ventas${vmArrowP('v')}</th>`
+    +`<th class="r" onclick="vmSetProdSort('g')">Margen $${vmArrowP('g')}</th>`
+    +`<th class="r" onclick="vmSetProdSort('p')">% Margen${vmArrowP('p')}</th>`
+    +`<th class="r" onclick="vmSetProdSort('nc')"># Clientes${vmArrowP('nc')}</th></tr></thead><tbody>`;
+  arr.slice(0,500).forEach(o=>{
+    html+=`<tr><td class="cl">${vmEsc(o.name)}</td><td>${o.cat?`<span class="vm-tag ${vmTagCls((o.cat||'').toUpperCase())}">${vmEsc(o.cat).slice(0,4)}</span>`:''}</td>`
+      +`<td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td><td class="r">${money(o.v)}</td>`
+      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td><td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
+      +`<td class="r">${o.nc}</td></tr>`;
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
+// SUB-VISTA REGIONES: drill-down de general a específico (Company→Región→Comercial→Cliente→Producto)
+function vmRenderRegiones(allRows){
+  const dims=['region','comercial','cliente','producto'], labels=['Región','Comercial','Cliente','Producto'];
+  let rows=allRows;
+  vmRegPath.forEach((p,i)=>{ rows=rows.filter(r=>(r[dims[i]]||'—')===p); });
+  const lvl=Math.min(vmRegPath.length,3); const dim=dims[lvl]; const leaf=lvl>=3;
+  const m={}; rows.forEach(r=>{ const k=r[dim]||'—'; const o=m[k]||(m[k]={name:k,v:0,kg:0,g:0,vc:0}); o.v+=r.usd;o.kg+=r.kg; if(r.marginFinal!=null){o.g+=r.gmcFinal;o.vc+=r.usd;} });
+  const arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0})).sort((a,b)=>b.v-a.v);
+  let html='<div class="vm-panel"><h3>Análisis por región</h3><p class="nt">de lo general a lo específico · click en una fila para entrar</p>';
+  html+=`<div class="vm-crumb"><span class="vm-crumbi" onclick="vmRegTo(0)">🏢 Company</span>`;
+  vmRegPath.forEach((p,i)=>{ html+=` <span class="vm-sep">›</span> <span class="vm-crumbi" onclick="vmRegTo(${i+1})">${vmEsc(p)}</span>`; });
+  html+=`</div>`;
+  html+=`<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr><th>${labels[lvl]}</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">% Margen</th>${leaf?'':'<th></th>'}</tr></thead><tbody>`;
+  arr.forEach(o=>{
+    const click = leaf?'':`style="cursor:pointer" onclick="vmRegInto('${vmEscJs(o.name)}')"`;
+    html+=`<tr ${click}><td class="cl">${leaf?'':'▸ '}${vmEsc(o.name)}</td>`
+      +`<td class="r">${money(o.v)}</td><td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td>`
+      +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td><td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
+      +(leaf?'':`<td style="color:var(--muted);text-align:right">entrar →</td>`)+`</tr>`;
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
 function renderVentasMargenes(){
   const body=document.getElementById('vmBody'); if(!body) return;
   if(!vmLoaded){ body.innerHTML='<div class="vm-msg">Cargando ventas…</div>'; return; }
@@ -7141,23 +7258,25 @@ function renderVentasMargenes(){
   html+=`<div class="vm-kpi"><div class="k">Clientes</div><div class="v">${nClientes}</div><div class="s">distintos</div></div>`;
   html+='</div>';
 
+  // Sub-pestañas
+  html+=vmSubTabsHtml();
+  if(vmSub==='clientes'){ html+=vmRenderClientes(rows); body.innerHTML=html; return; }
+  if(vmSub==='productos'){ html+=vmRenderProductos(rows); body.innerHTML=html; return; }
+  if(vmSub==='regiones'){ html+=vmRenderRegiones(rows); body.innerHTML=html; return; }
+
+  // ===== RESUMEN =====
   // Tendencia + categorías
   html+='<div class="vm-grid">';
   html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
   if(!monthsPresent.length) html+='<div class="vm-msg" style="width:100%">Sin datos para el filtro.</div>';
-  monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.vc?o.g/o.vc*100:0;
-    html+=`<div class="vm-bar" title="${VM_MESES[m]||m} · Ventas ${money(o.v)} · Margen ${p.toFixed(1)}%"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}<br><span class="bv">${vmAbbr(o.v)}</span></div></div>`; });
+  monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.vc?o.g/o.vc*100:0; const sel=String(vmF.month)===String(m);
+    html+=`<div class="vm-bar${sel?' sel':''}" style="cursor:pointer" title="${VM_MESES[m]||m} · Ventas ${money(o.v)} · Margen ${p.toFixed(1)}% · (click para filtrar)" onclick="vmOnFilter('month', vmF.month==='${m}'?'':'${m}')"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}<br><span class="bv">${vmAbbr(o.v)}</span></div></div>`; });
   html+='</div></div>';
   html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
   catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100);
     html+=`<div class="vm-catrow"><span class="cn">${vmEsc(c.n)}</span><span class="vm-track"><span class="vm-fill" style="width:${w}%;background:${catColor(c.n)}"></span></span><span class="cv">${money(c.v)} · <b style="color:${catColor(c.n)}">${c.p.toFixed(1)}%</b></span></div>`; });
   html+='</div></div>';
   html+='</div>';
-
-  // Top clientes
-  html+='<div class="vm-panel"><h3>Top clientes</h3><div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Cliente</th><th class="r">Ventas</th><th class="r">KG</th><th class="r">Margen $</th><th class="r">Margen %</th></tr></thead><tbody>';
-  top.forEach(c=>{ html+=`<tr><td class="cl">${vmEsc(c.n)}</td><td class="r">${money(c.v)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r vm-pos">${money(c.g)}</td><td class="r">${c.p.toFixed(1)}%</td></tr>`; });
-  html+='</tbody></table></div></div>';
 
   // Detalle por línea
   html+='<div class="vm-panel"><h3>Detalle por línea de referencia</h3><p class="nt">cada línea de factura · click en los encabezados para ordenar'
