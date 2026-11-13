@@ -1477,6 +1477,12 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     table.vm-tbl tbody tr:last-child td{border-bottom:none}
     .vm-tbl .cl{font-weight:700}.vm-mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
     .vm-pos{color:var(--res-fg);font-weight:700}.vm-neg{color:var(--warn);font-weight:800}.vm-warn{color:var(--fsr-fg);font-weight:800}
+    .vm-cump{border-left:4px solid var(--green)}
+    .vm-cumpcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:4px}
+    .vm-cc{border:1px solid var(--border);border-radius:11px;padding:12px 14px;background:var(--panel-2,transparent)}
+    .vm-cc .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+    .vm-cc .v{font-size:24px;font-weight:800;margin:3px 0 1px}
+    .vm-cc .s{font-size:12px;color:var(--muted)}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
     .vm-tag.com{background:var(--spot-bg);color:var(--spot-fg)}.vm-tag.inn{background:var(--res-bg);color:var(--res-fg)}
     .vm-tag.res{background:var(--fsr-bg);color:var(--fsr-fg)}.vm-tag.mic{background:var(--ctr-bg);color:var(--ctr-fg)}.vm-tag.rw{background:#e9e0f5;color:#5b3a8a}
@@ -6703,6 +6709,7 @@ const VM_COST_TAB = 'BASE COST', VM_COST_GID = '';
 const VM_CONTRACTS_TAB = 'CONTRACTS', VM_CONTRACTS_GID = '';
 const VM_REP_TAB = 'SALES REP', VM_REP_GID = '';   // Customer → Comercial (col A → D)
 const VM_DEALS_TAB = 'Deals', VM_DEALS_GID = '';   // HubSpot Closed Won (comparativo vs QuickBooks)
+const VM_META_TAB = 'METAS', VM_META_GID = '';     // Metas mensuales por comercial (USD): Mercado | Comercial | Ene..Dic
 // Respaldo por región cuando el cliente no cruza en SALES REP.
 const VM_REGION_REP = { 'Dubai':'Ricardo', 'Australia':'Samuel' };
 const VM_CATS = ['COMMUNITY','INNOVATION','MICROLOT','RESERVE','COMPETITION','RELATIONSHIP'];
@@ -6778,7 +6785,7 @@ function vmParseDesc(desc){
 const VM_AED = 0.2740;                                  // Dubai pegado al USD (fijo)
 const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el mes en FX
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-let vmRows = [], vmDeals = [], vmFX = {}, vmLoaded = false, vmLoading = false, vmError = '';
+let vmRows = [], vmDeals = [], vmFX = {}, vmMeta = {}, vmLoaded = false, vmLoading = false, vmError = '';
 let vmCmpOpen = false;   // comparativo HubSpot desplegado
 let vmSub = 'resumen';   // sub-pestaña: resumen | clientes | productos | regiones
 let vmCliOpen = '';      // cliente expandido (drill a productos) en sub-vista Clientes
@@ -6849,7 +6856,7 @@ function vmLookupCost(ico, iconum){
   return null;
 }
 async function cargarVentasMargenes(){
-  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[]; vmCost={}; vmContracts={}; vmClientRep={}; vmFX={}; vmDeals=[];
+  if(vmLoading) return; vmLoading=true; vmError=''; vmDiag=[]; vmCost={}; vmContracts={}; vmClientRep={}; vmFX={}; vmDeals=[]; vmMeta={};
   try{
     // 1) FX (monto nativo → USD). Si falla, respaldo VM_FX_DEFAULT.
     try{
@@ -6947,6 +6954,25 @@ async function cargarVentasMargenes(){
           fz1: vmFuzzyCli(comp), fz2: vmFuzzyCli(legal) });
       }
     }catch(e){ console.warn('Deals no disponible', e); }
+
+    // 3d) METAS → meta mensual por comercial (USD). Celda vacía = mes sin meta (no cuenta).
+    try{
+      const mt=parseCSV(await (await fetch(vmGviz(VM_META_TAB,VM_META_GID))).text());
+      const hi=vmHeaderIdx(mt,['comercial','mensualidad','enero']);
+      const H=mt[hi].map(h=>String(h||'').trim().toLowerCase());
+      const iCom=vmCol(H,['comercial','mensualidad','sales rep','rep']);
+      const iMkt=vmCol(H,['mercado','region','región','market']);
+      const MES_N=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const MES_ABR=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const iMes=MES_N.map((nm,k)=>{ let c=vmCol(H,[nm]); if(c<0)c=vmCol(H,[MES_ABR[k]]); return c; });
+      for(let r=hi+1;r<mt.length;r++){
+        const row=mt[r]||[]; const com=normComercial(String(iCom>=0?(row[iCom]||''):'').trim());
+        if(!com || com==='Sin asignar') continue;
+        const m=iMes.map(ci=>{ if(ci<0) return null; const v=String(row[ci]||'').trim(); if(v==='') return null; const n=cleanNum(v); return n>0?n:null; });
+        if(m.every(x=>x==null)) continue;
+        vmMeta[com]={ region:String(iMkt>=0?(row[iMkt]||''):'').trim(), m };
+      }
+    }catch(e){ console.warn('METAS no disponible', e); }
 
     // 4) regiones (crudas de QuickBooks) → calcula todo
     const all=[];
@@ -7161,6 +7187,78 @@ function vmRenderRegiones(allRows){
   return html;
 }
 
+// ===== Cumplimiento vs Meta =====
+function vmCapMonth(Y){ const n=new Date(), cy=n.getFullYear(), cm=n.getMonth()+1; Y=+Y; return Y<cy?12:(Y>cy?0:cm); }
+function vmActualsByCom(Y){ const map={};
+  vmRows.forEach(r=>{ if(String(r.year)!==String(Y))return; const c=r.comercial; const o=map[c]||(map[c]={m:new Array(13).fill(0)}); if(r.month>=1&&r.month<=12) o.m[r.month]+=r.usd; });
+  return map; }
+function vmCumpFor(com, Y, actuals){
+  const key=normComercial(com); const meta=vmMeta[key]; if(!meta) return null;
+  const capM=vmCapMonth(Y); const mesN=vmF.month?+vmF.month:capM;
+  const act=actuals[key]||{m:new Array(13).fill(0)};
+  const metaMes=(mesN>=1&&mesN<=12)?meta.m[mesN-1]:null;
+  const factMes=(mesN>=1&&mesN<=12)?(act.m[mesN]||0):0;
+  let metaYTD=0, factYTD=0, hasY=false;
+  for(let k=1;k<=capM;k++){ const mv=meta.m[k-1]; if(mv!=null){ metaYTD+=mv; hasY=true; } factYTD+=act.m[k]||0; }
+  return { com:key, region:meta.region||'—', mesN,
+    metaMes, factMes, pMes:(metaMes!=null&&metaMes>0)?factMes/metaMes*100:null,
+    metaYTD:hasY?metaYTD:null, factYTD, pYTD:(hasY&&metaYTD>0)?factYTD/metaYTD*100:null }; }
+function vmCumpCls(p){ return p==null?'':p>=100?'vm-pos':p>=80?'vm-warn':'vm-neg'; }
+function vmCumpDot(p){ return p==null?'':p>=100?'🟢':p>=80?'🟡':'🔴'; }
+function vmCumpPctHtml(p){ return p==null?'<span style="color:var(--muted)">s/meta</span>':`<b class="${vmCumpCls(p)}">${Math.round(p)}%</b> ${vmCumpDot(p)}`; }
+function vmGap(fact,meta){ if(meta==null) return ''; const d=fact-meta; const s=d>=0?'+':''; return `<span style="font-size:11px;color:${d>=0?'var(--green)':'var(--warn)'}">${s}${money(d)}</span>`; }
+// Card para un comercial (autoservicio)
+function vmCumpCardHtml(c){
+  const mesLbl=VM_MESES[c.mesN]||('mes '+c.mesN);
+  return '<div class="vm-panel vm-cump"><h3>🎯 Cumplimiento vs meta</h3>'
+    +'<p class="nt">facturado vs meta (USD) · '+mesLbl+' y año a la fecha</p>'
+    +'<div class="vm-cumpcards">'
+    +`<div class="vm-cc"><div class="k">Mes · ${mesLbl}</div><div class="v">${vmCumpPctHtml(c.pMes)}</div><div class="s">${money(c.factMes)} / ${c.metaMes==null?'—':money(c.metaMes)} ${vmGap(c.factMes,c.metaMes)}</div></div>`
+    +`<div class="vm-cc"><div class="k">Año a la fecha</div><div class="v">${vmCumpPctHtml(c.pYTD)}</div><div class="s">${money(c.factYTD)} / ${c.metaYTD==null?'—':money(c.metaYTD)} ${vmGap(c.factYTD,c.metaYTD)}</div></div>`
+    +'</div></div>'; }
+// Tabla admin: todos los comerciales + resumen por región
+function vmCumpAdminHtml(Y){
+  const act=vmActualsByCom(Y);
+  const rows=Object.keys(vmMeta).map(c=>vmCumpFor(c,Y,act)).filter(Boolean).sort((a,b)=>(b.metaYTD||0)-(a.metaYTD||0));
+  if(!rows.length) return '';
+  const mesLbl=VM_MESES[rows[0].mesN]||('mes '+rows[0].mesN);
+  // resumen por región
+  const reg={}; rows.forEach(c=>{ const k=c.region||'—'; const o=reg[k]||(reg[k]={region:k,metaMes:0,factMes:0,metaYTD:0,factYTD:0,hasMes:false,hasYTD:false});
+    if(c.metaMes!=null){o.metaMes+=c.metaMes;o.hasMes=true;} o.factMes+=c.factMes; if(c.metaYTD!=null){o.metaYTD+=c.metaYTD;o.hasYTD=true;} o.factYTD+=c.factYTD; });
+  const totMetaMes=rows.reduce((s,c)=>s+(c.metaMes||0),0), totFactMes=rows.reduce((s,c)=>s+c.factMes,0);
+  const totMetaYTD=rows.reduce((s,c)=>s+(c.metaYTD||0),0), totFactYTD=rows.reduce((s,c)=>s+c.factYTD,0);
+  const pct=(f,m)=>m>0?f/m*100:null;
+  let h='<div class="vm-panel vm-cump"><h3>🎯 Cumplimiento vs meta — por comercial</h3>'
+    +'<p class="nt">facturado vs meta (USD) · Mes = '+mesLbl+' · Año = acumulado a la fecha · 🟢≥100% 🟡80-99% 🔴<80%</p>';
+  h+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Comercial</th><th>Región</th>'
+    +`<th class="r">Meta ${mesLbl}</th><th class="r">Fact. ${mesLbl}</th><th class="r">% mes</th>`
+    +'<th class="r">Meta año</th><th class="r">Fact. año</th><th class="r">% año</th></tr></thead><tbody>';
+  rows.forEach(c=>{ h+=`<tr><td class="cl">${vmEsc(c.com)}</td><td style="color:var(--muted)">${vmEsc(c.region)}</td>`
+    +`<td class="r">${c.metaMes==null?'—':money(c.metaMes)}</td><td class="r">${money(c.factMes)}</td><td class="r">${vmCumpPctHtml(c.pMes)}</td>`
+    +`<td class="r">${c.metaYTD==null?'—':money(c.metaYTD)}</td><td class="r">${money(c.factYTD)}</td><td class="r">${vmCumpPctHtml(c.pYTD)}</td></tr>`; });
+  h+=`<tr style="border-top:2px solid var(--border);font-weight:800"><td>TOTAL</td><td></td>`
+    +`<td class="r">${money(totMetaMes)}</td><td class="r">${money(totFactMes)}</td><td class="r">${vmCumpPctHtml(pct(totFactMes,totMetaMes))}</td>`
+    +`<td class="r">${money(totMetaYTD)}</td><td class="r">${money(totFactYTD)}</td><td class="r">${vmCumpPctHtml(pct(totFactYTD,totMetaYTD))}</td></tr>`;
+  h+='</tbody></table></div>';
+  // por región
+  h+='<div class="vm-scroll" style="margin-top:12px"><table class="vm-tbl"><thead><tr><th>Región</th>'
+    +`<th class="r">Meta ${mesLbl}</th><th class="r">Fact. ${mesLbl}</th><th class="r">% mes</th>`
+    +'<th class="r">Meta año</th><th class="r">Fact. año</th><th class="r">% año</th></tr></thead><tbody>';
+  Object.values(reg).sort((a,b)=>b.metaYTD-a.metaYTD).forEach(o=>{ h+=`<tr><td class="cl">${vmEsc(o.region)}</td>`
+    +`<td class="r">${o.hasMes?money(o.metaMes):'—'}</td><td class="r">${money(o.factMes)}</td><td class="r">${vmCumpPctHtml(o.hasMes?pct(o.factMes,o.metaMes):null)}</td>`
+    +`<td class="r">${o.hasYTD?money(o.metaYTD):'—'}</td><td class="r">${money(o.factYTD)}</td><td class="r">${vmCumpPctHtml(o.hasYTD?pct(o.factYTD,o.metaYTD):null)}</td></tr>`; });
+  h+='</tbody></table></div></div>';
+  return h; }
+// Entrada única: gerencia → tabla; comercial → su card
+function vmCumplimientoHtml(gerOK){
+  const Y=vmF.year||'2026';
+  if(!Object.keys(vmMeta).length) return gerOK ? '<div class="vm-panel vm-cump"><h3>🎯 Cumplimiento vs meta</h3><p class="nt">Crea la pestaña <b>METAS</b> en el Google Sheet (Mercado · Comercial · Ene…Dic) para activar esta vista.</p></div>' : '';
+  if(gerOK) return vmCumpAdminHtml(Y);
+  if(!vmF.comercial) return '';
+  const act=vmActualsByCom(Y); const c=vmCumpFor(vmF.comercial,Y,act);
+  return c?vmCumpCardHtml(c):'';
+}
+
 function renderVentasMargenes(){
   const body=document.getElementById('vmBody'); if(!body) return;
   if(!vmLoaded){ body.innerHTML='<div class="vm-msg">Cargando ventas…</div>'; return; }
@@ -7284,6 +7382,8 @@ function renderVentasMargenes(){
   if(vmSub==='regiones'){ html+=vmRenderRegiones(rows); body.innerHTML=html; return; }
 
   // ===== RESUMEN =====
+  // Cumplimiento vs meta (gerencia → tabla todos + región; comercial → su card)
+  html+=vmCumplimientoHtml(gerOK);
   // Tendencia + categorías
   html+='<div class="vm-grid">';
   html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
