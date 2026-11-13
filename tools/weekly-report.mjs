@@ -120,8 +120,11 @@ async function main(){
     const p=normCoffee(product); if(p){ const hit=wm.find(c=>{const cf=normCoffee(c.coffee); return cf&&(cf===p||cf.includes(p)||p.includes(cf));}); if(hit)return hit.margin; }
     const uniq=[...new Set(wm.map(c=>c.margin))]; return uniq.length===1?uniq[0]:wm[0].margin; }
   function lookupCost(ico,iconum){ const k=(ico||'').toUpperCase(); if(k&&COST[k]!=null)return COST[k]; if(iconum&&COST['#'+iconum]!=null)return COST['#'+iconum]; return null; }
-  function resolveCom(cliente,region,year,month){ const e=REP[normCli(cliente)]; const useHO=region==='USA'&&((year>2026)||(year===2026&&month>=8));
-    let com=e?((useHO&&e.ho)?e.ho:(e.rep||e.ho||'')):''; if(!com&&REGION_REP[region])com=REGION_REP[region]; return norm(com||'Sin asignar'); }
+  function resolveCom(cliente,region,year,month){
+    // Regiones de un solo comercial: el rep de la región manda sobre SALES REP (Australia→Samuel, Dubai→Ricardo)
+    if(REGION_REP[region]) return norm(REGION_REP[region]);
+    const e=REP[normCli(cliente)]; const useHO=region==='USA'&&((year>2026)||(year===2026&&month>=8));
+    let com=e?((useHO&&e.ho)?e.ho:(e.rep||e.ho||'')):''; return norm(com||'Sin asignar'); }
 
   // Parse region tabs → líneas 2026
   const lines=[];
@@ -140,6 +143,9 @@ async function main(){
       const gmcReal=haveCost?usd-costKg*kg:null, marginReal=(haveCost&&usd>0)?gmcReal/usd*100:null;
       let marginFinal=marginReal, gmcFinal=gmcReal; const cM=(cat==='COMMUNITY'&&contract)?contractMargin(contract,P.prod):null;
       if(cM!=null){ marginFinal=cM; gmcFinal=usd*cM/100; }
+      // On Float (café en tránsito): en community el margen viene SOLO del contrato. Si el contrato no
+      // tiene margen cerrado, se marca "sin margen" (el margen real por costo es provisional/engañoso).
+      else if(/on\s*float/i.test(itemName) && cat==='COMMUNITY'){ marginFinal=null; gmcFinal=0; }
       lines.push({ comercial:resolveCom(g(iCust),region,year,month), year, month, usd, marginFinal, gmcFinal:(gmcFinal==null?0:gmcFinal) });
     }
   }

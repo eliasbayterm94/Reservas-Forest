@@ -7000,13 +7000,19 @@ async function cargarVentasMargenes(){
           let marginFinal=marginReal, gmcFinal=gmcReal, overrideApplied=false;
           const cMargin = (cat==='COMMUNITY' && contract) ? vmContractMargin(contract, P.prod) : null;
           if(cMargin!=null){ marginFinal=cMargin; gmcFinal=usd*cMargin/100; overrideApplied=true; }
+          // On Float (café en tránsito): en community el margen viene SOLO del contrato. Si el contrato
+          // no tiene margen cerrado, se marca "sin margen" (el margen real por costo es provisional/engañoso).
+          else if(/on\s*float/i.test(itemName) && cat==='COMMUNITY'){ marginFinal=null; gmcFinal=0; }
           const cliente=(g(iCust)||'—');
-          // Comercial: desde Ago-2026 y SOLO para USA prima el "Hand Over Pablo"
-          // (el traspaso de clientes de Pablo fue de USA). Otras regiones: siempre col D.
-          const _rep=vmClientRep[vmNormCli(cliente)];
-          const _useHO = region==='USA' && ((year>2026) || (year===2026 && month>=8));
-          let _com = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || '')) : '';
-          if(!_com && VM_REGION_REP[region]) _com = VM_REGION_REP[region];   // respaldo por región (MENA→Ricardo, AU→Samuel)
+          // Regiones de un solo comercial: el rep de la región MANDA sobre SALES REP (Australia→Samuel, Dubai→Ricardo)
+          let _com;
+          if(VM_REGION_REP[region]){ _com = VM_REGION_REP[region]; }
+          else {
+            const _rep=vmClientRep[vmNormCli(cliente)];
+            // Desde Ago-2026 y SOLO para USA prima el "Hand Over Pablo" (el traspaso fue de USA).
+            const _useHO = region==='USA' && ((year>2026) || (year===2026 && month>=8));
+            _com = _rep ? ((_useHO && _rep.ho) ? _rep.ho : (_rep.rep || _rep.ho || '')) : '';
+          }
           const comercial = normComercial(_com || 'Sin asignar');   // homologa nombres (Juan David = JUAN DAVID ARANGO…)
           all.push({
             region, cliente, comercial,
