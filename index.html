@@ -1483,7 +1483,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-cc .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
     .vm-cc .v{font-size:24px;font-weight:800;margin:3px 0 1px}
     .vm-cc .s{font-size:12px;color:var(--muted)}
-    .vm-regcump{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 22px;margin-top:6px}
+    .vm-regcump{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:14px 26px;margin-top:6px}
     .vm-rcrow2{width:100%;min-width:0}
     .vm-rclab2{font-size:12px;font-weight:700;color:var(--text);margin-bottom:0}
     .vm-rcchart{width:100%;min-width:0}
@@ -7186,19 +7186,19 @@ function vmRenderProductos(rows){
 // SUB-VISTA REGIONES: drill-down de general a específico (Company→Región→Comercial→Cliente→Producto)
 // Combo SVG por mercado: barras = facturado del mes, línea = % cumplimiento (con ref 100%)
 function vmRegComboSvg(months, data, gMaxF, maxP){
-  const n=months.length; const W=Math.max(300, n*44), H=74, padL=6, padR=6, padT=12, padB=12, iW=W-padL-padR, iH=H-padT-padB;
+  const n=months.length; const W=Math.max(300, n*40), H=98, padL=6, padR=6, padT=14, padB=14, iW=W-padL-padR, iH=H-padT-padB;
   const slot=iW/n; const X=i=>padL+slot*i+slot/2; const baseY=padT+iH;
   const yPct=p=>padT+iH*(1-Math.min(p,maxP)/maxP);
   let bars='', dots=''; const seg=[];
   data.forEach((d,i)=>{
-    const bw=Math.min(15, slot*0.5); const bh=iH*Math.min(d.fact,gMaxF)/(gMaxF||1);
-    bars+=`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${(baseY-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,bh).toFixed(1)}" rx="1.5" fill="#cbd5e1"><title>${VM_MESES[d.mo]} · facturado ${money(d.fact)}</title></rect>`;
+    const bw=Math.min(18, slot*0.5); const bh=iH*Math.min(d.fact,gMaxF)/(gMaxF||1);
+    bars+=`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${(baseY-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,bh).toFixed(1)}" rx="2" fill="#cbd5e1"><title>${VM_MESES[d.mo]} · facturado ${money(d.fact)}</title></rect>`;
     if(d.p!=null){ seg.push(`${X(i).toFixed(1)},${yPct(d.p).toFixed(1)}`); const c=vmCumpColor(d.p);
-      dots+=`<circle cx="${X(i).toFixed(1)}" cy="${yPct(d.p).toFixed(1)}" r="2" fill="${c}"><title>${VM_MESES[d.mo]} · ${Math.round(d.p)}% de meta</title></circle>`
-        +`<text x="${X(i).toFixed(1)}" y="${(yPct(d.p)-4).toFixed(1)}" font-size="7" fill="${c}" text-anchor="middle" font-weight="700">${Math.round(d.p)}</text>`; }
+      dots+=`<circle cx="${X(i).toFixed(1)}" cy="${yPct(d.p).toFixed(1)}" r="2.4" fill="${c}"><title>${VM_MESES[d.mo]} · ${Math.round(d.p)}% de meta</title></circle>`
+        +`<text x="${X(i).toFixed(1)}" y="${(yPct(d.p)-4.5).toFixed(1)}" font-size="8" fill="${c}" text-anchor="middle" font-weight="700">${Math.round(d.p)}</text>`; }
   });
-  const line = seg.length>1?`<polyline points="${seg.join(' ')}" fill="none" stroke="#5b6b7f" stroke-width="1.3"/>`:'';
-  const mlabels=data.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${(H-3).toFixed(1)}" font-size="6.5" fill="#8a8578" text-anchor="middle">${VM_MESES[d.mo]}</text>`).join('');
+  const line = seg.length>1?`<polyline points="${seg.join(' ')}" fill="none" stroke="#5b6b7f" stroke-width="1.5"/>`:'';
+  const mlabels=data.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${(H-3).toFixed(1)}" font-size="7.5" fill="#8a8578" text-anchor="middle">${VM_MESES[d.mo]}</text>`).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`
     +`<line x1="${padL}" y1="${yPct(100).toFixed(1)}" x2="${W-padR}" y2="${yPct(100).toFixed(1)}" stroke="#8a8578" stroke-dasharray="3 3" stroke-width="1" opacity=".5"/>`
     +bars+line+dots+mlabels+`</svg>`;
