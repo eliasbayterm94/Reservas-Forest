@@ -1483,6 +1483,14 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-cc .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
     .vm-cc .v{font-size:24px;font-weight:800;margin:3px 0 1px}
     .vm-cc .s{font-size:12px;color:var(--muted)}
+    .vm-regcump{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+    .vm-rcrow{display:flex;align-items:flex-end;gap:10px}
+    .vm-rclab{width:64px;flex:0 0 64px;font-size:12.5px;font-weight:700;color:var(--text);padding-bottom:18px;text-align:right}
+    .vm-rcbars{display:flex;gap:4px;align-items:flex-end;flex:1;min-width:0;overflow-x:auto}
+    .vm-rcb{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:20px}
+    .vm-rcval{font-size:9.5px;font-weight:700;margin-bottom:2px}
+    .vm-rcbar{width:60%;max-width:22px;min-width:8px;border-radius:3px 3px 0 0}
+    .vm-rcm{font-size:9.5px;color:var(--muted);margin-top:3px}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
     .vm-tag.com{background:var(--spot-bg);color:var(--spot-fg)}.vm-tag.inn{background:var(--res-bg);color:var(--res-fg)}
     .vm-tag.res{background:var(--fsr-bg);color:var(--fsr-fg)}.vm-tag.mic{background:var(--ctr-bg);color:var(--ctr-fg)}.vm-tag.rw{background:#e9e0f5;color:#5b3a8a}
@@ -6787,6 +6795,7 @@ const VM_FX_DEFAULT = { EUR:1.13, GBP:1.30, AUD:0.69 }; // respaldo si falta el 
 const VM_MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 let vmRows = [], vmDeals = [], vmFX = {}, vmMeta = {}, vmLoaded = false, vmLoading = false, vmError = '';
 let vmCmpOpen = false;   // comparativo HubSpot desplegado
+let vmCumpOpen = false;  // cumplimiento (admin) desplegado
 let vmSub = 'resumen';   // sub-pestaña: resumen | clientes | productos | regiones
 let vmCliOpen = '';      // cliente expandido (drill a productos) en sub-vista Clientes
 let vmRegPath = [];      // breadcrumb de la sub-vista Regiones [region, comercial, cliente]
@@ -7164,6 +7173,30 @@ function vmRenderProductos(rows){
 }
 
 // SUB-VISTA REGIONES: drill-down de general a específico (Company→Región→Comercial→Cliente→Producto)
+// Gráfico de barras: cumplimiento mensual por mercado/región (pequeños múltiplos)
+function vmRegionCumpChart(Y){
+  if(!Object.keys(vmMeta).length) return '';
+  const act=vmActualsByCom(Y);
+  const regComs={}; Object.keys(vmMeta).forEach(c=>{ const rg=vmMeta[c].region||'—'; (regComs[rg]=regComs[rg]||[]).push(c); });
+  const capM=vmCapMonth(Y); const months=Array.from({length:capM},(_,i)=>i+1);
+  if(!months.length) return '';
+  const regions=Object.keys(regComs).sort();
+  let h='<div class="vm-panel"><h3>🎯 Cumplimiento mensual por mercado</h3><p class="nt">facturado ÷ meta de cada mes · 🟢≥100 🟡80-99 🔴&lt;80 · número = % del mes</p><div class="vm-regcump">';
+  let any=false;
+  regions.forEach(rg=>{
+    const coms=regComs[rg];
+    const bars=months.map(mo=>{ let meta=0,mh=false,fact=0; coms.forEach(c=>{ const e=vmMeta[c]; if(e&&e.m[mo-1]!=null){meta+=e.m[mo-1];mh=true;} fact+=(act[c]&&act[c].m[mo])||0; }); return { mo, p:(mh&&meta>0)?fact/meta*100:null }; });
+    if(!bars.some(b=>b.p!=null)) return; any=true;
+    const maxP=Math.max(120,...bars.filter(b=>b.p!=null).map(b=>b.p));
+    h+=`<div class="vm-rcrow"><div class="vm-rclab">${vmEsc(rg)}</div><div class="vm-rcbars">`;
+    bars.forEach(b=>{ if(b.p==null){ h+=`<div class="vm-rcb"><div class="vm-rcbar" style="height:0;background:transparent"></div><div class="vm-rcm">${VM_MESES[b.mo]}</div></div>`; return; }
+      const hh=Math.max(3,Math.round(Math.min(b.p,maxP)/maxP*60)); const col=vmCumpColor(b.p);
+      h+=`<div class="vm-rcb" title="${VM_MESES[b.mo]} · ${Math.round(b.p)}%"><div class="vm-rcval" style="color:${col}">${Math.round(b.p)}</div><div class="vm-rcbar" style="height:${hh}px;background:${col}"></div><div class="vm-rcm">${VM_MESES[b.mo]}</div></div>`; });
+    h+=`</div></div>`;
+  });
+  h+='</div></div>';
+  return any?h:'';
+}
 function vmRenderRegiones(allRows){
   const dims=['region','comercial','cliente','producto'], labels=['Región','Comercial','Cliente','Producto'];
   let rows=allRows;
@@ -7171,7 +7204,7 @@ function vmRenderRegiones(allRows){
   const lvl=Math.min(vmRegPath.length,3); const dim=dims[lvl]; const leaf=lvl>=3;
   const m={}; rows.forEach(r=>{ const k=r[dim]||'—'; const o=m[k]||(m[k]={name:k,v:0,kg:0,g:0,vc:0}); o.v+=r.usd;o.kg+=r.kg; if(r.marginFinal!=null){o.g+=r.gmcFinal;o.vc+=r.usd;} });
   const arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0})).sort((a,b)=>b.v-a.v);
-  let html='<div class="vm-panel"><h3>Análisis por región</h3><p class="nt">de lo general a lo específico · click en una fila para entrar</p>';
+  let html=(vmRegPath.length===0?vmRegionCumpChart(vmF.year||'2026'):'')+'<div class="vm-panel"><h3>Análisis por región</h3><p class="nt">de lo general a lo específico · click en una fila para entrar</p>';
   html+=`<div class="vm-crumb"><span class="vm-crumbi" onclick="vmRegTo(0)">🏢 Company</span>`;
   vmRegPath.forEach((p,i)=>{ html+=` <span class="vm-sep">›</span> <span class="vm-crumbi" onclick="vmRegTo(${i+1})">${vmEsc(p)}</span>`; });
   html+=`</div>`;
@@ -7192,6 +7225,27 @@ function vmCapMonth(Y){ const n=new Date(), cy=n.getFullYear(), cm=n.getMonth()+
 function vmActualsByCom(Y){ const map={};
   vmRows.forEach(r=>{ if(String(r.year)!==String(Y))return; const c=r.comercial; const o=map[c]||(map[c]={m:new Array(13).fill(0)}); if(r.month>=1&&r.month<=12) o.m[r.month]+=r.usd; });
   return map; }
+// meta de un mes para un conjunto de comerciales (homologados); null si ninguno tiene meta ese mes
+function vmMetaMonthFor(coms, month){ let s=0,has=false; coms.forEach(c=>{ const e=vmMeta[c]; if(e&&e.m[month-1]!=null){ s+=e.m[month-1]; has=true; } }); return has?s:null; }
+const vmCumpColor = p => p==null?'#8a8578':p>=100?'#2e7d46':p>=80?'#9a7b1f':'#c0392b';
+// Mini línea SVG de cumplimiento % por mes (facturado del mes ÷ meta del mes del scope)
+function vmCumpLineSvg(months, byMonth, scopeComs){
+  const pts=months.map(m=>{ const meta=vmMetaMonthFor(scopeComs,m); const fact=byMonth[m]?byMonth[m].v:0; return { m, p:(meta&&meta>0)?fact/meta*100:null }; });
+  if(!pts.some(x=>x.p!=null)) return '';
+  const W=Math.max(240, months.length*56), H=96, padL=6, padR=6, padT=16, padB=16, iW=W-padL-padR, iH=H-padT-padB;
+  const maxP=Math.max(120, ...pts.filter(x=>x.p!=null).map(x=>x.p));
+  const X=i=>padL+(months.length<=1?iW/2:iW*i/(months.length-1));
+  const Yv=p=>padT+iH*(1-Math.min(p,maxP)/maxP);
+  const seg=pts.map((pt,i)=>pt.p==null?null:`${X(i).toFixed(1)},${Yv(pt.p).toFixed(1)}`).filter(Boolean);
+  let dots=''; pts.forEach((pt,i)=>{ if(pt.p==null)return; const c=vmCumpColor(pt.p);
+    dots+=`<circle cx="${X(i).toFixed(1)}" cy="${Yv(pt.p).toFixed(1)}" r="3" fill="${c}"/>`
+      +`<text x="${X(i).toFixed(1)}" y="${(Yv(pt.p)-6).toFixed(1)}" font-size="9" fill="${c}" text-anchor="middle" font-weight="700">${Math.round(pt.p)}%</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:2px">`
+    +`<line x1="${padL}" y1="${Yv(100).toFixed(1)}" x2="${W-padR}" y2="${Yv(100).toFixed(1)}" stroke="#8a8578" stroke-width="1" stroke-dasharray="3 3" opacity=".55"/>`
+    +`<text x="${(W-padR).toFixed(1)}" y="${(Yv(100)-3).toFixed(1)}" font-size="8" fill="#8a8578" text-anchor="end">meta 100%</text>`
+    +(seg.length>1?`<polyline points="${seg.join(' ')}" fill="none" stroke="#5b6b7f" stroke-width="2"/>`:'')
+    +dots+`</svg>`;
+}
 function vmCumpFor(com, Y, actuals){
   const key=normComercial(com); const meta=vmMeta[key]; if(!meta) return null;
   const capM=vmCapMonth(Y); const mesN=vmF.month?+vmF.month:capM;
@@ -7228,8 +7282,14 @@ function vmCumpAdminHtml(Y){
   const totMetaMes=rows.reduce((s,c)=>s+(c.metaMes||0),0), totFactMes=rows.reduce((s,c)=>s+c.factMes,0);
   const totMetaYTD=rows.reduce((s,c)=>s+(c.metaYTD||0),0), totFactYTD=rows.reduce((s,c)=>s+c.factYTD,0);
   const pct=(f,m)=>m>0?f/m*100:null;
-  let h='<div class="vm-panel vm-cump"><h3>🎯 Cumplimiento vs meta — por comercial</h3>'
-    +'<p class="nt">facturado vs meta (USD) · Mes = '+mesLbl+' · Año = acumulado a la fecha · 🟢≥100% 🟡80-99% 🔴<80%</p>';
+  const cpY=pct(totFactYTD,totMetaYTD), cpM=pct(totFactMes,totMetaMes);
+  let h='<div class="vm-panel vm-cump">';
+  h+=`<h3 onclick="vmCumpOpen=!vmCumpOpen;renderVentasMargenes()" style="cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0">`
+    +`<span>${vmCumpOpen?'▾':'▸'} 🎯 Cumplimiento vs meta</span>`
+    +`<span style="font-weight:700;font-size:13.5px">Año ${vmCumpPctHtml(cpY)}<span style="color:var(--muted)"> · </span>${mesLbl} ${vmCumpPctHtml(cpM)}</span>`
+    +`<span style="font-size:11.5px;color:var(--muted);font-weight:600">· click para ${vmCumpOpen?'ocultar':'ver detalle'}</span></h3>`;
+  if(!vmCumpOpen) return h+'</div>';
+  h+='<p class="nt" style="margin-top:8px">facturado vs meta (USD) · Mes = '+mesLbl+' · Año = acumulado a la fecha · 🟢≥100% 🟡80-99% 🔴<80%</p>';
   h+='<div class="vm-scroll"><table class="vm-tbl"><thead><tr><th>Comercial</th><th>Región</th>'
     +`<th class="r">Meta ${mesLbl}</th><th class="r">Fact. ${mesLbl}</th><th class="r">% mes</th>`
     +'<th class="r">Meta año</th><th class="r">Fact. año</th><th class="r">% año</th></tr></thead><tbody>';
@@ -7386,11 +7446,15 @@ function renderVentasMargenes(){
   html+=vmCumplimientoHtml(gerOK);
   // Tendencia + categorías
   html+='<div class="vm-grid">';
-  html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)</p><div class="vm-trend">';
+  const vmScopeComs=[...new Set(rows.map(r=>r.comercial))];
+  const cumpSvg=Object.keys(vmMeta).length?vmCumpLineSvg(monthsPresent,byMonth,vmScopeComs):'';
+  html+='<div class="vm-panel"><h3>Tendencia mensual</h3><p class="nt">ventas (barras) y margen % (arriba)'+(cumpSvg?' · línea = % cumplimiento del mes':'')+'</p><div class="vm-trend">';
   if(!monthsPresent.length) html+='<div class="vm-msg" style="width:100%">Sin datos para el filtro.</div>';
   monthsPresent.forEach(m=>{ const o=byMonth[m]; const h=Math.max(2,Math.round(o.v/maxV*120)); const p=o.vc?o.g/o.vc*100:0; const sel=String(vmF.month)===String(m);
     html+=`<div class="vm-bar${sel?' sel':''}" style="cursor:pointer" title="${VM_MESES[m]||m} · Ventas ${money(o.v)} · Margen ${p.toFixed(1)}% · (click para filtrar)" onclick="vmOnFilter('month', vmF.month==='${m}'?'':'${m}')"><div class="bp">${p.toFixed(0)}%</div><div class="bb" style="height:${h}px"></div><div class="bl">${VM_MESES[m]||m}<br><span class="bv">${vmAbbr(o.v)}</span></div></div>`; });
-  html+='</div></div>';
+  html+='</div>';
+  if(cumpSvg) html+='<div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:4px"><div class="nt" style="margin:0 0 2px">🎯 Cumplimiento del mes (facturado ÷ meta)</div>'+cumpSvg+'</div>';
+  html+='</div>';
   html+='<div class="vm-panel"><h3>Desglose por categoría</h3><p class="nt">ventas · margen %</p><div class="vm-cat">';
   catArr.forEach(c=>{ const w=Math.round(c.v/maxCat*100);
     html+=`<div class="vm-catrow"><span class="cn">${vmEsc(c.n)}</span><span class="vm-track"><span class="vm-fill" style="width:${w}%;background:${catColor(c.n)}"></span></span><span class="cv">${money(c.v)} · <b style="color:${catColor(c.n)}">${c.p.toFixed(1)}%</b></span></div>`; });
