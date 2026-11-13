@@ -133,27 +133,38 @@ async function main(){
   for(const l of lines){ const a=agg[l.comercial]||(agg[l.comercial]={mtd:{v:0,g:0,vc:0},qtd:{v:0,g:0,vc:0},ytd:{v:0,g:0,vc:0}});
     for(const w of wins){ if(inWin[w](l)){ a[w].v+=l.usd; if(l.marginFinal!=null){a[w].g+=l.gmcFinal;a[w].vc+=l.usd;} } } }
 
-  // Formato Slack
-  const MES=['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const fmtM = n => { n=Math.round(n); return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+Math.round(n/1e3)+'K':'$'+n; };
-  const pad = (s,n)=>String(s).length>=n?String(s).slice(0,n):String(s)+' '.repeat(n-String(s).length);
-  const padL = (s,n)=>String(s).length>=n?String(s):' '.repeat(n-String(s).length)+String(s);
-  const coms = Object.keys(agg).filter(c=>c!=='Sin asignar').sort((a,b)=>agg[b].ytd.v-agg[a].ytd.v);
-  if(agg['Sin asignar']) coms.push('Sin asignar');
-  function section(w,title){
-    let out='**'+title+'**\n```\n'+pad('Comercial',16)+padL('Ventas',9)+padL('Margen$',10)+padL('Mg%',7)+'\n';
-    let tv=0,tg=0,tvc=0;
-    for(const c of coms){ const o=agg[c][w]; if(o.v<=0)continue; const mp=o.vc?o.g/o.vc*100:0;
-      out+=pad(c,16)+padL(fmtM(o.v),9)+padL(fmtM(o.g),10)+padL(mp.toFixed(1)+'%',7)+'\n'; tv+=o.v;tg+=o.g;tvc+=o.vc; }
-    out+=pad('TOTAL',16)+padL(fmtM(tv),9)+padL(fmtM(tg),10)+padL((tvc?tg/tvc*100:0).toFixed(1)+'%',7)+'\n```\n';
-    return out;
-  }
+  // Formato Slack (estilo del bot de Cartera: bullets por comercial)
+  const MES=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmtM = n => { const s=n<0?'-':''; n=Math.abs(Math.round(n)); return s+(n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+Math.round(n/1e3)+'k':'$'+n); };
+  const mpOf = o => o.vc?o.g/o.vc*100:0;
+  const dot = mp => mp<15?' 🔴':mp<22?' 🟡':'';
+  // Comerciales "reales" vs facturación adicional (placeholders / sin asignar)
+  const MAIN = new Set(['Santiago','Diego','Pablo','Michal','Juan David','Ricardo','Luis','Isis','Shady','Samuel','Sebastian','Andres']);
+  const mains = Object.keys(agg).filter(c=>MAIN.has(c) && agg[c].ytd.v>0).sort((a,b)=>agg[b].ytd.v-agg[a].ytd.v);
+  const otrosNames = Object.keys(agg).filter(c=>!MAIN.has(c) && agg[c].ytd.v>0);
+  const otros={mtd:{v:0,g:0,vc:0},qtd:{v:0,g:0,vc:0},ytd:{v:0,g:0,vc:0}};
+  otrosNames.forEach(c=>['mtd','qtd','ytd'].forEach(w=>{ otros[w].v+=agg[c][w].v; otros[w].g+=agg[c][w].g; otros[w].vc+=agg[c][w].vc; }));
+  // totales
+  const tot={mtd:{v:0,g:0,vc:0},qtd:{v:0,g:0,vc:0},ytd:{v:0,g:0,vc:0}};
+  Object.keys(agg).forEach(c=>['mtd','qtd','ytd'].forEach(w=>{ tot[w].v+=agg[c][w].v; tot[w].g+=agg[c][w].g; tot[w].vc+=agg[c][w].vc; }));
+
+  const line = (name,a) => `• **${name}** — YTD ${fmtM(a.ytd.v)} (${mpOf(a.ytd).toFixed(0)}%)${dot(mpOf(a.ytd))} · QTD ${fmtM(a.qtd.v)} · MTD ${fmtM(a.mtd.v)}`;
   const fecha = `${asOf.getDate()} ${MES[M]} ${Y}`;
-  let msg = `📊 **Ventas & Margen por comercial** — QuickBooks\nCorte: viernes ${fecha}\n\n`;
-  msg += section('mtd', `MTD · ${MES[M]} ${Y}`);
-  msg += section('qtd', `QTD · Q${Qt+1} ${Y}`);
-  msg += section('ytd', `YTD · ${Y}`);
-  msg += `\n_Ventas facturadas y margen Final (contrato prima en Community). Servicios excluidos._`;
+  let msg = `📊 **Ventas & Márgenes por comercial** — ${fecha} (QuickBooks)\n`;
+  msg += `YTD **${fmtM(tot.ytd.v)}** · margen **${fmtM(tot.ytd.g)} (${mpOf(tot.ytd).toFixed(0)}%)**  ·  QTD ${fmtM(tot.qtd.v)}  ·  MTD ${fmtM(tot.mtd.v)}\n`;
+  msg += `_Por comercial, de mayor a menor venta YTD:_\n\n`;
+  mains.forEach(c=>{ msg += line(c, agg[c]) + '\n'; });
+  if(otros.ytd.v>0) msg += `• **Facturación adicional** — YTD ${fmtM(otros.ytd.v)} · QTD ${fmtM(otros.qtd.v)} · MTD ${fmtM(otros.mtd.v)}  _(${otrosNames.join(', ')})_\n`;
+  msg += `— **TOTAL** — YTD ${fmtM(tot.ytd.v)} (${mpOf(tot.ytd).toFixed(0)}%) · QTD ${fmtM(tot.qtd.v)} · MTD ${fmtM(tot.mtd.v)}\n\n`;
+  // destacados (sobre comerciales reales)
+  if(mains.length){
+    const topV = mains[0];
+    const topM = mains.slice().filter(c=>agg[c].ytd.vc>0).sort((a,b)=>mpOf(agg[b].ytd)-mpOf(agg[a].ytd))[0];
+    const lowM = mains.slice().filter(c=>agg[c].ytd.vc>0).sort((a,b)=>mpOf(agg[a].ytd)-mpOf(agg[b].ytd))[0];
+    msg += `🥇 Mayor venta: **${topV}** ${fmtM(agg[topV].ytd.v)}\n`;
+    if(topM) msg += `📈 Mejor margen: **${topM}** ${mpOf(agg[topM].ytd).toFixed(0)}%  ·  📉 Menor: **${lowM}** ${mpOf(agg[lowM].ytd).toFixed(0)}%\n`;
+  }
+  msg += `👉 https://reservasforest.netlify.app`;
   process.stdout.write(msg);
 }
 main().catch(e=>{ console.error('ERROR', e); process.exit(1); });
