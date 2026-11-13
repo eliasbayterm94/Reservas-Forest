@@ -1595,7 +1595,7 @@ function rebuildRowCaches(){
     (m.clients||[]).forEach(c=>{
       RESERVED_ROWS.push({
         ico:m.ico, product:m.product, category:m.series, region:m.region, warehouse:m.warehouse,
-        cliente:c.cliente, tipo:c.tipo||'', bags:c.bags, kg:c.kg, vejez_dias:m.vejez_dias, vejez_grupo:m.vejez_grupo, bag_size:m.bag_size,
+        estado:'Reservado', cliente:c.cliente, tipo:c.tipo||'', bags:c.bags, kg:c.kg, vejez_dias:m.vejez_dias, vejez_grupo:m.vejez_grupo, bag_size:m.bag_size,
         price: c.price || m.price || 0, price_src: c.price ? c.price_src : (m.price ? 'Spot' : ''),
         container:m.container||''
       });
@@ -1603,7 +1603,7 @@ function rebuildRowCaches(){
     if(m.free_bags>0){
       FREE_ROWS.push({
         ico:m.ico, product:m.product, category:m.series, region:m.region, warehouse:m.warehouse,
-        bags:m.free_bags, kg:m.free_bags*(m.bag_size||0), vejez_dias:m.vejez_dias, vejez_grupo:m.vejez_grupo, bag_size:m.bag_size,
+        estado:'Libre', cliente:'', tipo:'', bags:m.free_bags, kg:m.free_bags*(m.bag_size||0), vejez_dias:m.vejez_dias, vejez_grupo:m.vejez_grupo, bag_size:m.bag_size,
         price: m.price || 0, price_src: m.price ? 'Spot' : '',
         container:m.container||''
       });
@@ -1638,7 +1638,7 @@ function warehousesForRegion(region){
 }
 
 function renderFilterControls(){
-  document.getElementById('modeChips').innerHTML = [['reservado','Reservado'],['libre','Libre']].map(([v,l])=>
+  document.getElementById('modeChips').innerHTML = [['reservado','Reservado'],['libre','Libre'],['ambos','Ambos']].map(([v,l])=>
     `<div class="chip ${detState.mode===v?'active':''}" data-mode="${v}">${l}</div>`).join('');
   document.getElementById('detRegionChips').innerHTML = `<div class="chip ${!detState.region?'active':''}" data-region="">Todas</div>` +
     REGIONS.map(r=>`<div class="chip ${detState.region===r?'active':''}" data-region="${r}">${r}</div>`).join('');
@@ -1714,6 +1714,7 @@ const TIPO_RESERVA = {SPOT:'Spot', CONTRACT:'Contrato', CONTRATO:'Contrato'};
 const DETAIL_COLS = {
   lote_reservado: [['ico','ICO'],['product','Producto'],['category','Categoría'],['container','Contenedor'],['region','Región'],['warehouse','Bodega'],['cliente','Cliente'],['tipo','Spot / Contrato'],['bag_size','Size','num'],['price','Precio','num'],['price_src','Precio de'],['bags','Cantidad','num'],['kg','KG','num'],['vejez_dias','Vejez (d)','num'],['vejez_grupo','Grupo Vejez']],
   lote_libre:     [['ico','ICO'],['product','Producto'],['category','Categoría'],['container','Contenedor'],['region','Región'],['warehouse','Bodega'],['bag_size','Size','num'],['price','Precio','num'],['bags','Cantidad Libre','num'],['kg','KG Libre','num'],['vejez_dias','Vejez (d)','num'],['vejez_grupo','Grupo Vejez']],
+  lote_ambos:     [['ico','ICO'],['estado','Estado'],['product','Producto'],['category','Categoría'],['container','Contenedor'],['region','Región'],['warehouse','Bodega'],['cliente','Cliente'],['tipo','Spot / Contrato'],['bag_size','Size','num'],['price','Precio','num'],['bags','Cantidad','num'],['kg','KG','num'],['vejez_dias','Vejez (d)','num'],['vejez_grupo','Grupo Vejez']],
   cliente:        [['cliente','Cliente'],['n_lotes','# Lotes','num'],['bags','Cantidad','num'],['kg','KG','num'],['regiones','Regiones']],
 };
 
@@ -1869,7 +1870,7 @@ function descargarDetalleExcel(){
     return porLote ? base.concat([isCaja(r.bag_size) ? 'caja' : 'saco']) : base;
   });
   const fecha = (DATA.meta && DATA.meta.generated_for_date) || new Date().toISOString().slice(0,10);
-  const etiqueta = detState.mode==='reservado' ? 'Reservas' : 'Libre';
+  const etiqueta = detState.mode==='reservado' ? 'Reservas' : detState.mode==='ambos' ? 'Reservas y libre' : 'Libre';
   descargarArchivo(xlsxBlob(encabezados, filas, 'Detalle'), 'Detalle ' + etiqueta + ' ' + fecha + '.xlsx');
   btn.innerHTML = '✓ ' + filas.length + ' filas';
   setTimeout(()=>{ btn.innerHTML = antes; }, 2200);
@@ -1909,10 +1910,13 @@ function descargarIcosViejos(){
 
 function renderDetail(){
   renderActiveFiltersLine();
-  const source = detState.mode==='reservado' ? RESERVED_ROWS : FREE_ROWS;
+  // Ambos: las reservas y el libre de cada ICO en una sola tabla, con una
+  // columna Estado que dice cuál es cuál.
+  const ambos = detState.mode==='ambos';
+  const source = ambos ? RESERVED_ROWS.concat(FREE_ROWS) : detState.mode==='reservado' ? RESERVED_ROWS : FREE_ROWS;
   let rows = source.filter(matchesFilters);
 
-  let colsKey = detState.mode==='reservado' ? 'lote_reservado' : 'lote_libre';
+  let colsKey = ambos ? 'lote_ambos' : detState.mode==='reservado' ? 'lote_reservado' : 'lote_libre';
   let displayRows = rows;
 
   if(detState.mode==='reservado' && detState.groupBy==='cliente'){
@@ -1928,6 +1932,14 @@ function renderDetail(){
     });
     displayRows = Object.values(byClient).map(c=>({...c, bags:fmtUnitsSplit(c.sacos,c.cajas), regiones:[...c.regionsSet].join(', ')}));
     displayRows.sort((a,b)=>b.kg-a.kg);
+  } else if(ambos){
+    // Agrupado por ICO (el de más KG primero) para ver juntas las reservas
+    // y el libre de cada lote; dentro del ICO, primero lo reservado.
+    const kgIco = {};
+    rows.forEach(r=>{ kgIco[r.ico] = (kgIco[r.ico]||0) + r.kg; });
+    displayRows = rows.slice().sort((a,b)=>
+      (kgIco[b.ico]-kgIco[a.ico]) || String(a.ico).localeCompare(String(b.ico)) ||
+      ((a.estado==='Libre')-(b.estado==='Libre')) || (b.kg-a.kg));
   } else {
     displayRows = rows.slice().sort((a,b)=>b.kg-a.kg);
   }
@@ -1939,11 +1951,21 @@ function renderDetail(){
   const totalKg = rows.reduce((s,r)=>s+r.kg,0);
   const totalSacos = rows.filter(r=>!isCaja(r.bag_size)).reduce((s,r)=>s+r.bags,0);
   const totalCajas = rows.filter(r=>isCaja(r.bag_size)).reduce((s,r)=>s+r.bags,0);
-  const nClientes = detState.mode==='reservado' ? new Set(rows.map(r=>(r.cliente||'').toLowerCase().trim())).size : 0;
+  const nClientes = detState.mode!=='libre' ? new Set(rows.filter(r=>r.cliente).map(r=>r.cliente.toLowerCase().trim())).size : 0;
   const nLotes = new Set(rows.map(r=>r.ico)).size;
 
   const summaryEl = document.getElementById('detailSummary');
-  if(detState.mode==='reservado'){
+  if(ambos){
+    const kgRes = rows.filter(r=>r.estado==='Reservado').reduce((s,r)=>s+r.kg,0);
+    summaryEl.innerHTML = `
+      <div class="dstat"><b>${fmtKg(totalKg)}</b>KG total (filtro actual)</div>
+      <div class="dstat"><b>${fmtKg(kgRes)}</b>reservado</div>
+      <div class="dstat"><b>${fmtKg(totalKg-kgRes)}</b>libre</div>
+      <div class="dstat"><b>${fmtUnitsSplit(totalSacos,totalCajas)}</b></div>
+      <div class="dstat"><b>${nLotes}</b>lotes (ICO)</div>
+      <div class="dstat"><b>${nClientes}</b>clientes distintos</div>
+    `;
+  } else if(detState.mode==='reservado'){
     summaryEl.innerHTML = `
       <div class="dstat"><b>${fmtKg(totalKg)}</b>KG reservado (filtro actual)</div>
       <div class="dstat"><b>${fmtUnitsSplit(totalSacos,totalCajas)}</b></div>
@@ -1974,6 +1996,8 @@ function renderDetail(){
         if(k==='price_src') v = v || '—';
         if(k==='region') v = `<b style="color:${REGION_COLORS[v]}">${v}</b>`;
         if(k==='container') v = v || '—';
+        if(k==='cliente' && colsKey==='lote_ambos') v = v || '—';
+        if(k==='estado') v = `<span class="tag ${v==='Libre'?'age-fresh':''}" style="${v==='Libre'?'':'color:var(--teal)'}">${v}</span>`;
         if(k==='tipo') v = v ? (TIPO_RESERVA[String(v).toUpperCase()] || v) : '—';
         const tip = (k==='ico'||k==='product') ? ` title="${String(r[k]||'').replace(/"/g,'&quot;')}"` : '';
         return `<td class="${cls||''} col-${k}"${tip}>${v}</td>`;
