@@ -6784,7 +6784,9 @@ let vmSub = 'resumen';   // sub-pestaña: resumen | clientes | productos | regio
 let vmCliOpen = '';      // cliente expandido (drill a productos) en sub-vista Clientes
 let vmRegPath = [];      // breadcrumb de la sub-vista Regiones [region, comercial, cliente]
 let vmCliSort = { key:'v', dir:-1 }, vmProdSort = { key:'v', dir:-1 };
-function vmSetSub(s){ vmSub=s; vmCliOpen=''; renderVentasMargenes(); }
+let vmProdOpen = '', vmProdQ = '';   // producto expandido + buscador propio de Productos
+function vmProdToggle(name){ vmProdOpen = (vmProdOpen===name?'':name); renderVentasMargenes(); }
+function vmSetSub(s){ vmSub=s; vmCliOpen=''; vmProdOpen=''; renderVentasMargenes(); }
 function vmMacroCat(cat){ cat=(cat||'').toUpperCase(); if(cat==='COMMUNITY') return 'Community'; if(cat==='MICROLOT'||cat==='INNOVATION'||cat==='RESERVE') return 'MIR'; return 'Otros'; }
 const vmEscJs = s => String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 function vmCliToggle(name){ vmCliOpen = (vmCliOpen===name?'':name); renderVentasMargenes(); }
@@ -7098,9 +7100,12 @@ function vmRenderProductos(rows){
   rows.forEach(r=>{ const k=(r.producto||'—'); const o=m[k]||(m[k]={name:k,cat:r.cat,kg:0,v:0,g:0,vc:0,cl:new Set()});
     o.kg+=r.kg; o.v+=r.usd; o.cl.add(r.cliente); if(r.marginFinal!=null){o.g+=r.gmcFinal;o.vc+=r.usd;} if(!o.cat&&r.cat)o.cat=r.cat; });
   let arr=Object.values(m).map(o=>({...o,p:o.vc?o.g/o.vc*100:0,nc:o.cl.size}));
+  const q=(vmProdQ||'').trim().toLowerCase();
+  if(q) arr=arr.filter(o=>String(o.name).toLowerCase().includes(q));
   const sk=vmProdSort.key, dir=vmProdSort.dir;
   arr.sort((a,b)=> sk==='name' ? dir*String(a.name).localeCompare(String(b.name)) : dir*((a[sk]||0)-(b[sk]||0)) );
-  let html='<div class="vm-panel"><h3>Productos</h3><p class="nt">foco en el producto · click en los encabezados para ordenar (más/menos vendidos, mejor/peor margen) · '+arr.length+' productos</p>';
+  let html='<div class="vm-panel"><h3>Productos</h3><p class="nt">foco en el producto · click en un producto para ver qué clientes lo compran · click en los encabezados para ordenar · '+arr.length+' productos</p>';
+  html+=`<div style="margin-bottom:10px"><input type="text" placeholder="Buscar producto…" value="${vmEsc(vmProdQ)}" style="width:260px;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13.5px" oninput="vmProdQ=this.value; clearTimeout(window._vmpq); window._vmpq=setTimeout(renderVentasMargenes,250)"></div>`;
   html+='<div class="vm-scroll tall"><table class="vm-tbl"><thead><tr>'
     +`<th onclick="vmSetProdSort('name')">Producto${vmArrowP('name')}</th><th>Cat.</th>`
     +`<th class="r" onclick="vmSetProdSort('kg')">KG${vmArrowP('kg')}</th>`
@@ -7109,10 +7114,18 @@ function vmRenderProductos(rows){
     +`<th class="r" onclick="vmSetProdSort('p')">% Margen${vmArrowP('p')}</th>`
     +`<th class="r" onclick="vmSetProdSort('nc')"># Clientes${vmArrowP('nc')}</th></tr></thead><tbody>`;
   arr.slice(0,500).forEach(o=>{
-    html+=`<tr><td class="cl">${vmEsc(o.name)}</td><td>${o.cat?`<span class="vm-tag ${vmTagCls((o.cat||'').toUpperCase())}">${vmEsc(o.cat).slice(0,4)}</span>`:''}</td>`
+    const open=vmProdOpen===o.name;
+    html+=`<tr style="cursor:pointer" onclick="vmProdToggle('${vmEscJs(o.name)}')"><td class="cl">${open?'▾ ':'▸ '}${vmEsc(o.name)}</td><td>${o.cat?`<span class="vm-tag ${vmTagCls((o.cat||'').toUpperCase())}">${vmEsc(o.cat).slice(0,4)}</span>`:''}</td>`
       +`<td class="r">${Math.round(o.kg).toLocaleString('en-US')}</td><td class="r">${money(o.v)}</td>`
       +`<td class="r vm-pos">${o.vc?money(o.g):'—'}</td><td class="r ${o.p<0?'vm-neg':o.p<15?'vm-warn':'vm-pos'}">${o.vc?o.p.toFixed(1)+'%':'—'}</td>`
       +`<td class="r">${o.nc}</td></tr>`;
+    if(open){
+      const cm={}; rows.filter(r=>(r.producto||'—')===o.name).forEach(r=>{ const c=cm[r.cliente]||(cm[r.cliente]={name:r.cliente,kg:0,v:0,g:0,vc:0}); c.kg+=r.kg; c.v+=r.usd; if(r.marginFinal!=null){c.g+=r.gmcFinal;c.vc+=r.usd;} });
+      const clis=Object.values(cm).map(c=>({...c,pct:c.vc?c.g/c.vc*100:0})).sort((a,b)=>b.v-a.v);
+      html+='<tr class="vm-sub"><td colspan="7" style="padding:0 0 0 18px;background:var(--row-alt)"><table class="vm-tbl" style="margin:6px 0"><thead><tr><th>Cliente</th><th class="r">KG</th><th class="r">Ventas</th><th class="r">% Margen</th></tr></thead><tbody>';
+      clis.forEach(c=>{ html+=`<tr><td>${vmEsc(c.name)}</td><td class="r">${Math.round(c.kg).toLocaleString('en-US')}</td><td class="r">${money(c.v)}</td><td class="r ${c.pct<0?'vm-neg':c.pct<15?'vm-warn':'vm-pos'}">${c.vc?c.pct.toFixed(1)+'%':'—'}</td></tr>`; });
+      html+='</tbody></table></td></tr>';
+    }
   });
   html+='</tbody></table></div></div>';
   return html;
