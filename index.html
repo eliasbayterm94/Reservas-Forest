@@ -1491,6 +1491,10 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
     .vm-unitdim{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
     .vm-unitdim button{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer}
     .vm-unitdim button.on{background:var(--fc-navy,#1a2238);color:#fff;border-color:var(--fc-navy,#1a2238)}
+    .vm-ufilters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:2px 0 14px}
+    .vm-ufilters label{font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+    .vm-ufilters select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text);font-weight:600;max-width:240px}
+    .vm-uclear{font-size:12px;font-weight:700;border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:8px;padding:6px 10px;cursor:pointer}
     .vm-share{width:44px;height:7px;border-radius:4px;background:var(--border);display:inline-block;overflow:hidden;vertical-align:middle}
     .vm-sharef{display:block;height:100%;border-radius:4px}
     .vm-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;background:var(--ctr-bg);color:var(--ctr-fg)}
@@ -6801,6 +6805,8 @@ let vmCmpOpen = false;   // comparativo HubSpot desplegado
 let vmCumpOpen = false;  // cumplimiento (admin) desplegado
 let vmRegCumpOpen = false; // cumplimiento por mercado (tab regiones) desplegado
 let vmUnitDim = 'producto';  // dimensión del ranking en Unit Economics
+let vmUnitCat = '';          // Unit Economics: filtro de categoría
+let vmUnitProd = '';         // Unit Economics: producto escogido
 let vmSub = 'resumen';   // sub-pestaña: resumen | clientes | productos | regiones
 let vmCliOpen = '';      // cliente expandido (drill a productos) en sub-vista Clientes
 let vmRegPath = [];      // breadcrumb de la sub-vista Regiones [region, comercial, cliente]
@@ -7109,20 +7115,34 @@ const vmArrowP = k => vmProdSort.key===k?(vmProdSort.dir<0?' ▾':' ▴'):'';
 // ===== Unit Economics (economía por kg · por lb cuando el filtro es USA) =====
 const VM_LBK = 0.45359237;   // kg por libra
 function vmSetUnitDim(d){ vmUnitDim=d; renderVentasMargenes(); }
+function vmSetUnitCat(v){ vmUnitCat=v; vmUnitProd=''; if(v) vmUnitDim='producto'; renderVentasMargenes(); }
+function vmSetUnitProd(v){ vmUnitProd=v; renderVentasMargenes(); }
 function uKpi(cls,k,v,s){ return `<div class="vm-kpi ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`; }
 function vmRenderUnit(rows){
   const isLb = String(vmF.region)==='USA'; const u = isLb?'lb':'kg'; const f = isLb?VM_LBK:1;
   const perU = v => '$'+(v*f).toFixed(2)+'/'+u;        // $/kg -> $/unidad
   const fmtQ = kg => Math.round(kg/f).toLocaleString('en-US');  // kg -> unidades
 
+  // selectores que refinan TODO el tab (comparar dentro de una categoría / un producto)
+  const cats=[...new Set(rows.map(r=>r.cat).filter(Boolean))].sort();
+  let urows=rows; if(vmUnitCat) urows=urows.filter(r=>r.cat===vmUnitCat);
+  const prods=[...new Set(urows.map(r=>r.producto).filter(Boolean))].sort();
+  if(vmUnitProd) urows=urows.filter(r=>r.producto===vmUnitProd);
+
   let V=0,KG=0,G=0,KGm=0,Vm=0; const facturas=new Set();
-  rows.forEach(r=>{ V+=r.usd; KG+=r.kg; if(r.factura)facturas.add(r.region+'|'+r.factura);
+  urows.forEach(r=>{ V+=r.usd; KG+=r.kg; if(r.factura)facturas.add(r.region+'|'+r.factura);
     if(r.marginFinal!=null){ G+=r.gmcFinal; KGm+=r.kg; Vm+=r.usd; } });
   const nFac=facturas.size||1;
   const priceKg=KGm>0?Vm/KGm:0, marginKg=KGm>0?G/KGm:0, costKg=priceKg-marginKg, mgPct=priceKg>0?marginKg/priceKg*100:0;
 
   let html='';
   html+=`<div class="vm-note-ger"><b>Economía unitaria</b> · unidad: <b>${u.toUpperCase()}</b> · ${isLb?'filtro USA → se muestra por libra':'filtra Región = USA para verlo por libra'}</div>`;
+  html+='<div class="vm-ufilters">'
+    +`<label>Categoría <select onchange="vmSetUnitCat(this.value)"><option value="">Todas</option>${cats.map(c=>`<option value="${vmEsc(c)}"${c===vmUnitCat?' selected':''}>${vmEsc(c)}</option>`).join('')}</select></label>`
+    +`<label>Producto <select onchange="vmSetUnitProd(this.value)"><option value="">Todos</option>${prods.map(p=>`<option value="${vmEsc(p)}"${p===vmUnitProd?' selected':''}>${vmEsc(p)}</option>`).join('')}</select></label>`
+    +((vmUnitCat||vmUnitProd)?`<button class="vm-uclear" onclick="vmUnitCat='';vmUnitProd='';renderVentasMargenes()">✕ limpiar</button>`:'')
+    +(vmUnitCat?`<span class="nt" style="margin:0">comparando productos de <b>${vmEsc(vmUnitCat)}</b></span>`:'')
+    +'</div>';
   html+='<div class="vm-ukpis">'
     +uKpi('','Precio / '+u, perU(priceKg), 'venta promedio')
     +uKpi('','Costo café / '+u, perU(costKg), 'base cost implícito')
@@ -7140,7 +7160,7 @@ function vmRenderUnit(rows){
   const dims=[['producto','Producto'],['cliente','Cliente'],['categoria','Categoría'],['comercial','Comercial'],['region','Región']];
   const dimLbl=(dims.find(d=>d[0]===vmUnitDim)||['','Producto'])[1];
   const dimKey=vmUnitDim==='categoria'?'cat':vmUnitDim;
-  const m={}; rows.forEach(r=>{ if(r.marginFinal==null)return; const k=(r[dimKey]||'—'); const o=m[k]||(m[k]={name:k,kg:0,v:0,g:0}); o.kg+=r.kg; o.v+=r.usd; o.g+=r.gmcFinal; });
+  const m={}; urows.forEach(r=>{ if(r.marginFinal==null)return; const k=(r[dimKey]||'—'); const o=m[k]||(m[k]={name:k,kg:0,v:0,g:0}); o.kg+=r.kg; o.v+=r.usd; o.g+=r.gmcFinal; });
   const arr=Object.values(m).map(o=>({...o,pk:o.kg>0?o.v/o.kg:0,ck:o.kg>0?(o.v-o.g)/o.kg:0,mk:o.kg>0?o.g/o.kg:0,pct:o.v>0?o.g/o.v*100:0})).sort((a,b)=>b.mk-a.mk);
   const maxMk=Math.max(0.01,...arr.map(a=>a.mk));
   html+='<div class="vm-panel"><h3>Unit economics por '+dimLbl.toLowerCase()+'</h3>';
@@ -7163,7 +7183,7 @@ function vmUnitWaterfall(price,cost,margin,f){
   return s+'</svg>';
 }
 function vmUnitBenchmark(f,u){
-  const base=vmFilter(vmRows,'region').filter(r=>r.marginFinal!=null);
+  const base=vmFilter(vmRows,'region').filter(r=>r.marginFinal!=null && (!vmUnitCat||r.cat===vmUnitCat) && (!vmUnitProd||r.producto===vmUnitProd));
   const m={}; base.forEach(r=>{ const k=r.region||'—'; const o=m[k]||(m[k]={kg:0,v:0,g:0}); o.kg+=r.kg; o.v+=r.usd; o.g+=r.gmcFinal; });
   const arr=Object.entries(m).map(([n,o])=>({n,pk:o.kg>0?o.v/o.kg:0,ck:o.kg>0?(o.v-o.g)/o.kg:0,mk:o.kg>0?o.g/o.kg:0,pct:o.v>0?o.g/o.v*100:0})).sort((a,b)=>b.mk-a.mk);
   if(!arr.length) return '<p class="nt">Sin datos.</p>';
@@ -7173,17 +7193,25 @@ function vmUnitBenchmark(f,u){
   return h+'</tbody></table>';
 }
 function vmUnitScatter(arr,u,f){
-  const pts=arr.filter(o=>o.kg>0).map(o=>({name:o.name,x:o.kg/f,y:o.mk*f,tot:o.g}));
+  const pts=arr.filter(o=>o.kg>0).map(o=>({name:o.name,x:o.kg/f,y:o.mk*f,tot:o.g})).sort((a,b)=>b.tot-a.tot);
   if(pts.length<2) return '<p class="nt">Pocos datos para el gráfico.</p>';
-  const W=900,H=320,padL=52,padR=16,padT=14,padB=36,iW=W-padL-padR,iH=H-padT-padB;
-  const maxX=Math.max(...pts.map(p=>p.x))||1, maxY=(Math.max(...pts.map(p=>p.y))||1)*1.15, maxT=Math.max(...pts.map(p=>p.tot))||1;
-  const X=v=>padL+iW*v/maxX, Y=v=>padT+iH*(1-v/maxY);
+  const W=900,H=340,padL=56,padR=18,padT=16,padB=40,iW=W-padL-padR,iH=H-padT-padB;
+  const maxX=Math.max(...pts.map(p=>p.x))||1, maxY=(Math.max(...pts.map(p=>p.y))||1)*1.12, maxT=Math.max(...pts.map(p=>p.tot))||1;
+  const sx=Math.sqrt(maxX)||1;                     // escala √ en X: separa a los de bajo volumen
+  const X=v=>padL+iW*Math.sqrt(v)/sx, Y=v=>padT+iH*(1-v/maxY);
+  const totKg=pts.reduce((s,p)=>s+p.x,0), avgY=totKg>0?pts.reduce((s,p)=>s+p.y*p.x,0)/totKg:0;
+  const LBLN=Math.min(10,pts.length);
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
   s+=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+iH}" stroke="#d6dae0"/><line x1="${padL}" y1="${padT+iH}" x2="${W-padR}" y2="${padT+iH}" stroke="#d6dae0"/>`;
   for(let g=0;g<=3;g++){ const yy=padT+iH*g/3,val=maxY*(1-g/3); s+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#eef0f2"/><text x="${padL-6}" y="${(yy+3).toFixed(1)}" font-size="9" text-anchor="end" fill="#8a8f9a">$${val.toFixed(1)}</text>`; }
-  pts.forEach(p=>{ const r=6+Math.sqrt(p.tot/maxT)*24;
-    s+=`<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${r.toFixed(1)}" fill="#2e7d46" opacity="0.22"/><circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="3" fill="#2e7d46"/><text x="${X(p.x).toFixed(1)}" y="${(Y(p.y)-r-4).toFixed(1)}" font-size="9.5" text-anchor="middle" fill="#1a2238" font-weight="600">${vmEsc(String(p.name).split(' ')[0]).slice(0,12)}</text>`; });
-  s+=`<text x="${padL+iW/2}" y="${H-6}" font-size="10.5" text-anchor="middle" fill="#8a8f9a">${u.toUpperCase()} vendidos →</text><text x="12" y="${(padT+iH/2).toFixed(1)}" font-size="10.5" text-anchor="middle" fill="#8a8f9a" transform="rotate(-90 12 ${(padT+iH/2).toFixed(1)})">margen / ${u} →</text>`;
+  if(avgY>0){ const ay=Y(avgY); s+=`<line x1="${padL}" y1="${ay.toFixed(1)}" x2="${W-padR}" y2="${ay.toFixed(1)}" stroke="#9a7b1f" stroke-dasharray="4 3" stroke-width="1" opacity=".75"/><text x="${(W-padR).toFixed(1)}" y="${(ay-3).toFixed(1)}" font-size="8.5" text-anchor="end" fill="#9a7b1f">promedio $${avgY.toFixed(2)}/${u}</text>`; }
+  pts.forEach((p,i)=>{ const r=5+Math.sqrt(p.tot/maxT)*22, cx=X(p.x),cy=Y(p.y);
+    s+=`<g><title>${vmEsc(p.name)}  ·  ${Math.round(p.x).toLocaleString('en-US')} ${u}  ·  $${p.y.toFixed(2)}/${u}  ·  margen total ${money(p.tot)}</title>`
+      +`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="#2e7d46" opacity="0.20"/><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.6" fill="#2e7d46"/>`
+      +(i<LBLN?`<text x="${cx.toFixed(1)}" y="${(cy-r-4).toFixed(1)}" font-size="9.5" text-anchor="middle" fill="#1a2238" font-weight="600">${vmEsc(String(p.name).slice(0,18))}</text>`:'')
+      +`</g>`; });
+  s+=`<text x="${padL+iW/2}" y="${H-6}" font-size="10.5" text-anchor="middle" fill="#8a8f9a">${u.toUpperCase()} vendidos → (escala √)</text><text x="13" y="${(padT+iH/2).toFixed(1)}" font-size="10.5" text-anchor="middle" fill="#8a8f9a" transform="rotate(-90 13 ${(padT+iH/2).toFixed(1)})">margen / ${u} →</text>`;
+  s+=`<text x="${(padL+4).toFixed(1)}" y="${(padT+11).toFixed(1)}" font-size="9" fill="#8a8f9a">etiquetadas: top ${LBLN} por margen · pasa el mouse para ver el resto</text>`;
   return s+'</svg>';
 }
 // Celda: peso de un margen $ sobre el margen de contribución TOTAL del scope filtrado.
