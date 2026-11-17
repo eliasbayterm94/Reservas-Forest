@@ -601,7 +601,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
-  <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
+  <!-- Oculta a pedido de Laura (17-nov-2026); para volver a mostrarla, quitar el style. -->
+  <button class="tab" id="tabRot90" style="display:none" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
   <button class="tab" id="tabCtrlInv" onclick="switchTab('ctrlinv')"><i data-lucide="boxes"></i> Control Inventario</button>
   <button class="tab" id="tabVentas" onclick="switchTab('ventas')"><i data-lucide="trending-up"></i> Ventas &amp; Márgenes</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
