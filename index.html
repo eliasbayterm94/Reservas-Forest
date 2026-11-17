@@ -5110,7 +5110,7 @@ async function exportControlInvPDF(btn){
   }finally{ if(btn){ btn.disabled=false; btn.innerHTML=old; if(window.lucide) lucide.createIcons(); } }
 }
 // ── Vista Gerencia (con código) ──
-const GERENCIA_CODE = 'forest2026';   // ← cámbialo por el código que quieras
+const GERENCIA_CODE = 'Vergel2027';   // ← cámbialo por el código que quieras
 function gerUnlock(){
   const v=($('gerCode').value||'').trim();
   if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarGerencia(); }
