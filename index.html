@@ -601,7 +601,8 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
   <button class="tab" id="tabCartera" onclick="switchTab('cartera')"><i data-lucide="wallet"></i> Receivables</button>
   <button class="tab" id="tabHistorial" onclick="switchTab('historial')"><i data-lucide="archive"></i> History</button>
   <button class="tab" id="tabRepcom" onclick="switchTab('repcom')"><i data-lucide="badge-percent"></i> Cartera Comisiones</button>
-  <button class="tab" id="tabRot90" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
+  <!-- Oculta a pedido de Laura (17-nov-2026); para volver a mostrarla, quitar el style. -->
+  <button class="tab" id="tabRot90" style="display:none" onclick="switchTab('rotacion90')"><i data-lucide="refresh-cw"></i> Rotación &amp; Vejez</button>
   <button class="tab" id="tabCtrlInv" onclick="switchTab('ctrlinv')"><i data-lucide="boxes"></i> Control Inventario</button>
   <button class="tab" id="tabVentas" onclick="switchTab('ventas')"><i data-lucide="trending-up"></i> Ventas &amp; Márgenes</button>
   <button class="tab" id="tabGerencia" onclick="switchTab('gerencia')"><i data-lucide="lock"></i> Management</button>
@@ -1031,17 +1032,7 @@ textarea.pn-inp{height:76px;padding:9px 12px;resize:none}
 
 <!-- ══════════ VISTA: CONTROL INVENTARIO (dashboard embebido) ══════════ -->
 <div id="viewControlInv" class="view hidden">
-  <div id="ciLock" class="gerlock">
-    <div class="gerlock-card">
-      <div class="gerlock-ico"><i data-lucide="lock"></i></div>
-      <div class="gerlock-title">Control Inventario</div>
-      <div class="gerlock-sub">Ingresa el código de acceso</div>
-      <input id="ciCode" type="password" class="gerlock-inp" placeholder="Código" onkeydown="if(event.key==='Enter')ciUnlock()">
-      <button class="gerlock-btn" onclick="ciUnlock()">Entrar</button>
-      <div id="ciErr" class="gerlock-err"></div>
-    </div>
-  </div>
-  <div id="ciContent" class="gercontent hidden">
+  <div id="ciContent" class="gercontent">
   <div class="ci-bar">
     <div class="ci-seg" role="tablist">
       <button id="ciSegDash" class="on" onclick="ciSetModo('dash')">Dashboard</button>
@@ -3860,11 +3851,7 @@ function switchTab(tab){
   if((isC||isH||isG||isRC) && !cartLoaded) cargarCartera(false);
   if(isRC){ if(!ventasLoaded) cargarVentas(); renderCarteraComisiones(); }
   if(isR90){ if(!rotLoaded) cargarRotacion(); if(!vejezLoaded) cargarVejez(); renderRotacion90(); }
-  if(isCI){
-    // Mismo código y misma sesión que Management: desbloquear una abre la otra.
-    if(sessionStorage.getItem('gerOK')==='1') mostrarControlInv();
-    else { $('ciLock').classList.remove('hidden'); $('ciContent').classList.add('hidden'); $('ciCode').value=''; $('ciErr').textContent=''; setTimeout(()=>{try{$('ciCode').focus();}catch(e){}},60); }
-  }
+  if(isCI) mostrarControlInv();   // sin código de acceso: abierto a todo el equipo
   if(isVM){ if(!vmLoaded && !vmLoading) cargarVentasMargenes(); renderVentasMargenes(); }
   if(isH){ cargarSeguimiento(); renderHistorial(); }
   if(isG){
@@ -3892,15 +3879,8 @@ let ctrlInvLoaded = false, ctrlInvTimer = null, ctrlInvCargadoEn = 0, ctrlInvCar
 // punto medio entre no quedarse viejo y no repetir 480 KB en cada cambio de tab.
 const CI_FRESCURA_MS = 30 * 60 * 1000;
 
-// Gate de acceso: reutiliza GERENCIA_CODE y la misma marca de sesión que
-// Management (gerOK), así el equipo maneja un solo código.
-function ciUnlock(){
-  const v=($('ciCode').value||'').trim();
-  if(v===GERENCIA_CODE){ sessionStorage.setItem('gerOK','1'); mostrarControlInv(); }
-  else { $('ciErr').textContent='Código incorrecto'; $('ciCode').select(); }
-}
+// Control Inventario ya no pide código (antes compartía GERENCIA_CODE con Management).
 function mostrarControlInv(){
-  $('ciLock').classList.add('hidden'); $('ciContent').classList.remove('hidden');
   let modo = 'dash'; try{ modo = sessionStorage.getItem('ciModo') || 'dash'; }catch(e){}
   ciSetModo(modo);
 }
